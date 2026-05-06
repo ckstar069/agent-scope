@@ -17,7 +17,7 @@ export function Layout({ activeRoute, children, onRouteChange }: LayoutProps) {
   const [isSidebarExpanded, setIsSidebarExpanded] = useState(true);
 
   return (
-    <div className="dark flex h-screen overflow-hidden bg-background text-foreground">
+    <div className="flex h-screen overflow-hidden bg-background text-foreground">
       <Sidebar
         activeRoute={activeRoute}
         isExpanded={isSidebarExpanded}

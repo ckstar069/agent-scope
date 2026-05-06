@@ -16,3 +16,9 @@
 - Tauri build targets: macOS .dmg + Linux AppImage
 - Linux test machine: 100.85.255.89 (yufei/yufei)
 - App.tsx routing uses simple state (not React Router)
+
+## [2026-05-06] 参数解析兼容性
+
+- `fpga_project_coarse_cfo` 的自定义 `parameters.py` 可能缺少模板默认字段，例如 `axi_lite_addr_width`。
+- 采集层 `ProjectConfig` 已为非关键字段配置 `#[serde(default)]`，命令层 payload 类型也需要保持同样兼容性，避免中间 JSON/结构体反序列化链路重新变严格。
+- 前端参数快照应把非关键配置字段声明为可选，并继续通过 `formatValue` 将 `undefined` 显示为 `--`。

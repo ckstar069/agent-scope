@@ -19,36 +19,61 @@ pub struct ProjectConfig {
     pub project_name: String,
     pub module_name: String,
     pub interface_type: String,
+    #[serde(default)]
     pub reference_project: String,
+    #[serde(default)]
     pub use_l0: bool,
+    #[serde(default)]
     pub data_width: i64,
+    #[serde(default)]
     pub iterations: i64,
 
+    #[serde(default)]
     pub q_int_bits: i64,
+    #[serde(default)]
     pub q_frac_bits: i64,
+    #[serde(default)]
     pub rounding_mode: String,
+    #[serde(default)]
     pub saturation: bool,
 
+    #[serde(default)]
     pub pipeline_stages: i64,
+    #[serde(default)]
     pub cycles_per_stage: i64,
+    #[serde(default)]
     pub output_register: bool,
 
+    #[serde(default)]
     pub axis_data_width: i64,
+    #[serde(default)]
     pub axis_has_tlast: bool,
+    #[serde(default)]
     pub axis_has_tkeep: bool,
+    #[serde(default)]
     pub handshake_delay: i64,
+    #[serde(default)]
     pub axi_lite_addr_width: i64,
 
+    #[serde(default)]
     pub test_data_length: i64,
+    #[serde(default)]
     pub random_seed: i64,
+    #[serde(default)]
     pub float_tolerance: f64,
+    #[serde(default)]
     pub fixed_tolerance: f64,
 
+    #[serde(default)]
     pub clock_frequency: i64,
+    #[serde(default)]
     pub reset_sync_stages: i64,
+    #[serde(default)]
     pub use_clock_enable: bool,
 
+    #[serde(default)]
     pub debug_mode: bool,
+    #[serde(default)]
     pub debug_level: i64,
 
     // 派生参数，标记为 Option 以保持兼容性
@@ -124,6 +149,9 @@ pub fn parse_parameters_py(path: &Path) -> Result<ProjectConfig, ParameterError>
         .arg("export")
         .arg("json")
         .arg(&temp_file)
+        .env_remove("PYTHONHOME")
+        .env_remove("PYTHONPATH")
+        .env_remove("PYTHONNOUSERSITE")
         .output()
         .map_err(|e| ParameterError::ExportFailed(format!("无法执行 python3: {}", e)))?;
 
