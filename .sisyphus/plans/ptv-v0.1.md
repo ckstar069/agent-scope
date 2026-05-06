@@ -211,7 +211,7 @@ Wave FINAL（完成前审查 — 4 并行 → 等待用户确认）:
 > 每个任务必须包含：推荐 Agent 配置 + 并行化信息 + QA 场景。
 > **没有 QA 场景的任务是不完整的。绝不允许。**
 
-- [ ] 0.1 从 abtop 提取 `abtop-collector` 库 crate
+- [x] 0.1 从 abtop 提取 `abtop-collector` 库 crate
 
   **What to do**：
   - Fork abtop 仓库到本地工作区
@@ -270,7 +270,7 @@ Wave FINAL（完成前审查 — 4 并行 → 等待用户确认）:
     Evidence: .sisyphus/evidence/task-0.1-deps-check.txt
   ```
 
-- [ ] 0.2 Tauri + React 最小骨架搭建
+- [x] 0.2 Tauri + React 最小骨架搭建
 
   **What to do**：
   - 使用 `create-tauri-app` 初始化 ptv 项目（React + TypeScript 模板）
@@ -318,7 +318,7 @@ Wave FINAL（完成前审查 — 4 并行 → 等待用户确认）:
     Evidence: .sisyphus/evidence/task-0.2-skeleton.png
   ```
 
-- [ ] 0.3 Shell-out config 解析器
+- [x] 0.3 Shell-out config 解析器
 
   **What to do**：
   - 在 Rust 端实现 `parse_parameters_py(project_path: &Path) -> Result<ProjectConfig>`
@@ -358,7 +358,7 @@ Wave FINAL（完成前审查 — 4 并行 → 等待用户确认）:
     Evidence: .sisyphus/evidence/task-0.3-test-output.txt
   ```
 
-- [ ] 0.4 文件监听集成验证
+- [x] 0.4 文件监听集成验证
 
   **What to do**：
   - Rust 端测试 `tauri-plugin-fs` 的 `watch()` API
@@ -397,7 +397,7 @@ Wave FINAL（完成前审查 — 4 并行 → 等待用户确认）:
      Evidence: .sisyphus/evidence/task-0.4-watch-log.txt
   ```
 
-- [ ] 1.1 项目注册表
+- [x] 1.1 项目注册表
 
   **What to do**：
   - Rust 端实现 `ProjectRegistry` struct
@@ -432,7 +432,7 @@ Wave FINAL（完成前审查 — 4 并行 → 等待用户确认）:
     Evidence: .sisyphus/evidence/task-1.1-test-output.txt
   ```
 
-- [ ] 1.2 模板项目数据采集器
+- [x] 1.2 模板项目数据采集器
 
   **What to do**：
   - 创建 `src-tauri/src/collectors/template/` 目录
@@ -475,7 +475,7 @@ Wave FINAL（完成前审查 — 4 并行 → 等待用户确认）:
     Evidence: .sisyphus/evidence/task-1.2-edge-empty.txt
   ```
 
-- [ ] 1.3 Agent 运行时采集器
+- [x] 1.3 Agent 运行时采集器
 
   **What to do**：
   - 在 `Cargo.toml` 添加 `abtop-collector` 依赖（Task 0.1 产出）
@@ -511,7 +511,7 @@ Wave FINAL（完成前审查 — 4 并行 → 等待用户确认）:
     Evidence: .sisyphus/evidence/task-1.3-agent-output.txt
   ```
 
-- [ ] 1.4 Tauri commands + 事件层
+- [x] 1.4 Tauri commands + 事件层
 
   **What to do**：
   - 实现完整 Tauri commands：
@@ -551,7 +551,7 @@ Wave FINAL（完成前审查 — 4 并行 → 等待用户确认）:
     Evidence: .sisyphus/evidence/task-1.4-test-output.txt
   ```
 
-- [ ] 2.0 前端脚手架（类型定义、状态管理、API hooks）
+- [x] 2.0 前端脚手架（类型定义、状态管理、API hooks）
 
   **What to do**：
   - TypeScript 类型定义（与 Rust struct 对齐）：`ProjectEntry`, `ProjectConfig`, `MemoryEntry`, `AgentSession`, `GitStatus`
@@ -586,7 +586,7 @@ Wave FINAL（完成前审查 — 4 并行 → 等待用户确认）:
     Evidence: .sisyphus/evidence/task-2.0-hooks-test.png
   ```
 
-- [ ] 2.1 仪表盘面板
+- [x] 2.1 仪表盘面板
 
   **What to do**：
   - React 组件 `panels/Dashboard.tsx`
@@ -638,7 +638,7 @@ Wave FINAL（完成前审查 — 4 并行 → 等待用户确认）:
     Evidence: .sisyphus/evidence/task-2.1-empty.png
   ```
 
-- [ ] 2.2 项目详情面板
+- [x] 2.2 项目详情面板
 
   **What to do**：
   - React 组件 `panels/ProjectDetail.tsx`
@@ -684,7 +684,7 @@ Wave FINAL（完成前审查 — 4 并行 → 等待用户确认）:
       - .sisyphus/evidence/task-2.2-git.png
   ```
 
-- [ ] 2.3 Agent 监控面板
+- [x] 2.3 Agent 监控面板
 
   **What to do**：
   - React 组件 `panels/AgentMonitor.tsx`
@@ -736,7 +736,7 @@ Wave FINAL（完成前审查 — 4 并行 → 等待用户确认）:
     Evidence: .sisyphus/evidence/task-2.3-agent-empty.png
   ```
 
-- [ ] 2.4 设置/添加项目面板
+- [x] 2.4 设置/添加项目面板
 
   **What to do**：
   - React 组件 `panels/Settings.tsx`
@@ -775,7 +775,7 @@ Wave FINAL（完成前审查 — 4 并行 → 等待用户确认）:
     Evidence: .sisyphus/evidence/task-2.4-settings.png
   ```
 
-- [ ] 3.1 端到端数据流验证
+- [x] 3.1 端到端数据流验证
 
   **What to do**：
   - 验证完整数据流：Rust collector → Tauri command → React state → UI 渲染
@@ -814,7 +814,7 @@ Wave FINAL（完成前审查 — 4 并行 → 等待用户确认）:
     Evidence: .sisyphus/evidence/task-3.1-e2e-flow/
   ```
 
-- [ ] 3.2 Playwright E2E 测试套件
+- [x] 3.2 Playwright E2E 测试套件
 
   **What to do**：
   - 编写 Playwright 测试脚本，覆盖所有面板
@@ -843,7 +843,7 @@ Wave FINAL（完成前审查 — 4 并行 → 等待用户确认）:
     Evidence: .sisyphus/evidence/task-3.2-playwright-results.txt
   ```
 
-- [ ] 3.3 Tauri 打包构建（macOS .dmg + Linux AppImage）
+- [x] 3.3 Tauri 打包构建（macOS .dmg + Linux AppImage）
 
   **What to do**：
   - 配置 `tauri.conf.json`：应用名 "ptv"、bundle identifier、图标
@@ -885,19 +885,19 @@ Wave FINAL（完成前审查 — 4 并行 → 等待用户确认）:
 > 4 个审查 agent 并行运行。全部必须 APPROVE。向用户展示汇总结果，获取明确"可以"后才完成。
 > **在获取用户明确批准前，绝不标记 F1-F4 为已完成。**
 
-- [ ] F1. **规划合规审计** — `oracle`
+- [x] F1. **规划合规审计** — `oracle`
   通读规划全文。检查每个 "Must Have"：验证实施是否存在（读文件、curl 端点、运行命令）。检查每个 "Must NOT Have"：搜索代码库中的禁止模式 — 如发现则拒绝并标注 file:line。检查证据文件存在于 `.sisyphus/evidence/`。对比交付物与规划。
   输出：`Must Have [N/N] | Must NOT Have [N/N] | Tasks [N/N] | VERDICT: APPROVE/REJECT`
 
-- [ ] F2. **代码质量审查** — `unspecified-high`
+- [x] F2. **代码质量审查** — `unspecified-high`
   运行 `cargo clippy -- -D warnings` + `npm run lint` + `cargo test`。审查所有变更文件：`unwrap()` 使用、空 catch、console.log 残留、注释掉的代码、未用 import。检查 AI 代码坏味道：过度注释、过度抽象、通用命名（data/result/item/temp）。
   输出：`Build [PASS/FAIL] | Lint [PASS/FAIL] | Tests [N pass/N fail] | Files [N clean/N issues] | VERDICT`
 
-- [ ] F3. **真实 QA 验证** — `unspecified-high`（+ `playwright` skill）
+- [x] F3. **真实 QA 验证** — `unspecified-high`（+ `playwright` skill）
   从干净状态开始。执行每个任务的 QA 场景——遵循精确步骤，捕获证据。测试跨任务集成（功能协作，非隔离）。测试边界：空状态、无效输入、快速操作。保存到 `.sisyphus/evidence/final-qa/`。
   输出：`Scenarios [N/N pass] | Integration [N/N] | Edge Cases [N tested] | VERDICT`
 
-- [ ] F4. **范围忠实度检查** — `deep`
+- [x] F4. **范围忠实度检查** — `deep`
   对每个任务：读 "What to do"，读实际 diff（git log/diff）。验证 1:1 — 规范中所有内容已构建（无缺失），规范之外无构建（无蔓延）。检查 "Must NOT do" 合规。检测跨任务污染：Task N 触碰 Task M 的文件。标记未计入的变更。
   输出：`Tasks [N/N compliant] | Contamination [CLEAN/N issues] | Unaccounted [CLEAN/N files] | VERDICT`
 

@@ -1,0 +1,6 @@
+前端脚手架验证
+- src/hooks/useTauri.ts: invoke + listen 封装
+- src/components/Layout.tsx: 侧边栏 + 主内容区布局
+- src/components/Sidebar.tsx: 导航按钮 + 折叠展开
+- shadcn/ui 组件: Card, Button, Dialog, Input, ScrollArea
+- npm run build: 通过（无 TypeScript 错误）

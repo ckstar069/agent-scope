@@ -1,0 +1,101 @@
+    Finished `dev` profile [unoptimized + debuginfo] target(s) in 0.09s
+---
+    Finished `test` profile [unoptimized + debuginfo] target(s) in 0.02s
+     Running unittests src/lib.rs (target/debug/deps/abtop_collector-4ee7ed84f97cfaf9)
+
+running 86 tests
+test collector::claude::tests::test_context_window_for_model ... ok
+test collector::claude::tests::test_encode_cwd_path ... ok
+test collector::claude::tests::test_find_claude_pids_excludes_print_sessions ... ok
+test collector::claude::tests::test_find_live_session_id_empty_dir_returns_none ... ok
+test collector::claude::tests::test_find_live_session_id_filters_by_started_at ... ok
+test collector::claude::tests::test_config_dirs_from_open_paths_finds_profile_root_without_cwd ... ok
+test collector::claude::tests::test_find_live_session_id_excludes_claimed_sids ... ok
+test collector::claude::tests::test_find_live_session_id_grace_window_boundary ... ok
+test collector::claude::tests::test_find_live_session_id_picks_newest_jsonl ... ok
+test collector::claude::tests::test_find_session_file_for_pid_falls_back_to_embedded_pid ... ok
+test collector::claude::tests::test_config_dirs_from_open_paths_finds_profile_root_and_ignores_project_claude_dir ... ok
+test collector::claude::tests::test_find_session_file_for_pid_prefers_direct_pid_file ... ok
+test collector::claude::tests::test_collect_sessions_deduplicates_active_and_scanned_session_id ... ok
+test collector::claude::tests::test_find_session_file_for_pid_skips_bad_files_and_continues ... ok
+test collector::claude::tests::test_find_session_file_for_pid_rejects_symlinked_session_files ... ok
+test collector::claude::tests::test_load_session_overrides_sid_after_clear ... ok
+test collector::claude::tests::test_load_session_overrides_sid_in_worktree_project_dir ... ok
+test collector::claude::tests::test_load_session_recent_transcript_activity_is_thinking ... ok
+test collector::claude::tests::test_parse_environ_var_empty_value ... ok
+test collector::claude::tests::test_load_session_pending_tool_use_is_executing ... ok
+test collector::claude::tests::test_load_session_stale_transcript_is_waiting_even_when_cpu_busy ... ok
+test collector::claude::tests::test_parse_environ_var_found ... ok
+test collector::claude::tests::test_parse_environ_var_no_partial_match ... ok
+test collector::claude::tests::test_parse_environ_var_not_set ... ok
+test collector::claude::tests::test_load_session_overrides_sid_despite_print_sibling ... ok
+test collector::claude::tests::test_parse_lsof_process_info_captures_multiple_pids_and_cwd ... ok
+test collector::claude::tests::test_parse_transcript_empty_file ... ok
+test collector::claude::tests::test_parse_transcript_basic_tokens ... ok
+test collector::claude::tests::test_parse_transcript_current_task_cleared_between_turns ... ok
+test collector::claude::tests::test_parse_transcript_initial_prompt ... ok
+test collector::claude::tests::test_parse_transcript_file_shrunk_resets ... ok
+test collector::claude::tests::test_parse_transcript_non_turn_lines_do_not_set_saw_turn ... ok
+test collector::claude::tests::test_parse_transcript_no_new_bytes_does_not_set_saw_turn ... ok
+test collector::claude::tests::test_parse_transcript_incremental_offset ... ok
+test collector::claude::tests::test_parse_transcript_multiple_turns ... ok
+test collector::claude::tests::test_load_session_uses_non_default_config_root ... ok
+test collector::claude::tests::test_parse_transcript_skips_malformed_json ... ok
+test collector::claude::tests::test_parse_transcript_tool_result_does_not_open_thinking_window ... ok
+test collector::claude::tests::test_open_paths_without_cwd_loads_session_from_same_config_root ... ok
+test collector::claude::tests::test_load_session_skips_override_when_multiple_pids_share_cwd ... ok
+test collector::claude::tests::test_parse_transcript_tool_use_current_task ... ok
+test collector::claude::tests::test_parse_transcript_trailing_user_marks_thinking_window ... ok
+test collector::claude::tests::test_parse_transcript_user_then_assistant_clears_thinking_marker ... ok
+test collector::claude::tests::test_read_effort_from_settings_nonexistent_file ... ok
+test collector::claude::tests::test_parse_transcript_version_and_git_branch ... ok
+test collector::claude::tests::test_read_effort_from_settings_missing_field_returns_none ... ok
+test collector::claude::tests::test_read_effort_from_settings_extracts_value ... ok
+test collector::claude::tests::test_read_effort_from_settings_empty_string_returns_none ... ok
+test collector::claude::tests::test_shorten_path ... ok
+test collector::claude::tests::test_truncate ... ok
+test collector::codex::tests::test_codex_exec_command_end_closes_task_and_records_duration ... ok
+test collector::claude::tests::test_resolve_project_dir_uses_worktree_fallback ... ok
+test collector::codex::tests::test_codex_exec_command_output_closes_task_without_end_event ... ok
+test collector::codex::tests::test_codex_pending_function_call_marks_session_executing_and_timeline ... ok
+test collector::claude::tests::test_session_paths_from_open_paths_maps_pid_to_session_file ... ok
+test collector::claude::tests::test_session_paths_from_open_paths_deduplicates_same_session_path ... ok
+test collector::claude::tests::test_resolve_project_dir_rejects_symlinked_matches ... ok
+test collector::codex::tests::test_parse_codex_empty_returns_none ... ok
+test collector::codex::tests::test_parse_codex_cache_read_fallback_field_name ... ok
+test collector::codex::tests::test_parse_codex_model_generating_after_user_message ... ok
+test collector::codex::tests::test_parse_codex_model_generating_cleared_by_agent_message ... ok
+test collector::codex::tests::test_codex_running_exec_closes_when_write_stdin_reports_exit ... ok
+test collector::codex::tests::test_parse_codex_missing_effort_is_empty ... ok
+test collector::codex::tests::test_parse_codex_rate_limits ... ok
+test collector::codex::tests::test_parse_codex_session_meta ... ok
+test collector::codex::tests::test_parse_codex_skips_malformed_lines ... ok
+test collector::codex::tests::test_parse_codex_token_count ... ok
+test collector::codex::tests::test_parse_codex_turn_context_effort ... ok
+test collector::mcp::tests::ignores_non_codex_mcp_servers ... ok
+test collector::mcp::tests::ignores_non_mcp_codex_processes ... ok
+test collector::mcp::tests::rollout_active_threshold_excludes_old_mtime ... ok
+test collector::process::tests::cmd_has_binary_autoupdater_layout ... ok
+test collector::process::tests::cmd_has_binary_basename_match ... ok
+test collector::claude::tests::test_transcript_cache_evicts_old_sid_after_clear ... ok
+test collector::process::tests::cmd_has_binary_does_not_overmatch ... ok
+test collector::tests::with_hidden_all_agents_yields_empty ... ok
+test collector::tests::with_hidden_codex_drops_codex_only ... ok
+test collector::tests::with_hidden_empty_keeps_all_collectors ... ok
+test collector::tests::with_hidden_is_case_insensitive ... ok
+test collector::tests::with_hidden_unknown_names_are_ignored ... ok
+test model::session::tests::test_active_tokens ... ok
+test model::session::tests::test_total_tokens ... ok
+test collector::mcp::tests::parent_cli_unknown_when_ppid_missing ... ok
+test collector::mcp::tests::parses_profile_flag ... ok
+test collector::mcp::tests::detects_codex_mcp_server_default_profile ... ok
+test collector::claude::tests::test_parse_transcript_file_accesses_sliding_window ... ok
+
+test result: ok. 86 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.04s
+
+   Doc-tests abtop_collector
+
+running 0 tests
+
+test result: ok. 0 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s
+

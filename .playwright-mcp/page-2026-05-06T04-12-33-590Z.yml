@@ -1,0 +1,43 @@
+- generic [ref=e3]:
+  - complementary [ref=e4]:
+    - generic [ref=e5]:
+      - img [ref=e7]
+      - generic [ref=e12]:
+        - paragraph [ref=e13]: ptv
+        - paragraph [ref=e14]: Project Visualizer
+    - navigation "主导航" [ref=e15]:
+      - button "Dashboard" [ref=e16]:
+        - img
+        - generic [ref=e17]: Dashboard
+      - button "Projects" [ref=e18]:
+        - img
+        - generic [ref=e19]: Projects
+      - button "Agents" [ref=e20]:
+        - img
+        - generic [ref=e21]: Agents
+      - button "Settings" [ref=e22]:
+        - img
+        - generic [ref=e23]: Settings
+    - button "收起侧边栏" [ref=e25]:
+      - img
+      - generic [ref=e26]: Collapse
+  - main [ref=e27]:
+    - generic [ref=e31]:
+      - generic [ref=e32]:
+        - generic [ref=e33]:
+          - paragraph [ref=e34]: Dashboard
+          - heading "项目仪表盘" [level=1] [ref=e35]
+          - paragraph [ref=e36]: 汇总已注册 FPGA 项目的 Stage、Git 工作区状态和实时 Agent 活跃度。
+        - button "添加项目" [ref=e37]:
+          - img
+          - text: 添加项目
+      - generic [ref=e39]:
+        - img [ref=e40]
+        - text: 项目列表加载失败：Cannot read properties of undefined (reading 'invoke')
+      - generic [ref=e44]:
+        - img [ref=e46]
+        - heading "还没有项目" [level=2] [ref=e48]
+        - paragraph [ref=e49]: 添加从 ai_project_template 创建的项目后，这里会按名称排序展示 Stage、Git 状态和 Agent 数量。
+        - button "添加项目" [ref=e50]:
+          - img
+          - text: 添加项目

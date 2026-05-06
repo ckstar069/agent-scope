@@ -1,0 +1,23 @@
+{
+  "active_plan": "/Users/ckstar/Repo/ai_project_template_visualization/.sisyphus/plans/ptv-v0.1.md",
+  "started_at": "2026-05-06T02:40:00Z",
+  "session_ids": [
+    "ses_20515bf64ffeIr6P84PM66d3Pv"
+  ],
+  "plan_name": "ptv-v0.1",
+  "worktree_path": "",
+  "session_origins": {
+    "ses_20515bf64ffeIr6P84PM66d3Pv": "direct"
+  },
+  "task_sessions": {
+    "final-wave:f1": {
+      "task_key": "final-wave:f1",
+      "task_label": "F1",
+      "task_title": "**规划合规审计** — `oracle`",
+      "session_id": "ses_2047d4eccffefunHx29ORLYuMu",
+      "agent": "Sisyphus-Junior",
+      "category": "deep",
+      "updated_at": "2026-05-06T04:20:41.385Z"
+    }
+  }
+}

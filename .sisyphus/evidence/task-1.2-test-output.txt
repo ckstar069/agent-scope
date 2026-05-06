@@ -1,0 +1,16 @@
+    Finished `test` profile [unoptimized + debuginfo] target(s) in 0.14s
+     Running unittests src/lib.rs (target/debug/deps/ptv_lib-784babb348f67e23)
+
+running 3 tests
+test collectors::template::tests::test_template_data_collector_empty_project ... ok
+test collectors::template::tests::test_template_data_collector_with_stage ... ok
+test collectors::template::tests::test_template_data_collector_with_flat_layout ... ok
+
+test result: ok. 3 passed; 0 failed; 0 ignored; 0 measured; 71 filtered out; finished in 0.02s
+
+     Running unittests src/main.rs (target/debug/deps/ptv-4164112324265d00)
+
+running 0 tests
+
+test result: ok. 0 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s
+

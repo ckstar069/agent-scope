@@ -1,43 +1,42 @@
-import { useState } from "react";
-import { invoke } from "@tauri-apps/api/core";
+import { useMemo, useState } from "react";
+
+import { Layout } from "@/components/Layout";
+import { AgentMonitor } from "@/pages/AgentMonitor";
+import { Dashboard } from "@/pages/Dashboard";
+import { ProjectDetail } from "@/pages/ProjectDetail";
+import { Settings } from "@/pages/Settings";
+
+export type AppRoute = "dashboard" | "projects" | "agents" | "settings";
 
 function App() {
-  const [greetMsg, setGreetMsg] = useState("");
-  const [name, setName] = useState("");
+  const [activeRoute, setActiveRoute] = useState<AppRoute>("dashboard");
+  const [currentProjectPath, setCurrentProjectPath] = useState("");
 
-  async function greet() {
-    setGreetMsg(await invoke("greet", { name }));
+  function handleRouteChange(route: AppRoute, projectPath?: string) {
+    if (projectPath !== undefined) {
+      setCurrentProjectPath(projectPath);
+    }
+    setActiveRoute(route);
   }
 
-  return (
-    <div className="min-h-screen bg-gray-900 text-gray-100 flex flex-col items-center justify-center p-8">
-      <h1 className="text-3xl font-bold mb-4">ptv</h1>
-      <p className="text-gray-400 mb-8">Project Template Visualizer</p>
+  const page = useMemo(() => {
+    switch (activeRoute) {
+      case "projects":
+        return <ProjectDetail projectPath={currentProjectPath} />;
+      case "agents":
+        return <AgentMonitor />;
+      case "settings":
+        return <Settings />;
+      case "dashboard":
+      default:
+        return <Dashboard onRouteChange={handleRouteChange} />;
+    }
+  }, [activeRoute, currentProjectPath]);
 
-      <form
-        onSubmit={(e) => {
-          e.preventDefault();
-          greet();
-        }}
-        className="flex gap-2 mb-4"
-      >
-        <input
-          id="greet-input"
-          onChange={(e) => setName(e.currentTarget.value)}
-          placeholder="Enter a name..."
-          className="px-4 py-2 rounded bg-gray-800 border border-gray-700 text-gray-100 placeholder-gray-500 focus:outline-none focus:border-blue-500"
-        />
-        <button
-          type="submit"
-          className="px-4 py-2 bg-blue-600 hover:bg-blue-700 rounded font-medium transition-colors"
-        >
-          Greet
-        </button>
-      </form>
-      {greetMsg && (
-        <p className="text-green-400 font-mono">{greetMsg}</p>
-      )}
-    </div>
+  return (
+    <Layout activeRoute={activeRoute} onRouteChange={handleRouteChange}>
+      {page}
+    </Layout>
   );
 }
 

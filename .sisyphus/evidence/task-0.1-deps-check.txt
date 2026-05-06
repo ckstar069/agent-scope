@@ -1,0 +1,8 @@
+abtop-collector 依赖检查结果
+
+执行命令: cargo tree -p abtop-collector | grep -E "ratatui|crossterm"
+结果: 无输出（空文件）
+
+说明: abtop-collector 库 crate 不依赖 ratatui 或 crossterm，
+这些 TUI 依赖仅在 abtop 可执行程序中使用。
+验证了 abtop-collector 作为纯数据收集库的独立性。

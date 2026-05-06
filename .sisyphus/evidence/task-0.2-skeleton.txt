@@ -1,0 +1,7 @@
+Tauri v2 + React + TypeScript 骨架验证
+- package.json: React 19, TypeScript 5.8, Vite 7
+- src-tauri/Cargo.toml: tauri v2, tauri-plugin-fs, tauri-plugin-opener
+- Tailwind CSS v4 + shadcn/ui 组件库
+- Recharts 图表库
+- cargo tauri dev 可启动桌面窗口
+- invoke("greet") 返回 Rust 后端响应

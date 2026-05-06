@@ -1,0 +1,6 @@
+AgentMonitor 面板验证
+- src/pages/AgentMonitor.tsx: Token 速率、上下文窗口、会话状态
+- Token 速率: CSS 进度条 (token/s ↔ token/min 切换)
+- 上下文窗口: 百分比进度条
+- 状态: Active/Idle/Offline 彩色 badge
+- 空状态: "暂无活跃 Agent"

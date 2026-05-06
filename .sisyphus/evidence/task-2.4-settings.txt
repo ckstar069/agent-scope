@@ -1,0 +1,5 @@
+Settings 面板验证
+- src/pages/Settings.tsx: 添加/移除项目
+- 路径校验: 空路径、相对路径、根目录
+- 移除确认: Dialog 二次确认
+- 错误/成功提示: 自动清除

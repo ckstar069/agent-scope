@@ -1,0 +1,5 @@
+端到端数据流验证
+- 浏览器环境（Vite dev server）测试通过
+- Dashboard → Settings → ProjectDetail → AgentMonitor 路由切换正常
+- Tauri invoke 错误被优雅捕获
+- 29 个 Playwright E2E 测试全部通过

@@ -1,0 +1,5 @@
+Dashboard 面板验证
+- src/pages/Dashboard.tsx: 项目卡片列表
+- 显示: 项目名称、Stage badge、Git 分支、Agent 数量
+- 空状态: "还没有项目" 引导卡片
+- 响应式: xl:grid-cols-2

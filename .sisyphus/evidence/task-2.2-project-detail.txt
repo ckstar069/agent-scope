@@ -1,0 +1,6 @@
+ProjectDetail 面板验证
+- src/pages/ProjectDetail.tsx: Stage 时间线、参数快照、Memory、Git
+- StageTimeline: L0-L6-Verilog-Synthesis-Hardware 步骤条
+- ConfigSnapshot: 4 个分类、30+ 参数字段
+- MemoryPanel: ScrollArea 滚动列表
+- GitPanel: 分支 + 变更统计

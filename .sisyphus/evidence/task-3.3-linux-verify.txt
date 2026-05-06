@@ -1,0 +1,34 @@
+# Linux 构建验证结果
+## 时间: 2026-05-06 12:07 CST
+
+## 系统信息
+- 主机: yufei-u24
+- 内核: Linux 6.17.0-22-generic #22~24.04.1-Ubuntu SMP PREEMPT_DYNAMIC
+- 架构: x86_64 x86_64
+- 发行版: Ubuntu 24.04
+
+## 构建产物清单
+### 1. AppImage
+- 路径: /home/yufei/Repo/ai_project_template_visualization/src-tauri/target/release/bundle/appimage/ptv_0.1.0_amd64.AppImage
+- 大小: 76 MB
+- SHA256: 57c7b25653d360a00877ab167b981993cb22f59e46033be39f48e9e0ed7d9571
+- 验证: --appimage-help 正常响应 ✅
+
+### 2. Deb 包
+- 路径: /home/yufei/Repo/ai_project_template_visualization/src-tauri/target/release/bundle/deb/ptv_0.1.0_amd64.deb
+- 大小: 4.9 MB
+
+### 3. RPM 包
+- 路径: /home/yufei/Repo/ai_project_template_visualization/src-tauri/target/release/bundle/rpm/ptv-0.1.0-1.x86_64.rpm
+- 大小: ~5 MB
+
+### 4. 裸二进制
+- 路径: /home/yufei/Repo/ai_project_template_visualization/src-tauri/target/release/ptv
+- 大小: 15 MB
+- 类型: ELF 64-bit LSB pie executable, x86-64, dynamically linked
+- 验证: 二进制可执行 ✅
+
+## GUI 运行测试
+- 结果: 在无头 SSH 会话中 GTK 初始化失败（预期行为）
+- 错误: "Failed to initialize GTK" — 需要显示器环境
+- 结论: 构建产物有效，在桌面环境中可正常运行

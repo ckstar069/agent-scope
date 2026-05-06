@@ -1,4 +1,11 @@
+pub mod collectors;
+pub mod commands;
+pub mod registry;
 pub mod watcher;
+
+use commands::{add_project, get_project_data, list_projects, remove_project, start_watching, stop_watching};
+use collectors::agent::AgentCollector;
+use registry::ProjectRegistry;
 
 #[tauri::command]
 fn greet(name: &str) -> String {
@@ -10,7 +17,28 @@ pub fn run() {
     tauri::Builder::default()
         .plugin(tauri_plugin_opener::init())
         .plugin(tauri_plugin_fs::init())
-        .invoke_handler(tauri::generate_handler![greet])
+        .setup(|app| {
+            let data_dir = ProjectRegistry::default_data_dir();
+            let storage_path = data_dir.join("projects.json");
+            let registry = ProjectRegistry::load_or_default(storage_path);
+
+            let agent_collector = AgentCollector::new();
+            let agent_handle = app.handle().clone();
+            let _join_handle = agent_collector.start(agent_handle);
+
+            commands::init_app_state(app, registry, agent_collector);
+
+            Ok(())
+        })
+        .invoke_handler(tauri::generate_handler![
+            greet,
+            add_project,
+            remove_project,
+            list_projects,
+            get_project_data,
+            start_watching,
+            stop_watching,
+        ])
         .run(tauri::generate_context!())
         .expect("error while running tauri application");
 }
