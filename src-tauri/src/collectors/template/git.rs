@@ -39,18 +39,6 @@ impl GitStatus {
         }
     }
 
-    /// 创建表示"Git 命令不可用"的状态
-    pub fn git_not_available() -> Self {
-        Self {
-            branch: String::from("(git unavailable)"),
-            modified_count: 0,
-            staged_count: 0,
-            untracked_count: 0,
-            conflict_count: 0,
-            is_clean: true,
-            changed_files: Vec::new(),
-        }
-    }
 }
 
 impl Default for GitStatus {
@@ -80,13 +68,14 @@ impl GitCollector {
     /// - `Err(GitError)`: Git 命令执行失败
     ///
     /// # 行为
-    /// - 如果路径不是 Git 仓库，返回 `GitStatus::no_repo()`
-    /// - 如果 `git` 命令不可用，返回 `GitStatus::git_not_available()`
+    /// - 如果路径不是 Git 仓库，返回 `GitError::NotARepo`
+    /// - 如果 `git` 命令不可用，返回 `GitError::NotAvailable`
     pub fn collect(path: &Path) -> Result<GitStatus, GitError> {
         // 检查 git 是否可用
         let git_check = Command::new("git").arg("--version").output();
-        if git_check.is_err() || !git_check.unwrap().status.success() {
-            return Ok(GitStatus::git_not_available());
+        match git_check {
+            Ok(output) if output.status.success() => {}
+            Ok(_) | Err(_) => return Err(GitError::NotAvailable),
         }
 
         // 检查是否为 git 仓库
@@ -99,8 +88,7 @@ impl GitCollector {
             .map_err(|e| GitError::CommandFailed(format!("git rev-parse 失败: {}", e)))?;
 
         if !rev_parse.status.success() {
-            // 不是 git 仓库，返回空状态
-            return Ok(GitStatus::no_repo());
+            return Err(GitError::NotARepo);
         }
 
         // 获取当前分支
@@ -167,7 +155,8 @@ impl GitCollector {
             .map_err(|e| GitError::CommandFailed(format!("git status 失败: {}", e)))?;
 
         if !output.status.success() {
-            return Ok(GitStatus::no_repo());
+            let stderr = String::from_utf8_lossy(&output.stderr).trim().to_string();
+            return Err(GitError::CommandFailed(stderr));
         }
 
         let stdout = String::from_utf8_lossy(&output.stdout);
@@ -231,13 +220,17 @@ impl GitCollector {
 
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub enum GitError {
+    NotAvailable,
+    NotARepo,
     CommandFailed(String),
 }
 
 impl fmt::Display for GitError {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         match self {
-            GitError::CommandFailed(msg) => write!(f, "Git 命令执行失败: {}", msg),
+            GitError::NotAvailable => write!(f, "系统未安装 Git，无法获取版本控制状态"),
+            GitError::NotARepo => write!(f, "该项目不是 Git 仓库"),
+            GitError::CommandFailed(msg) => write!(f, "Git 命令执行失败：{}", msg),
         }
     }
 }
@@ -284,9 +277,8 @@ mod tests {
     #[test]
     fn test_git_collector_no_repo() {
         let dir = tempfile::tempdir().unwrap();
-        let status = GitCollector::collect(dir.path()).unwrap();
-        assert!(status.branch.is_empty() || status.branch == "(unknown)");
-        assert!(status.is_clean);
+        let result = GitCollector::collect(dir.path());
+        assert!(matches!(result, Err(GitError::NotARepo)));
     }
 
     #[test]

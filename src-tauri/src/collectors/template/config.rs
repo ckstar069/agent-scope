@@ -92,24 +92,49 @@ pub struct ProjectConfig {
 pub enum ParameterError {
     PythonNotFound,
     FileNotFound(String),
+    SyntaxError(String),
+    RuntimeError(String),
     ExportFailed(String),
     ParseError(String),
+}
+
+fn truncate_details(details: &str) -> &str {
+    const MAX_CHARS: usize = 200;
+
+    match details.char_indices().nth(MAX_CHARS) {
+        Some((idx, _)) => &details[..idx],
+        None => details,
+    }
 }
 
 impl std::fmt::Display for ParameterError {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         match self {
             ParameterError::PythonNotFound => {
-                write!(f, "Python3 解释器未找到，请确保已安装 python3")
+                write!(f, "系统未安装 Python3，无法解析参数文件")
             }
-            ParameterError::FileNotFound(path) => {
-                write!(f, "参数文件不存在: {}", path)
+            ParameterError::FileNotFound(_) => {
+                write!(f, "项目目录下未找到 config/parameters.py，请确认这是有效的 ai_project_template 项目")
+            }
+            ParameterError::SyntaxError(details) => {
+                write!(
+                    f,
+                    "项目的 parameters.py 存在语法错误。常见原因：双花括号 {{、缩进错误、括号不匹配等。请检查该文件\n详细信息：{}",
+                    truncate_details(details)
+                )
+            }
+            ParameterError::RuntimeError(details) => {
+                write!(
+                    f,
+                    "项目的 parameters.py 运行时出错。请检查该文件逻辑\n详细信息：{}",
+                    truncate_details(details)
+                )
             }
             ParameterError::ExportFailed(msg) => {
-                write!(f, "参数导出失败: {}", msg)
+                write!(f, "参数导出失败：{}", msg)
             }
             ParameterError::ParseError(msg) => {
-                write!(f, "参数解析失败: {}", msg)
+                write!(f, "参数解析失败：{}", msg)
             }
         }
     }
@@ -158,6 +183,17 @@ pub fn parse_parameters_py(path: &Path) -> Result<ProjectConfig, ParameterError>
     if !output.status.success() {
         let stderr = String::from_utf8_lossy(&output.stderr);
         let _ = fs::remove_file(&temp_file);
+
+        if stderr.contains("SyntaxError") || stderr.contains("invalid syntax") {
+            return Err(ParameterError::SyntaxError(stderr.trim().to_string()));
+        }
+        if stderr.contains("Traceback") && stderr.contains("TypeError") {
+            return Err(ParameterError::SyntaxError(stderr.trim().to_string()));
+        }
+        if stderr.contains("Traceback") {
+            return Err(ParameterError::RuntimeError(stderr.trim().to_string()));
+        }
+
         return Err(ParameterError::ExportFailed(format!(
             "Python 导出失败 (exit code: {:?}): {}",
             output.status.code(),
@@ -241,6 +277,48 @@ mod tests {
         assert!(
             matches!(result, Err(ParameterError::ExportFailed(ref msg)) if msg.contains("Intentional failure") || msg.contains("exit code")),
             "期望 ExportFailed 错误，得到: {:?}", result
+        );
+
+        let _ = fs::remove_file(&bad_script);
+        let _ = fs::remove_dir(&dir);
+    }
+
+    #[test]
+    fn test_parse_syntax_error() {
+        let dir = temp_dir();
+        let bad_script = dir.join("syntax_parameters.py");
+
+        let mut file = fs::File::create(&bad_script).expect("应能创建测试文件");
+        writeln!(file, "#!/usr/bin/env python3").unwrap();
+        writeln!(file, "if True print('bad')").unwrap();
+        drop(file);
+
+        let result = parse_parameters_py(&bad_script);
+        assert!(
+            matches!(result, Err(ParameterError::SyntaxError(ref msg)) if msg.contains("SyntaxError") || msg.contains("invalid syntax")),
+            "期望 SyntaxError 错误，得到: {:?}",
+            result
+        );
+
+        let _ = fs::remove_file(&bad_script);
+        let _ = fs::remove_dir(&dir);
+    }
+
+    #[test]
+    fn test_parse_runtime_error() {
+        let dir = temp_dir();
+        let bad_script = dir.join("runtime_parameters.py");
+
+        let mut file = fs::File::create(&bad_script).expect("应能创建测试文件");
+        writeln!(file, "#!/usr/bin/env python3").unwrap();
+        writeln!(file, "raise ValueError('boom')").unwrap();
+        drop(file);
+
+        let result = parse_parameters_py(&bad_script);
+        assert!(
+            matches!(result, Err(ParameterError::RuntimeError(ref msg)) if msg.contains("ValueError")),
+            "期望 RuntimeError 错误，得到: {:?}",
+            result
         );
 
         let _ = fs::remove_file(&bad_script);

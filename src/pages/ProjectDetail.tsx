@@ -210,10 +210,55 @@ function formatTimestamp(timestampMs?: number) {
 
 function describeTauriError(error: unknown) {
   const message = error instanceof Error ? error.message : String(error);
-  if (message.includes("路径不存在")) {
-    return "项目路径不存在，请确认目录仍然可访问。";
+  if (message.includes("项目路径不存在") || message.includes("路径不存在")) {
+    return "项目路径不存在或已被删除";
+  }
+  if (message.includes("Permission denied") || message.includes("权限") || message.includes("无权访问")) {
+    return "无权访问该项目路径";
   }
   return message;
+}
+
+function classifyConfigError(message: string) {
+  if (message.includes("语法错误")) {
+    return { title: "参数文件语法错误", tone: "destructive" as const };
+  }
+  if (message.includes("运行时出错")) {
+    return { title: "参数文件运行时错误", tone: "warning" as const };
+  }
+  if (message.includes("未安装 Python3")) {
+    return { title: "缺少 Python3", tone: "warning" as const };
+  }
+  if (message.includes("未找到") || message.includes("不存在")) {
+    return { title: "缺少参数文件", tone: "muted" as const };
+  }
+  if (message.includes("解析失败")) {
+    return { title: "参数解析失败", tone: "warning" as const };
+  }
+  return { title: "参数读取失败", tone: "destructive" as const };
+}
+
+function classifyStageError(message: string) {
+  if (message.includes("未找到")) {
+    return { title: "阶段文件缺失", tone: "muted" as const };
+  }
+  if (message.includes("内容为空")) {
+    return { title: "阶段文件为空", tone: "warning" as const };
+  }
+  if (message.includes("无法识别")) {
+    return { title: "阶段值无法识别", tone: "warning" as const };
+  }
+  return { title: "阶段读取失败", tone: "destructive" as const };
+}
+
+function classifyGitError(message: string) {
+  if (message.includes("不是 Git 仓库")) {
+    return { title: "非 Git 仓库", tone: "muted" as const };
+  }
+  if (message.includes("未安装 Git")) {
+    return { title: "缺少 Git", tone: "warning" as const };
+  }
+  return { title: "Git 状态读取失败", tone: "destructive" as const };
 }
 
 export function ProjectDetail({ projectPath = "" }: ProjectDetailProps) {
@@ -333,17 +378,17 @@ export function ProjectDetail({ projectPath = "" }: ProjectDetailProps) {
               <StageTimeline currentStageIndex={currentStageIndex} stageError={data?.stage_error ?? null} />
             </Panel>
 
-            <Panel title="Git" icon={GitBranch} subtitle={data?.git_error ?? "工作区状态快照"}>
-              <GitPanel git={git} />
+            <Panel title="Git" icon={GitBranch} subtitle="工作区状态快照">
+              <GitPanel git={git} gitError={data?.git_error ?? null} />
             </Panel>
           </div>
 
-          <Panel title="参数快照" icon={SlidersHorizontal} subtitle={data?.config_error ?? "config/parameters.py 解析结果"}>
-            <ConfigSnapshot config={config} />
+          <Panel title="参数快照" icon={SlidersHorizontal} subtitle="config/parameters.py 解析结果">
+            <ConfigSnapshot config={config} configError={data?.config_error ?? null} />
           </Panel>
 
-          <Panel title="Memory" icon={MemoryStick} subtitle={data?.memory_error ?? ".claude/memory/*.md"}>
-            <MemoryPanel entries={data?.memories ?? []} />
+          <Panel title="Memory" icon={MemoryStick} subtitle=".claude/memory/*.md">
+            <MemoryPanel entries={data?.memories ?? []} memoryError={data?.memory_error ?? null} />
           </Panel>
         </>
       )}
@@ -413,7 +458,8 @@ function Panel({
 
 function StageTimeline({ currentStageIndex, stageError }: { currentStageIndex: number; stageError: string | null }) {
   if (stageError) {
-    return <InlineNotice message={stageError} />;
+    const error = classifyStageError(stageError);
+    return <ErrorNotice message={stageError} title={error.title} tone={error.tone} />;
   }
 
   return (
@@ -452,7 +498,12 @@ function StageTimeline({ currentStageIndex, stageError }: { currentStageIndex: n
   );
 }
 
-function ConfigSnapshot({ config }: { config: SerProjectConfig | null }) {
+function ConfigSnapshot({ config, configError }: { config: SerProjectConfig | null; configError: string | null }) {
+  if (configError) {
+    const error = classifyConfigError(configError);
+    return <ErrorNotice message={configError} title={error.title} tone={error.tone} />;
+  }
+
   if (!config) {
     return <InlineNotice message="未读取到 config/parameters.py 参数。" />;
   }
@@ -495,7 +546,11 @@ function ConfigSnapshot({ config }: { config: SerProjectConfig | null }) {
   );
 }
 
-function MemoryPanel({ entries }: { entries: SerMemoryEntry[] }) {
+function MemoryPanel({ entries, memoryError }: { entries: SerMemoryEntry[]; memoryError: string | null }) {
+  if (memoryError) {
+    return <ErrorNotice message={memoryError} title="Memory 读取失败" tone="warning" />;
+  }
+
   if (entries.length === 0) {
     return <InlineNotice message="暂无 Memory 条目。" />;
   }
@@ -538,7 +593,12 @@ function MemoryPanel({ entries }: { entries: SerMemoryEntry[] }) {
   );
 }
 
-function GitPanel({ git }: { git: SerGitStatus | null }) {
+function GitPanel({ git, gitError }: { git: SerGitStatus | null; gitError: string | null }) {
+  if (gitError) {
+    const error = classifyGitError(gitError);
+    return <ErrorNotice message={gitError} title={error.title} tone={error.tone} />;
+  }
+
   if (!git) {
     return <InlineNotice message="未读取到 Git 状态。" />;
   }
@@ -609,6 +669,25 @@ function InlineNotice({ message }: { message: string }) {
     <div className="flex items-center gap-2 rounded-xl border border-dashed border-border bg-muted/30 p-4 text-sm text-muted-foreground">
       <AlertCircle className="size-4 shrink-0" aria-hidden="true" />
       <span>{message}</span>
+    </div>
+  );
+}
+
+function ErrorNotice({ message, title, tone }: { message: string; title: string; tone: "destructive" | "warning" | "muted" }) {
+  const className = cn(
+    "flex items-start gap-3 rounded-xl border p-4 text-sm",
+    tone === "destructive" && "border-destructive/40 bg-destructive/10 text-destructive",
+    tone === "warning" && "border-amber-500/30 bg-amber-500/10 text-amber-700 dark:text-amber-300",
+    tone === "muted" && "border-border bg-muted/30 text-muted-foreground",
+  );
+
+  return (
+    <div className={className}>
+      <AlertCircle className="mt-0.5 size-4 shrink-0" aria-hidden="true" />
+      <div className="min-w-0 space-y-1">
+        <p className="font-medium">{title}</p>
+        <p className="whitespace-pre-wrap text-xs opacity-85">{message}</p>
+      </div>
     </div>
   );
 }

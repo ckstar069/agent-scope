@@ -175,12 +175,12 @@ pub enum StageError {
 impl fmt::Display for StageError {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         match self {
-            StageError::FileNotFound(path) => write!(f, ".current_stage 文件不存在: {}", path),
-            StageError::ReadError(path, err) => {
-                write!(f, "读取 .current_stage 失败 ({}): {}", path, err)
+            StageError::FileNotFound(_) => write!(f, "未找到 .current_stage 文件，项目阶段未知"),
+            StageError::ReadError(_, err) => {
+                write!(f, "读取 .current_stage 失败：{}", err)
             }
             StageError::EmptyFile => write!(f, ".current_stage 文件内容为空"),
-            StageError::UnknownStage(s) => write!(f, "无法识别的阶段: '{}'", s),
+            StageError::UnknownStage(s) => write!(f, "无法识别的阶段：'{}'，支持 L0-L6、Verilog、Synthesis、Hardware", s),
         }
     }
 }
