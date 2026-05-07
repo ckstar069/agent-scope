@@ -9,11 +9,17 @@ use crate::watcher::FileWatcher;
 pub use config::{parse_parameters_py, ConfigCollector, ParameterError, ProjectConfig};
 pub use git::{GitCollector, GitError, GitStatus};
 pub use memory::{MemoryCollector, MemoryEntry, MemoryError};
+pub use project_files::{ProjectFile, ProjectFilesCollector, ProjectFilesError};
+pub use session_transcript::{
+    SessionSummary, SessionTranscript, SessionTranscriptCollector, SessionTurn, TranscriptError,
+};
 pub use stage::{Stage, StageCollector, StageError};
 
 pub mod config;
 pub mod git;
 pub mod memory;
+pub mod project_files;
+pub mod session_transcript;
 pub mod stage;
 
 // ============================================================================
@@ -75,6 +81,8 @@ pub struct TemplateData {
     pub config: Result<ProjectConfig, ParameterError>,
     /// 记忆条目列表
     pub memories: Result<Vec<MemoryEntry>, MemoryError>,
+    /// 项目文件列表
+    pub project_files: Result<Vec<ProjectFile>, ProjectFilesError>,
     /// Git 状态
     pub git: Result<GitStatus, GitError>,
     /// 源码布局
@@ -92,6 +100,7 @@ impl TemplateData {
                 path.join("config/parameters.py").to_string_lossy().to_string(),
             )),
             memories: Ok(Vec::new()),
+            project_files: Ok(Vec::new()),
             git: Ok(GitStatus::no_repo()),
             layout: SourceLayout::Unknown,
         }
@@ -102,6 +111,7 @@ impl TemplateData {
         self.stage.is_ok()
             && self.config.is_ok()
             && self.memories.is_ok()
+            && self.project_files.is_ok()
             && self.git.is_ok()
     }
 }
@@ -112,8 +122,9 @@ impl TemplateData {
 
 /// 模板项目数据统一采集器
 ///
-/// 协调 [`StageCollector`]、[`ConfigCollector`]、[`MemoryCollector`]、[`GitCollector`]
-/// 四个采集器，提供单次采集和持续监听两种模式。
+/// 协调 [`StageCollector`]、[`ConfigCollector`]、[`MemoryCollector`]、
+/// [`ProjectFilesCollector`]、[`GitCollector`]
+/// 五个采集器，提供单次采集和持续监听两种模式。
 pub struct TemplateDataCollector {
     project_path: PathBuf,
 }
@@ -132,6 +143,7 @@ impl TemplateDataCollector {
             stage: StageCollector::collect(&self.project_path),
             config: ConfigCollector::collect(&self.project_path),
             memories: MemoryCollector::collect(&self.project_path),
+            project_files: ProjectFilesCollector::collect(&self.project_path),
             git: GitCollector::collect(&self.project_path),
             layout,
         }
@@ -210,6 +222,16 @@ impl WatchedCollector {
             watcher.add(path.join(".current_stage"), false);
             watcher.add(path.join("config").join("parameters.py"), false);
             watcher.add(path.join(".claude").join("memory"), true);
+
+            // 项目文件白名单目录监听
+            watcher.add(path.join("CLAUDE.md"), false);
+            watcher.add(path.join("AGENTS.md"), false);
+            watcher.add(path.join(".claude").join("rules"), true);
+            watcher.add(path.join(".sisyphus").join("notepads"), true);
+            watcher.add(path.join(".sisyphus").join("plans"), true);
+            watcher.add(path.join(".sisyphus").join("drafts"), true);
+            watcher.add(path.join("docs").join("design"), true);
+            watcher.add(path.join("docs").join("specs"), true);
 
             let pending: Arc<Mutex<Option<(Instant, Vec<PathBuf>)>>> =
                 Arc::new(Mutex::new(None));
@@ -316,7 +338,9 @@ mod tests {
         assert!(data.stage.is_err());
         assert!(data.config.is_err());
         assert!(data.memories.is_ok());
-        assert!(data.git.is_ok());
+        assert!(data.project_files.is_ok());
+        // 临时目录不是 git 仓库，GitCollector 返回 Err(GitError::NotARepo)
+        assert!(data.git.is_err());
         assert_eq!(data.layout, SourceLayout::Unknown);
         assert!(!data.is_complete());
     }

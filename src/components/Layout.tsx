@@ -4,8 +4,10 @@ import { useState } from "react";
 import type { AppRoute } from "@/App";
 import { ScrollArea } from "@/components/ui/scroll-area";
 import { cn } from "@/lib/utils";
+import { useTheme } from "@/hooks/useTheme";
 
 import { Sidebar } from "./Sidebar";
+import { ThemeToggle } from "./ThemeToggle";
 
 interface LayoutProps {
   activeRoute: AppRoute;
@@ -15,6 +17,7 @@ interface LayoutProps {
 
 export function Layout({ activeRoute, children, onRouteChange }: LayoutProps) {
   const [isSidebarExpanded, setIsSidebarExpanded] = useState(true);
+  useTheme(); // 初始化主题（应用 localStorage 或系统偏好）
 
   return (
     <div className="flex h-screen overflow-hidden bg-background text-foreground">
@@ -25,6 +28,10 @@ export function Layout({ activeRoute, children, onRouteChange }: LayoutProps) {
         onToggle={() => setIsSidebarExpanded((current) => !current)}
       />
       <main className="flex min-w-0 flex-1 flex-col bg-background">
+        {/* Header 工具栏 */}
+        <div className="flex items-center justify-end px-4 pt-4 sm:px-6 sm:pt-6 lg:px-8 lg:pt-8">
+          <ThemeToggle />
+        </div>
         <ScrollArea className="h-full">
           <div
             className={cn(

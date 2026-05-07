@@ -71,8 +71,13 @@ test.describe("Navigation", () => {
     await expect(expandBtn).toBeVisible();
   });
 
-  test("应用在 dark 模式下渲染", async ({ page }) => {
-    const darkContainer = page.locator("div.dark");
+  test("主题切换按钮存在且可切换主题", async ({ page }) => {
+    const themeButton = page.locator("[aria-label='浅色模式'], [aria-label='深色模式'], [aria-label='跟随系统']").first();
+    await expect(themeButton).toBeVisible();
+
+    await themeButton.click();
+    await themeButton.click();
+    const darkContainer = page.locator("html.dark");
     await expect(darkContainer).toBeVisible();
   });
 });

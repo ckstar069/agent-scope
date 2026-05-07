@@ -110,6 +110,16 @@ pub struct AgentInfo {
     pub version: String,
     /// 推理 effort（Codex CLI）
     pub effort: String,
+    /// 工具调用记录
+    pub tool_calls: Vec<SerToolCall>,
+    /// 子 Agent 信息
+    pub subagents: Vec<SerSubAgent>,
+    /// 文件访问记录
+    pub file_accesses: Vec<SerFileAccess>,
+    /// 待处理工具调用的起始时间戳（毫秒），0 表示无待处理工具
+    pub pending_since_ms: u64,
+    /// 最近一次用户消息的时间戳，用于渲染"思考中"虚拟行
+    pub thinking_since_ms: u64,
 }
 
 /// 子进程信息
@@ -119,6 +129,31 @@ pub struct ChildProcessInfo {
     pub command: String,
     pub mem_kb: u64,
     pub port: Option<u16>,
+}
+
+/// 工具调用记录
+#[derive(Debug, Clone, Serialize)]
+pub struct SerToolCall {
+    pub name: String,
+    pub arg: String,
+    pub duration_ms: u64,
+}
+
+/// 子 Agent 信息
+#[derive(Debug, Clone, Serialize)]
+pub struct SerSubAgent {
+    pub name: String,
+    pub status: String,
+    pub tokens: u64,
+}
+
+/// 文件访问记录
+#[derive(Debug, Clone, Serialize)]
+pub struct SerFileAccess {
+    pub path: String,
+    /// "R" | "W" | "E"（映射自 FileOp）
+    pub operation: String,
+    pub turn_index: u32,
 }
 
 /// 单个项目的 Agent 聚合数据
@@ -348,6 +383,23 @@ fn session_to_info(
         pid: session.pid,
         version: session.version.clone(),
         effort: session.effort.clone(),
+        tool_calls: session.tool_calls.iter().map(|tc| SerToolCall {
+            name: tc.name.clone(),
+            arg: tc.arg.clone(),
+            duration_ms: tc.duration_ms,
+        }).collect(),
+        subagents: session.subagents.iter().map(|sa| SerSubAgent {
+            name: sa.name.clone(),
+            status: sa.status.clone(),
+            tokens: sa.tokens,
+        }).collect(),
+        file_accesses: session.file_accesses.iter().map(|fa| SerFileAccess {
+            path: fa.path.clone(),
+            operation: fa.operation.to_string(),
+            turn_index: fa.turn_index,
+        }).collect(),
+        pending_since_ms: session.pending_since_ms,
+        thinking_since_ms: session.thinking_since_ms,
     }
 }
 
@@ -531,6 +583,12 @@ mod tests {
         assert_eq!(info.token_rate, 0.0); // 首次采集，无历史记录
         assert_eq!(info.children.len(), 1);
         assert_eq!(info.children[0].port, Some(3000));
+        // 新增字段验证
+        assert!(info.tool_calls.is_empty());
+        assert!(info.subagents.is_empty());
+        assert!(info.file_accesses.is_empty());
+        assert_eq!(info.pending_since_ms, 0);
+        assert_eq!(info.thinking_since_ms, 0);
     }
 
     #[test]
@@ -697,5 +755,242 @@ mod tests {
         assert_eq!(payload.projects.len(), 1);
         assert_eq!(payload.projects[0].count, 0);
         assert!(payload.unmapped.is_empty());
+    }
+
+    #[test]
+    fn test_session_to_info_with_tool_calls() {
+        let last_tokens = Arc::new(Mutex::new(HashMap::new()));
+        let session = AgentSession {
+            agent_cli: "claude",
+            pid: 1,
+            session_id: "s1".to_string(),
+            cwd: "/tmp".to_string(),
+            project_name: "test".to_string(),
+            started_at: 0,
+            status: SessionStatus::Executing,
+            model: "claude".to_string(),
+            effort: "".to_string(),
+            context_percent: 0.0,
+            total_input_tokens: 0,
+            total_output_tokens: 0,
+            total_cache_read: 0,
+            total_cache_create: 0,
+            turn_count: 1,
+            current_tasks: vec![],
+            mem_mb: 0,
+            version: "".to_string(),
+            git_branch: "".to_string(),
+            git_added: 0,
+            git_modified: 0,
+            token_history: vec![],
+            context_history: vec![],
+            compaction_count: 0,
+            context_window: 0,
+            subagents: vec![],
+            mem_file_count: 0,
+            mem_line_count: 0,
+            children: vec![],
+            initial_prompt: "".to_string(),
+            first_assistant_text: "".to_string(),
+            tool_calls: vec![
+                abtop_collector::model::ToolCall {
+                    name: "Read".to_string(),
+                    arg: "src/main.rs".to_string(),
+                    duration_ms: 1500,
+                },
+                abtop_collector::model::ToolCall {
+                    name: "Bash".to_string(),
+                    arg: "cargo build".to_string(),
+                    duration_ms: 3200,
+                },
+            ],
+            pending_since_ms: 0,
+            thinking_since_ms: 0,
+            file_accesses: vec![],
+        };
+
+        let info = session_to_info(&session, &last_tokens);
+        assert_eq!(info.tool_calls.len(), 2);
+        assert_eq!(info.tool_calls[0].name, "Read");
+        assert_eq!(info.tool_calls[0].arg, "src/main.rs");
+        assert_eq!(info.tool_calls[0].duration_ms, 1500);
+        assert_eq!(info.tool_calls[1].name, "Bash");
+        assert_eq!(info.tool_calls[1].duration_ms, 3200);
+    }
+
+    #[test]
+    fn test_session_to_info_with_subagents() {
+        let last_tokens = Arc::new(Mutex::new(HashMap::new()));
+        let session = AgentSession {
+            agent_cli: "claude",
+            pid: 1,
+            session_id: "s1".to_string(),
+            cwd: "/tmp".to_string(),
+            project_name: "test".to_string(),
+            started_at: 0,
+            status: SessionStatus::Executing,
+            model: "claude".to_string(),
+            effort: "".to_string(),
+            context_percent: 0.0,
+            total_input_tokens: 0,
+            total_output_tokens: 0,
+            total_cache_read: 0,
+            total_cache_create: 0,
+            turn_count: 1,
+            current_tasks: vec![],
+            mem_mb: 0,
+            version: "".to_string(),
+            git_branch: "".to_string(),
+            git_added: 0,
+            git_modified: 0,
+            token_history: vec![],
+            context_history: vec![],
+            compaction_count: 0,
+            context_window: 0,
+            subagents: vec![
+                abtop_collector::model::SubAgent {
+                    name: "build".to_string(),
+                    status: "running".to_string(),
+                    tokens: 5000,
+                },
+                abtop_collector::model::SubAgent {
+                    name: "oracle".to_string(),
+                    status: "done".to_string(),
+                    tokens: 1200,
+                },
+            ],
+            mem_file_count: 0,
+            mem_line_count: 0,
+            children: vec![],
+            initial_prompt: "".to_string(),
+            first_assistant_text: "".to_string(),
+            tool_calls: vec![],
+            pending_since_ms: 0,
+            thinking_since_ms: 0,
+            file_accesses: vec![],
+        };
+
+        let info = session_to_info(&session, &last_tokens);
+        assert_eq!(info.subagents.len(), 2);
+        assert_eq!(info.subagents[0].name, "build");
+        assert_eq!(info.subagents[0].status, "running");
+        assert_eq!(info.subagents[0].tokens, 5000);
+        assert_eq!(info.subagents[1].name, "oracle");
+        assert_eq!(info.subagents[1].tokens, 1200);
+    }
+
+    #[test]
+    fn test_session_to_info_with_file_accesses() {
+        let last_tokens = Arc::new(Mutex::new(HashMap::new()));
+        let session = AgentSession {
+            agent_cli: "claude",
+            pid: 1,
+            session_id: "s1".to_string(),
+            cwd: "/tmp".to_string(),
+            project_name: "test".to_string(),
+            started_at: 0,
+            status: SessionStatus::Executing,
+            model: "claude".to_string(),
+            effort: "".to_string(),
+            context_percent: 0.0,
+            total_input_tokens: 0,
+            total_output_tokens: 0,
+            total_cache_read: 0,
+            total_cache_create: 0,
+            turn_count: 1,
+            current_tasks: vec![],
+            mem_mb: 0,
+            version: "".to_string(),
+            git_branch: "".to_string(),
+            git_added: 0,
+            git_modified: 0,
+            token_history: vec![],
+            context_history: vec![],
+            compaction_count: 0,
+            context_window: 0,
+            subagents: vec![],
+            mem_file_count: 0,
+            mem_line_count: 0,
+            children: vec![],
+            initial_prompt: "".to_string(),
+            first_assistant_text: "".to_string(),
+            tool_calls: vec![],
+            pending_since_ms: 0,
+            thinking_since_ms: 0,
+            file_accesses: vec![
+                abtop_collector::model::FileAccess {
+                    path: "src/main.rs".to_string(),
+                    operation: abtop_collector::model::FileOp::Read,
+                    turn_index: 0,
+                },
+                abtop_collector::model::FileAccess {
+                    path: "src/lib.rs".to_string(),
+                    operation: abtop_collector::model::FileOp::Write,
+                    turn_index: 1,
+                },
+                abtop_collector::model::FileAccess {
+                    path: "Cargo.toml".to_string(),
+                    operation: abtop_collector::model::FileOp::Edit,
+                    turn_index: 1,
+                },
+            ],
+        };
+
+        let info = session_to_info(&session, &last_tokens);
+        assert_eq!(info.file_accesses.len(), 3);
+        assert_eq!(info.file_accesses[0].path, "src/main.rs");
+        assert_eq!(info.file_accesses[0].operation, "R");
+        assert_eq!(info.file_accesses[0].turn_index, 0);
+        assert_eq!(info.file_accesses[1].operation, "W");
+        assert_eq!(info.file_accesses[2].operation, "E");
+    }
+
+    #[test]
+    fn test_session_to_info_empty_fields() {
+        let last_tokens = Arc::new(Mutex::new(HashMap::new()));
+        let session = AgentSession {
+            agent_cli: "claude",
+            pid: 1,
+            session_id: "s1".to_string(),
+            cwd: "/tmp".to_string(),
+            project_name: "test".to_string(),
+            started_at: 0,
+            status: SessionStatus::Waiting,
+            model: "claude".to_string(),
+            effort: "".to_string(),
+            context_percent: 0.0,
+            total_input_tokens: 0,
+            total_output_tokens: 0,
+            total_cache_read: 0,
+            total_cache_create: 0,
+            turn_count: 0,
+            current_tasks: vec![],
+            mem_mb: 0,
+            version: "".to_string(),
+            git_branch: "".to_string(),
+            git_added: 0,
+            git_modified: 0,
+            token_history: vec![],
+            context_history: vec![],
+            compaction_count: 0,
+            context_window: 0,
+            subagents: vec![],
+            mem_file_count: 0,
+            mem_line_count: 0,
+            children: vec![],
+            initial_prompt: "".to_string(),
+            first_assistant_text: "".to_string(),
+            tool_calls: vec![],
+            pending_since_ms: 0,
+            thinking_since_ms: 0,
+            file_accesses: vec![],
+        };
+
+        let info = session_to_info(&session, &last_tokens);
+        assert!(info.tool_calls.is_empty());
+        assert!(info.subagents.is_empty());
+        assert!(info.file_accesses.is_empty());
+        assert_eq!(info.pending_since_ms, 0);
+        assert_eq!(info.thinking_since_ms, 0);
     }
 }

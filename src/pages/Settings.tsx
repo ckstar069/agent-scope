@@ -1,5 +1,6 @@
 import { useCallback, useEffect, useMemo, useState, type ComponentProps } from "react";
-import { AlertTriangle, CheckCircle2, FolderCog, FolderPlus, Loader2, Settings as SettingsIcon, Trash2 } from "lucide-react";
+import { open } from "@tauri-apps/plugin-dialog";
+import { AlertTriangle, CheckCircle2, FolderCog, FolderOpen, FolderPlus, Loader2, RefreshCw, Trash2 } from "lucide-react";
 
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
@@ -94,6 +95,24 @@ export function Settings() {
     }
   }
 
+  async function handleBrowse() {
+    try {
+      const selected = await open({
+        directory: true,
+        multiple: false,
+        title: "选择 FPGA 项目目录",
+      });
+
+      if (selected && typeof selected === "string") {
+        setProjectPath(selected);
+        setError(null);
+        setSuccess(null);
+      }
+    } catch (err) {
+      console.error("浏览目录失败:", err);
+    }
+  }
+
   return (
     <section className="space-y-6">
       <div className="flex flex-col gap-4 lg:flex-row lg:items-end lg:justify-between">
@@ -124,7 +143,7 @@ export function Settings() {
         </CardHeader>
         <CardContent>
           <form className="flex flex-col gap-3 lg:flex-row" onSubmit={handleAddProject}>
-            <div className="min-w-0 flex-1">
+            <div className="flex min-w-0 flex-1 gap-2">
               <label htmlFor="project-path" className="sr-only">
                 项目路径
               </label>
@@ -144,6 +163,9 @@ export function Settings() {
                   }
                 }}
               />
+              <Button type="button" variant="outline" disabled={isAdding} onClick={handleBrowse} title="浏览目录">
+                <FolderOpen className="size-4" aria-hidden="true" />
+              </Button>
             </div>
             <Button type="submit" className="lg:w-32" disabled={isAdding}>
               {isAdding ? <Loader2 className="size-4 animate-spin" aria-hidden="true" /> : <FolderPlus className="size-4" aria-hidden="true" />}
@@ -164,7 +186,9 @@ export function Settings() {
             <CardTitle>已注册项目</CardTitle>
             <CardDescription>这些路径会被后端注册表持久化保存，移除后停止纳入跨项目监控。</CardDescription>
           </div>
-          <SettingsIcon className="mt-1 size-5 shrink-0 text-muted-foreground" aria-hidden="true" />
+          <Button type="button" variant="ghost" size="icon" onClick={loadProjects} title="刷新项目列表" disabled={isLoading}>
+            <RefreshCw className={isLoading ? "size-4 animate-spin" : "size-4"} aria-hidden="true" />
+          </Button>
         </CardHeader>
         <CardContent>
           {isLoading ? (

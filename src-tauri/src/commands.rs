@@ -8,7 +8,9 @@ use tauri::{AppHandle, Emitter, Manager, State};
 
 use crate::collectors::agent::AgentCollector;
 use crate::collectors::template::{
-    SourceLayout, TemplateData, TemplateDataCollector, WatchedCollector,
+    ProjectFile, ProjectFilesCollector, SessionSummary, SessionTranscript,
+    SessionTranscriptCollector, SessionTurn, SourceLayout, TemplateData, TemplateDataCollector,
+    WatchedCollector,
 };
 use crate::registry::{ProjectEntry, ProjectRegistry};
 
@@ -208,6 +210,173 @@ impl Default for SerGitStatus {
             is_clean: true,
             changed_files: Vec::new(),
         }
+    }
+}
+
+#[derive(Debug, Clone, Serialize)]
+pub struct SerProjectFile {
+    pub relative_path: String,
+    pub source_group: String,
+    pub content_preview: String,
+    pub mtime_ms: u64,
+}
+
+impl From<ProjectFile> for SerProjectFile {
+    fn from(f: ProjectFile) -> Self {
+        let content_preview = if f.content.len() > 200 {
+            format!("{}...", &f.content[..200])
+        } else {
+            f.content.clone()
+        };
+        let source_group = match f.source_group.as_str() {
+            "design" | "specs" => "docs".to_string(),
+            other => other.to_string(),
+        };
+        Self {
+            relative_path: f.relative_path,
+            source_group,
+            content_preview,
+            mtime_ms: f.mtime_ms,
+        }
+    }
+}
+
+#[derive(Debug, Clone, Serialize)]
+pub struct SerTurn {
+    pub role: String,
+    pub text: String,
+    pub tools: Vec<String>,
+    pub timestamp: Option<u64>,
+}
+
+impl From<SessionTurn> for SerTurn {
+    fn from(turn: SessionTurn) -> Self {
+        Self {
+            role: turn.role,
+            text: turn.text,
+            tools: turn.tools,
+            timestamp: turn.timestamp,
+        }
+    }
+}
+
+#[derive(Debug, Clone, Serialize)]
+pub struct SerTranscript {
+    pub session_id: String,
+    pub initial_prompt: String,
+    pub custom_title: Option<String>,
+    pub model: Option<String>,
+    pub turns: Vec<SerTurn>,
+    pub modified_files: Vec<String>,
+    pub created_at: u64,
+}
+
+impl From<SessionTranscript> for SerTranscript {
+    fn from(t: SessionTranscript) -> Self {
+        Self {
+            session_id: t.session_id,
+            initial_prompt: t.initial_prompt,
+            custom_title: t.custom_title,
+            model: t.model,
+            turns: t.turns.into_iter().map(SerTurn::from).collect(),
+            modified_files: t.modified_files,
+            created_at: t.created_at,
+        }
+    }
+}
+
+#[derive(Debug, Clone, Serialize)]
+pub struct SerSessionSummary {
+    pub session_id: String,
+    pub initial_prompt: String,
+    pub custom_title: Option<String>,
+    pub model: Option<String>,
+    pub turn_count: usize,
+    pub modified_files: Vec<String>,
+    pub created_at: u64,
+}
+
+impl From<SessionSummary> for SerSessionSummary {
+    fn from(s: SessionSummary) -> Self {
+        Self {
+            session_id: s.session_id,
+            initial_prompt: s.initial_prompt,
+            custom_title: s.custom_title,
+            model: s.model,
+            turn_count: s.turn_count,
+            modified_files: s.modified_files,
+            created_at: s.created_at,
+        }
+    }
+}
+
+#[derive(Debug, Clone, Deserialize)]
+pub struct SerCandidateMemory {
+    pub content: String,
+    pub source_session_id: String,
+    pub source_turn_index: usize,
+    pub source_snippet: String,
+    pub category: String,
+}
+
+fn is_whitelisted_path(relative_path: &str) -> bool {
+    let path = std::path::Path::new(relative_path);
+    let parent = path
+        .parent()
+        .map(|p| p.to_string_lossy())
+        .unwrap_or_default();
+    let file_name = path
+        .file_name()
+        .map(|n| n.to_string_lossy())
+        .unwrap_or_default();
+
+    if parent.is_empty() && matches!(file_name.as_ref(), "CLAUDE.md" | "AGENTS.md") {
+        return true;
+    }
+
+    let whitelist_dirs = [
+        ".claude/rules",
+        ".sisyphus/notepads",
+        ".sisyphus/plans",
+        ".sisyphus/drafts",
+        "docs/design",
+        "docs/specs",
+    ];
+
+    whitelist_dirs.iter().any(|&dir| parent.starts_with(dir))
+}
+
+#[tauri::command]
+pub fn get_project_files(path: String) -> Result<Vec<SerProjectFile>, String> {
+    let path_buf = PathBuf::from(&path);
+    if !path_buf.exists() || !path_buf.is_dir() {
+        return Err(describe_path_error(&path));
+    }
+
+    match ProjectFilesCollector::collect(&path_buf) {
+        Ok(files) => Ok(files.into_iter().map(SerProjectFile::from).collect()),
+        Err(e) => Err(e.to_string()),
+    }
+}
+
+#[tauri::command]
+pub fn get_project_file_content(
+    path: String,
+    relative_path: String,
+) -> Result<String, String> {
+    let path_buf = PathBuf::from(&path);
+    if !path_buf.exists() || !path_buf.is_dir() {
+        return Err(describe_path_error(&path));
+    }
+
+    if !is_whitelisted_path(&relative_path) {
+        return Err("文件不在白名单内".to_string());
+    }
+
+    let file_path = path_buf.join(&relative_path);
+    match std::fs::read_to_string(&file_path) {
+        Ok(content) => Ok(content),
+        Err(e) => Err(format!("读取文件失败: {}", e)),
     }
 }
 
@@ -443,6 +612,157 @@ pub fn stop_watching(
         stop_signal.store(false, Ordering::SeqCst);
         println!("[commands] 已停止监听项目: {}", canonical_path);
     }
+
+    Ok(())
+}
+
+#[tauri::command]
+pub fn get_latest_session(path: String) -> Result<Option<SerTranscript>, String> {
+    let path_buf = PathBuf::from(&path);
+    if !path_buf.exists() || !path_buf.is_dir() {
+        return Err(describe_path_error(&path));
+    }
+
+    match SessionTranscriptCollector::get_latest_session(&path_buf) {
+        Ok(Some(transcript)) => Ok(Some(SerTranscript::from(transcript))),
+        Ok(None) => Ok(None),
+        Err(e) => Err(e.to_string()),
+    }
+}
+
+#[tauri::command]
+pub fn list_project_sessions(path: String) -> Result<Vec<SerSessionSummary>, String> {
+    let path_buf = PathBuf::from(&path);
+    if !path_buf.exists() || !path_buf.is_dir() {
+        return Err(describe_path_error(&path));
+    }
+
+    match SessionTranscriptCollector::list_sessions(&path_buf) {
+        Ok(sessions) => Ok(sessions.into_iter().map(SerSessionSummary::from).collect()),
+        Err(e) => Err(e.to_string()),
+    }
+}
+
+#[tauri::command]
+pub fn search_sessions(
+    path: String,
+    query: String,
+) -> Result<Vec<SerSessionSummary>, String> {
+    let path_buf = PathBuf::from(&path);
+    if !path_buf.exists() || !path_buf.is_dir() {
+        return Err(describe_path_error(&path));
+    }
+
+    match SessionTranscriptCollector::search_sessions(&path_buf, &query) {
+        Ok(sessions) => Ok(sessions.into_iter().map(SerSessionSummary::from).collect()),
+        Err(e) => Err(e.to_string()),
+    }
+}
+
+#[tauri::command]
+pub fn get_session_transcript(
+    path: String,
+    session_id: String,
+) -> Result<SerTranscript, String> {
+    let path_buf = PathBuf::from(&path);
+    if !path_buf.exists() || !path_buf.is_dir() {
+        return Err(describe_path_error(&path));
+    }
+
+    match SessionTranscriptCollector::get_session(&path_buf, &session_id) {
+        Ok(Some(transcript)) => Ok(SerTranscript::from(transcript)),
+        Ok(None) => Err("会话未找到".to_string()),
+        Err(e) => Err(e.to_string()),
+    }
+}
+
+#[tauri::command]
+pub fn save_candidate_memory(
+    path: String,
+    memory: SerCandidateMemory,
+) -> Result<(), String> {
+    use std::io::Write;
+
+    let path_buf = PathBuf::from(&path);
+    if !path_buf.exists() || !path_buf.is_dir() {
+        return Err(describe_path_error(&path));
+    }
+
+    let memory_dir = path_buf
+        .join(".sisyphus")
+        .join("notepads")
+        .join("project-memory");
+    let memory_file = memory_dir.join("decisions.md");
+
+    // 确保目录存在
+    if let Err(e) = std::fs::create_dir_all(&memory_dir) {
+        return Err(format!("创建目录失败: {}", e));
+    }
+
+    // 生成时间戳（使用 std::time，无需 chrono 依赖）
+    let now = std::time::SystemTime::now()
+        .duration_since(std::time::UNIX_EPOCH)
+        .unwrap_or_default();
+    let secs = now.as_secs();
+    // 简单日期计算（UTC），近似 YYYY-MM-DD HH:MM:SS
+    let days = secs / 86400;
+    let time_of_day = secs % 86400;
+    let hours = time_of_day / 3600;
+    let minutes = (time_of_day % 3600) / 60;
+    let seconds = time_of_day % 60;
+
+    // 从 epoch 天数计算日期（1970-01-01 = day 0）
+    let mut y = 1970i64;
+    let mut remaining_days = days as i64;
+    loop {
+        let year_days = if (y % 4 == 0 && y % 100 != 0) || (y % 400 == 0) {
+            366
+        } else {
+            365
+        };
+        if remaining_days < year_days {
+            break;
+        }
+        remaining_days -= year_days;
+        y += 1;
+    }
+    let month_days = if (y % 4 == 0 && y % 100 != 0) || (y % 400 == 0) {
+        [31, 29, 31, 30, 31, 30, 31, 31, 30, 31, 30, 31]
+    } else {
+        [31, 28, 31, 30, 31, 30, 31, 31, 30, 31, 30, 31]
+    };
+    let mut m = 1usize;
+    for &md in &month_days {
+        if remaining_days < md as i64 {
+            break;
+        }
+        remaining_days -= md as i64;
+        m += 1;
+    }
+    let d = remaining_days + 1;
+
+    let timestamp = format!(
+        "{:04}-{:02}-{:02} {:02}:{:02}:{:02}",
+        y, m, d, hours, minutes, seconds
+    );
+
+    let entry = format!(
+        "\n## [{}] {}\n\n{}\n\n来源: {} / Turn {}\n",
+        timestamp,
+        memory.category,
+        memory.content,
+        memory.source_session_id,
+        memory.source_turn_index
+    );
+
+    let mut file = std::fs::OpenOptions::new()
+        .create(true)
+        .append(true)
+        .open(&memory_file)
+        .map_err(|e| format!("打开文件失败: {}", e))?;
+
+    file.write_all(entry.as_bytes())
+        .map_err(|e| format!("写入文件失败: {}", e))?;
 
     Ok(())
 }

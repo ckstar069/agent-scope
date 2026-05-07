@@ -1,7 +1,10 @@
 import type { ComponentType, ReactNode } from "react";
-import { useEffect, useMemo, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import {
   AlertCircle,
+  ArrowDown,
+  ArrowRight,
+  BookOpen,
   CheckCircle2,
   Circle,
   Clock,
@@ -17,6 +20,7 @@ import {
   SlidersHorizontal,
 } from "lucide-react";
 
+import { ProjectMemoryPanel } from "@/components/ProjectMemoryPanel";
 import { ScrollArea } from "@/components/ui/scroll-area";
 import { useTauri } from "@/hooks/useTauri";
 import { cn } from "@/lib/utils";
@@ -390,6 +394,10 @@ export function ProjectDetail({ projectPath = "" }: ProjectDetailProps) {
           <Panel title="Memory" icon={MemoryStick} subtitle=".claude/memory/*.md">
             <MemoryPanel entries={data?.memories ?? []} memoryError={data?.memory_error ?? null} />
           </Panel>
+
+          <Panel title="项目记忆" icon={BookOpen} subtitle="CLAUDE.md、规则、笔记、设计文档">
+            <ProjectMemoryPanel projectPath={projectPath} />
+          </Panel>
         </>
       )}
     </section>
@@ -457,43 +465,99 @@ function Panel({
 }
 
 function StageTimeline({ currentStageIndex, stageError }: { currentStageIndex: number; stageError: string | null }) {
+  const containerRef = useRef<HTMLDivElement | null>(null);
+  const [itemsPerRow, setItemsPerRow] = useState(5);
+
+  useEffect(() => {
+    const container = containerRef.current;
+
+    if (!container) {
+      return;
+    }
+
+    const updateItemsPerRow = () => {
+      const nextItemsPerRow = Math.max(1, Math.min(5, Math.floor(container.clientWidth / 120)));
+      setItemsPerRow(nextItemsPerRow);
+    };
+
+    updateItemsPerRow();
+
+    const resizeObserver = new ResizeObserver(updateItemsPerRow);
+    resizeObserver.observe(container);
+
+    return () => resizeObserver.disconnect();
+  }, []);
+
   if (stageError) {
     const error = classifyStageError(stageError);
     return <ErrorNotice message={stageError} title={error.title} tone={error.tone} />;
   }
 
-  return (
-    <div className="overflow-x-auto pb-2">
-      <ol className="flex min-w-max items-start">
-        {stageSteps.map((stage, index) => {
-          const isDone = currentStageIndex > index;
-          const isCurrent = currentStageIndex === index;
-          const Icon = isDone ? CheckCircle2 : isCurrent ? Clock : Circle;
+  const rows: Array<Array<{ stage: (typeof stageSteps)[number]; index: number }>> = [];
 
-          return (
-            <li key={stage.name} className="flex items-start">
-              <div className="flex w-28 flex-col items-center text-center">
-                <div
-                  className={cn(
-                    "flex size-10 items-center justify-center rounded-full border transition-colors",
-                    isCurrent && "border-primary bg-primary text-primary-foreground",
-                    isDone && "border-primary/50 bg-primary/10 text-primary",
-                    !isCurrent && !isDone && "border-border bg-muted text-muted-foreground",
+  for (let index = 0; index < stageSteps.length; index += itemsPerRow) {
+    rows.push(stageSteps.slice(index, index + itemsPerRow).map((stage, rowOffset) => ({ stage, index: index + rowOffset })));
+  }
+
+  return (
+    <div ref={containerRef} className="space-y-5 pb-2">
+      {rows.map((row, rowIndex) => {
+        const isReversedRow = rowIndex % 2 === 1;
+        const displayRow = isReversedRow ? [...row].reverse() : row;
+
+        return (
+          <ol key={row[0]?.stage.name ?? rowIndex} className="flex items-start justify-between gap-2">
+            {displayRow.map(({ stage, index }, displayIndex) => {
+              const isDone = currentStageIndex > index;
+              const isCurrent = currentStageIndex === index;
+              const Icon = isDone ? CheckCircle2 : isCurrent ? Clock : Circle;
+              const nextVisualItem = displayRow[displayIndex + 1];
+              const hasNextInRow = nextVisualItem !== undefined;
+              const isLogicalRowEnd = index === row[row.length - 1].index;
+              const hasNextRow = rowIndex < rows.length - 1;
+              const connectorDone = nextVisualItem ? currentStageIndex > Math.min(index, nextVisualItem.index) : isDone;
+
+              return (
+                <li key={stage.name} className="flex min-w-0 flex-1 items-start last:flex-none">
+                  <div className="flex w-24 shrink-0 flex-col items-center text-center">
+                    <div
+                      className={cn(
+                        "flex size-10 items-center justify-center rounded-full border transition-colors",
+                        isCurrent && "border-primary bg-primary text-primary-foreground",
+                        isDone && "border-primary/50 bg-primary/10 text-primary",
+                        !isCurrent && !isDone && "border-border bg-muted text-muted-foreground",
+                      )}
+                    >
+                      <Icon className="size-4" aria-hidden="true" />
+                    </div>
+                    <p className={cn("mt-3 text-sm font-medium", isCurrent ? "text-foreground" : "text-muted-foreground")}>{stage.label}</p>
+                    <p className="mt-1 text-xs text-muted-foreground">{stage.description}</p>
+                    <p className="mt-2 rounded-md bg-muted px-2 py-1 text-xs text-muted-foreground">耗时 --</p>
+                    {isLogicalRowEnd && hasNextRow && (
+                      <div className="mt-3 flex flex-col items-center" aria-hidden="true">
+                        <div className={cn("h-4 w-px", isDone ? "bg-primary/60" : "bg-border")} />
+                        <ArrowDown className={cn("-mt-1 size-3", isDone ? "text-primary/60" : "text-border")} />
+                      </div>
+                    )}
+                  </div>
+                  {hasNextInRow && (
+                    <div className="mt-5 flex min-w-4 flex-1 items-center px-1" aria-hidden="true">
+                      <div className={cn("h-px flex-1", connectorDone ? "bg-primary/60" : "bg-border")} />
+                      <ArrowRight
+                        className={cn(
+                          "-ml-1 size-3 shrink-0",
+                          isReversedRow && "rotate-180",
+                          connectorDone ? "text-primary/60" : "text-border",
+                        )}
+                      />
+                    </div>
                   )}
-                >
-                  <Icon className="size-4" aria-hidden="true" />
-                </div>
-                <p className={cn("mt-3 text-sm font-medium", isCurrent ? "text-foreground" : "text-muted-foreground")}>{stage.label}</p>
-                <p className="mt-1 text-xs text-muted-foreground">{stage.description}</p>
-                <p className="mt-2 rounded-md bg-muted px-2 py-1 text-xs text-muted-foreground">耗时 --</p>
-              </div>
-              {index < stageSteps.length - 1 && (
-                <div className={cn("mt-5 h-px w-10", currentStageIndex > index ? "bg-primary/60" : "bg-border")} aria-hidden="true" />
-              )}
-            </li>
-          );
-        })}
-      </ol>
+                </li>
+              );
+            })}
+          </ol>
+        );
+      })}
     </div>
   );
 }

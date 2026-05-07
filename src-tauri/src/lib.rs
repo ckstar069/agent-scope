@@ -3,7 +3,7 @@ pub mod commands;
 pub mod registry;
 pub mod watcher;
 
-use commands::{add_project, get_project_data, list_projects, remove_project, start_watching, stop_watching};
+use commands::{add_project, get_latest_session, get_project_data, get_project_files, get_project_file_content, get_session_transcript, list_project_sessions, list_projects, remove_project, save_candidate_memory, search_sessions, start_watching, stop_watching};
 use collectors::agent::AgentCollector;
 use registry::ProjectRegistry;
 
@@ -16,6 +16,7 @@ fn greet(name: &str) -> String {
 pub fn run() {
     tauri::Builder::default()
         .plugin(tauri_plugin_opener::init())
+        .plugin(tauri_plugin_dialog::init())
         .plugin(tauri_plugin_fs::init())
         .setup(|app| {
             let data_dir = ProjectRegistry::default_data_dir();
@@ -36,8 +37,15 @@ pub fn run() {
             remove_project,
             list_projects,
             get_project_data,
+            get_project_files,
+            get_project_file_content,
             start_watching,
             stop_watching,
+            get_latest_session,
+            list_project_sessions,
+            search_sessions,
+            get_session_transcript,
+            save_candidate_memory,
         ])
         .run(tauri::generate_context!())
         .expect("error while running tauri application");

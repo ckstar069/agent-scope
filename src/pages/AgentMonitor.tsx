@@ -1,14 +1,19 @@
 import { useEffect, useMemo, useState } from "react";
-import { Activity, AlertTriangle, Bot, Clock, Gauge, Layers3, Radio, RotateCcw } from "lucide-react";
+import { Activity, AlertTriangle, Bot, ChevronDown, ChevronRight, Clock, Gauge, Layers3, Radio, RotateCcw, Search, X } from "lucide-react";
 
+import { AgentFileAudit } from "@/components/AgentFileAudit";
+import { AgentSubTree } from "@/components/AgentSubTree";
+import { AgentToolTimeline } from "@/components/AgentToolTimeline";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
+import { Input } from "@/components/ui/input";
 import { useTauri } from "@/hooks/useTauri";
 import { cn } from "@/lib/utils";
 
 type RawAgentStatus = "Thinking" | "Executing" | "Waiting" | "RateLimited" | "Done";
 type DisplayStatus = "Active" | "Idle" | "Offline";
 type TokenRateUnit = "second" | "minute";
+type AgentDetailTab = "timeline" | "subagents" | "fileaudit";
 
 interface AgentInfo {
   agent_type: string;
@@ -36,6 +41,11 @@ interface AgentInfo {
   pid: number;
   version: string;
   effort: string;
+  tool_calls: { name: string; arg: string; duration_ms: number }[];
+  subagents: { name: string; status: string; tokens: number }[];
+  file_accesses: { path: string; operation: string; turn_index: number }[];
+  pending_since_ms: number;
+  thinking_since_ms: number;
 }
 
 interface ProjectAgents {
@@ -76,7 +86,10 @@ export function AgentMonitor() {
   const [snapshot, setSnapshot] = useState<AgentUpdatePayload | null>(null);
   const [listenError, setListenError] = useState<string | null>(null);
   const [rateUnit, setRateUnit] = useState<TokenRateUnit>("second");
+  const [filterText, setFilterText] = useState("");
+  const [expandedSessionId, setExpandedSessionId] = useState<string | null>(null);
   const [now, setNow] = useState(() => Date.now());
+  const normalizedFilter = filterText.trim().toLowerCase();
 
   useEffect(() => {
     let isMounted = true;
@@ -111,6 +124,12 @@ export function AgentMonitor() {
     return () => window.clearInterval(timer);
   }, []);
 
+  useEffect(() => {
+    if (filterText.length >= 0) {
+      setExpandedSessionId(null);
+    }
+  }, [filterText]);
+
   const activeProjects = useMemo(
     () => (snapshot?.projects ?? []).filter((project) => project.agents.length > 0),
     [snapshot?.projects],
@@ -120,18 +139,58 @@ export function AgentMonitor() {
     () => [...activeProjects.flatMap((project) => project.agents), ...unmappedAgents],
     [activeProjects, unmappedAgents],
   );
+  const filteredProjects = useMemo(() => {
+    if (!normalizedFilter) {
+      return activeProjects;
+    }
+
+    return activeProjects
+      .map((project) => {
+        const agents = project.agents.filter((agent) => matchesAgentFilter(agent, normalizedFilter));
+        return { ...project, agents, count: agents.length };
+      })
+      .filter((project) => project.agents.length > 0);
+  }, [activeProjects, normalizedFilter]);
+  const filteredUnmappedAgents = useMemo(() => {
+    if (!normalizedFilter) {
+      return unmappedAgents;
+    }
+
+    return unmappedAgents.filter((agent) => matchesAgentFilter(agent, normalizedFilter));
+  }, [normalizedFilter, unmappedAgents]);
   const maxRate = useMemo(() => Math.max(1, ...allAgents.map((agent) => getDisplayRate(agent.token_rate, rateUnit))), [allAgents, rateUnit]);
   const totalSessions = snapshot?.total_sessions ?? 0;
+  const totalCount = allAgents.length;
+  const matchedCount = filteredProjects.reduce((sum, project) => sum + project.agents.length, 0) + filteredUnmappedAgents.length;
+
+  function handleToggle(sessionId: string) {
+    setExpandedSessionId((previous) => (previous === sessionId ? null : sessionId));
+  }
 
   return (
     <section className="space-y-6">
       <div className="flex flex-col gap-4 lg:flex-row lg:items-end lg:justify-between">
-        <div className="space-y-2">
+        <div className="space-y-3">
           <p className="text-sm font-medium text-muted-foreground">Agents</p>
           <h1 className="text-3xl font-semibold tracking-tight">Agent 监控</h1>
           <p className="max-w-2xl text-sm text-muted-foreground">
             通过 Tauri 事件流展示实时 Token 速率、上下文窗口占用和会话在线状态。
           </p>
+          <div className="flex max-w-2xl items-center gap-2">
+            <Search className="size-4 shrink-0 text-muted-foreground" aria-hidden="true" />
+            <Input
+              aria-label="搜索 Agent 会话"
+              placeholder="搜索会话 ID、项目、模型、状态…"
+              value={filterText}
+              onChange={(event) => setFilterText(event.target.value)}
+            />
+            {filterText && (
+              <Button type="button" variant="ghost" size="icon" aria-label="清空搜索" onClick={() => setFilterText("")}>
+                <X className="size-4" aria-hidden="true" />
+              </Button>
+            )}
+            <span className="shrink-0 font-mono text-xs text-muted-foreground">{matchedCount}/{totalCount}</span>
+          </div>
         </div>
 
         <div className="flex flex-wrap items-center gap-2">
@@ -180,17 +239,43 @@ export function AgentMonitor() {
             </p>
           </CardContent>
         </Card>
+      ) : normalizedFilter && matchedCount === 0 ? (
+        <Card className="relative flex min-h-72 overflow-hidden border-dashed">
+          <div className="absolute inset-x-8 top-0 h-px bg-gradient-to-r from-transparent via-primary/30 to-transparent" />
+          <CardContent className="m-auto flex max-w-md flex-col items-center p-8 text-center">
+            <div className="mb-4 flex size-12 items-center justify-center rounded-xl bg-muted text-muted-foreground">
+              <Search className="size-6" aria-hidden="true" />
+            </div>
+            <h2 className="text-xl font-semibold tracking-tight">没有匹配的会话</h2>
+            <p className="mt-2 text-sm text-muted-foreground">
+              当前筛选条件未命中 session_id、项目、模型、状态或工作目录。
+            </p>
+            <Button type="button" variant="outline" className="mt-5" onClick={() => setFilterText("")}>
+              <X className="size-4" aria-hidden="true" />
+              清空搜索
+            </Button>
+          </CardContent>
+        </Card>
       ) : (
         <div className="space-y-4">
-          {activeProjects.map((project) => (
-            <ProjectAgentCard key={project.project_path} project={project} maxRate={maxRate} rateUnit={rateUnit} />
-          ))}
-
-          {unmappedAgents.length > 0 && (
+          {filteredProjects.map((project) => (
             <ProjectAgentCard
-              project={{ project_path: "未关联", agents: unmappedAgents, count: unmappedAgents.length }}
+              key={project.project_path}
+              project={project}
               maxRate={maxRate}
               rateUnit={rateUnit}
+              expandedSessionId={expandedSessionId}
+              onToggleSession={handleToggle}
+            />
+          ))}
+
+          {filteredUnmappedAgents.length > 0 && (
+            <ProjectAgentCard
+              project={{ project_path: "未关联", agents: filteredUnmappedAgents, count: filteredUnmappedAgents.length }}
+              maxRate={maxRate}
+              rateUnit={rateUnit}
+              expandedSessionId={expandedSessionId}
+              onToggleSession={handleToggle}
               isUnmapped
             />
           )}
@@ -226,10 +311,12 @@ interface ProjectAgentCardProps {
   project: ProjectAgents;
   maxRate: number;
   rateUnit: TokenRateUnit;
+  expandedSessionId: string | null;
+  onToggleSession: (sessionId: string) => void;
   isUnmapped?: boolean;
 }
 
-function ProjectAgentCard({ project, maxRate, rateUnit, isUnmapped = false }: ProjectAgentCardProps) {
+function ProjectAgentCard({ project, maxRate, rateUnit, expandedSessionId, onToggleSession, isUnmapped = false }: ProjectAgentCardProps) {
   const displayName = isUnmapped ? "未关联" : getProjectName(project.project_path, project.agents[0]?.project_name);
   const cardAccent = isUnmapped ? "from-muted via-muted-foreground/30 to-muted" : "from-stage-l0 via-stage-l2 to-stage-l5";
 
@@ -255,7 +342,14 @@ function ProjectAgentCard({ project, maxRate, rateUnit, isUnmapped = false }: Pr
 
       <CardContent className="space-y-3">
         {project.agents.map((agent) => (
-          <AgentSessionRow key={agent.session_id} agent={agent} maxRate={maxRate} rateUnit={rateUnit} />
+          <AgentSessionRow
+            key={agent.session_id}
+            agent={agent}
+            maxRate={maxRate}
+            rateUnit={rateUnit}
+            isExpanded={expandedSessionId === agent.session_id}
+            onToggle={() => onToggleSession(agent.session_id)}
+          />
         ))}
       </CardContent>
     </Card>
@@ -266,61 +360,146 @@ interface AgentSessionRowProps {
   agent: AgentInfo;
   maxRate: number;
   rateUnit: TokenRateUnit;
+  isExpanded: boolean;
+  onToggle: () => void;
 }
 
-function AgentSessionRow({ agent, maxRate, rateUnit }: AgentSessionRowProps) {
+function AgentSessionRow({ agent, maxRate, rateUnit, isExpanded, onToggle }: AgentSessionRowProps) {
+  const [activeTab, setActiveTab] = useState<AgentDetailTab>("timeline");
   const displayStatus = toDisplayStatus(agent.status);
   const displayRate = getDisplayRate(agent.token_rate, rateUnit);
   const ratePercent = clamp((displayRate / maxRate) * 100, 0, 100);
   const context = getContextUsage(agent);
   const rateStyle = { "--rate-fill": `${ratePercent}%` } as React.CSSProperties;
   const contextStyle = { "--context-fill": `${context.percent}%` } as React.CSSProperties;
+  const detailId = `agent-detail-${agent.session_id}`;
 
   return (
-    <div className="rounded-lg border border-border bg-muted/30 p-4 transition-colors hover:bg-muted/45">
-      <div className="flex flex-col gap-3 xl:flex-row xl:items-start xl:justify-between">
-        <div className="min-w-0 space-y-2">
-          <div className="flex flex-wrap items-center gap-2">
-            <span className="font-mono text-sm font-semibold tracking-tight">{shortSessionId(agent.session_id)}</span>
-            <span className="rounded-full border border-border bg-background px-2 py-0.5 text-xs text-muted-foreground">
-              {agent.agent_type || "unknown"}
-            </span>
-            <StatusBadge status={displayStatus} rawStatus={agent.status} />
+    <div
+      className={cn(
+        "rounded-lg border border-border bg-muted/30 p-4 transition-colors outline-none focus-visible:border-ring focus-visible:ring-3 focus-visible:ring-ring/50",
+        isExpanded ? "border-l-2 border-l-primary bg-muted/40" : "cursor-pointer hover:bg-muted/50",
+      )}
+    >
+      <button type="button" className="block w-full text-left" aria-expanded={isExpanded} aria-controls={detailId} onClick={onToggle}>
+        <div className="flex flex-col gap-3 xl:flex-row xl:items-start xl:justify-between">
+          <div className="min-w-0 space-y-2">
+            <div className="flex flex-wrap items-center gap-2">
+              {isExpanded ? (
+                <ChevronDown className="size-4 shrink-0 text-muted-foreground" aria-hidden="true" />
+              ) : (
+                <ChevronRight className="size-4 shrink-0 text-muted-foreground" aria-hidden="true" />
+              )}
+              <span className="font-mono text-sm font-semibold tracking-tight">{shortSessionId(agent.session_id)}</span>
+              <span className="rounded-full border border-border bg-background px-2 py-0.5 text-xs text-muted-foreground">
+                {agent.agent_type || "unknown"}
+              </span>
+              <StatusBadge status={displayStatus} rawStatus={agent.status} />
+            </div>
+            <p className="truncate text-xs text-muted-foreground">{agent.cwd}</p>
           </div>
-          <p className="truncate text-xs text-muted-foreground">{agent.cwd}</p>
+
+          <div className="grid gap-2 text-xs text-muted-foreground sm:grid-cols-3 xl:min-w-96">
+            <InlineMetric icon={Gauge} label="模型" value={agent.model || "未知"} />
+            <InlineMetric icon={Layers3} label="轮次" value={`${agent.turn_count}`} />
+            <InlineMetric icon={RotateCcw} label="PID" value={`${agent.pid || "-"}`} />
+          </div>
         </div>
 
-        <div className="grid gap-2 text-xs text-muted-foreground sm:grid-cols-3 xl:min-w-96">
-          <InlineMetric icon={Gauge} label="模型" value={agent.model || "未知"} />
-          <InlineMetric icon={Layers3} label="轮次" value={`${agent.turn_count}`} />
-          <InlineMetric icon={RotateCcw} label="PID" value={`${agent.pid || "-"}`} />
+        <div className="mt-4 grid gap-4 lg:grid-cols-[minmax(0,1fr)_minmax(0,1fr)]">
+          <div className="space-y-2">
+            <div className="flex items-center justify-between gap-3 text-xs">
+              <span className="text-muted-foreground">Token 速率</span>
+              <span className="font-mono font-semibold text-foreground">{formatRate(displayRate)} {rateUnit === "second" ? "token/s" : "token/min"}</span>
+            </div>
+            <div className="h-2 overflow-hidden rounded-full bg-muted">
+              <div className="h-full w-[var(--rate-fill)] rounded-full bg-gradient-to-r from-stage-l0 via-stage-l2 to-stage-l4 transition-[width] duration-500" style={rateStyle} />
+            </div>
+          </div>
+
+          <div className="space-y-2">
+            <div className="flex items-center justify-between gap-3 text-xs">
+              <span className="text-muted-foreground">上下文窗口</span>
+              <span className="font-mono font-semibold text-foreground">
+                {formatTokens(context.current)} / {formatTokens(context.max)}
+              </span>
+            </div>
+            <div className="h-2 overflow-hidden rounded-full bg-muted">
+              <div className="h-full w-[var(--context-fill)] rounded-full bg-gradient-to-r from-stage-l1 via-stage-l3 to-stage-l5 transition-[width] duration-500" style={contextStyle} />
+            </div>
+            <p className="text-xs text-muted-foreground">{formatRate(context.percent)}% 使用率</p>
+          </div>
+        </div>
+      </button>
+
+      <div
+        id={detailId}
+        className={cn(
+          "overflow-hidden transition-[max-height,opacity] duration-300 ease-in-out",
+          isExpanded ? "max-h-screen opacity-100" : "max-h-0 opacity-0",
+        )}
+      >
+        <div className="mt-4 border-t border-border pt-4">
+          <div className="mb-3 flex gap-1 border-b border-border pb-2">
+            <DetailTabButton active={activeTab === "timeline"} onClick={() => setActiveTab("timeline")}>
+              工具调用
+            </DetailTabButton>
+            <DetailTabButton active={activeTab === "subagents"} onClick={() => setActiveTab("subagents")}>
+              子 Agent
+            </DetailTabButton>
+            <DetailTabButton active={activeTab === "fileaudit"} onClick={() => setActiveTab("fileaudit")}>
+              文件审计
+            </DetailTabButton>
+          </div>
+
+          {activeTab === "timeline" && (
+            agent.tool_calls?.length ? (
+              <AgentToolTimeline
+                tool_calls={agent.tool_calls ?? []}
+                pending_since_ms={agent.pending_since_ms}
+                thinking_since_ms={agent.thinking_since_ms}
+              />
+            ) : (
+              <DetailEmptyState label="暂无工具调用记录" />
+            )
+          )}
+          {activeTab === "subagents" && (
+            agent.subagents?.length ? <AgentSubTree subagents={agent.subagents ?? []} /> : <DetailEmptyState label="暂无子 Agent" />
+          )}
+          {activeTab === "fileaudit" && (
+            agent.file_accesses?.length ? <AgentFileAudit file_accesses={agent.file_accesses ?? []} /> : <DetailEmptyState label="暂无文件审计记录" />
+          )}
         </div>
       </div>
+    </div>
+  );
+}
 
-      <div className="mt-4 grid gap-4 lg:grid-cols-[minmax(0,1fr)_minmax(0,1fr)]">
-        <div className="space-y-2">
-          <div className="flex items-center justify-between gap-3 text-xs">
-            <span className="text-muted-foreground">Token 速率</span>
-            <span className="font-mono font-semibold text-foreground">{formatRate(displayRate)} {rateUnit === "second" ? "token/s" : "token/min"}</span>
-          </div>
-          <div className="h-2 overflow-hidden rounded-full bg-muted">
-            <div className="h-full w-[var(--rate-fill)] rounded-full bg-gradient-to-r from-stage-l0 via-stage-l2 to-stage-l4 transition-[width] duration-500" style={rateStyle} />
-          </div>
-        </div>
+interface DetailTabButtonProps {
+  active: boolean;
+  children: React.ReactNode;
+  onClick: () => void;
+}
 
-        <div className="space-y-2">
-          <div className="flex items-center justify-between gap-3 text-xs">
-            <span className="text-muted-foreground">上下文窗口</span>
-            <span className="font-mono font-semibold text-foreground">
-              {formatTokens(context.current)} / {formatTokens(context.max)}
-            </span>
-          </div>
-          <div className="h-2 overflow-hidden rounded-full bg-muted">
-            <div className="h-full w-[var(--context-fill)] rounded-full bg-gradient-to-r from-stage-l1 via-stage-l3 to-stage-l5 transition-[width] duration-500" style={contextStyle} />
-          </div>
-          <p className="text-xs text-muted-foreground">{formatRate(context.percent)}% 使用率</p>
-        </div>
-      </div>
+function DetailTabButton({ active, children, onClick }: DetailTabButtonProps) {
+  return (
+    <button
+      type="button"
+      className={cn(
+        "rounded-md px-3 py-1 text-xs font-medium transition-colors",
+        active ? "bg-primary text-primary-foreground" : "text-muted-foreground hover:bg-muted hover:text-foreground",
+      )}
+      onClick={onClick}
+    >
+      {children}
+    </button>
+  );
+}
+
+function DetailEmptyState({ label }: { label: string }) {
+  return (
+    <div className="rounded-lg border border-dashed border-border bg-background/60 px-3 py-6 text-center text-xs text-muted-foreground">
+      {label}
     </div>
   );
 }
@@ -426,6 +605,17 @@ function formatTokens(value: number) {
   }
 
   return value.toLocaleString("zh-CN");
+}
+
+function matchesAgentFilter(agent: AgentInfo, filter: string): boolean {
+  const lower = filter.toLowerCase();
+  return (
+    agent.session_id.toLowerCase().includes(lower) ||
+    agent.project_name.toLowerCase().includes(lower) ||
+    agent.model.toLowerCase().includes(lower) ||
+    agent.status.toLowerCase().includes(lower) ||
+    agent.cwd.toLowerCase().includes(lower)
+  );
 }
 
 function formatRelativeTime(timestampMs: number, now: number) {
