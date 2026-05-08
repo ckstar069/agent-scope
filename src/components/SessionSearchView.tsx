@@ -18,7 +18,14 @@ export interface SerSessionSummary {
 
 interface SessionSearchViewProps {
   projectPath: string;
+  selectedSessionId?: string | null;
   onSelectSession: (sessionId: string) => void;
+}
+
+interface SessionTitleSource {
+  session_id: string;
+  initial_prompt?: string | null;
+  custom_title?: string | null;
 }
 
 function formatRelativeTime(timestampMs: number): string {
@@ -47,7 +54,33 @@ function truncateText(text: string, maxLength: number): string {
   return text.slice(0, maxLength) + "...";
 }
 
-export function SessionSearchView({ projectPath, onSelectSession }: SessionSearchViewProps) {
+function isValidSessionTitle(value: string | null | undefined, maxLength?: number): value is string {
+  const normalized = value?.trim() ?? "";
+
+  if (!normalized || normalized === "$@" || normalized.startsWith("[SYSTEM DIRECTIVE:")) {
+    return false;
+  }
+
+  return maxLength === undefined || normalized.length < maxLength;
+}
+
+export function getSessionTitle(session: SessionTitleSource): string {
+  if (isValidSessionTitle(session.custom_title)) {
+    return session.custom_title.trim();
+  }
+
+  if (isValidSessionTitle(session.initial_prompt, 500)) {
+    return session.initial_prompt.trim();
+  }
+
+  return `无标题会话 ${session.session_id.slice(0, 8)}`;
+}
+
+export function SessionSearchView({
+  projectPath,
+  selectedSessionId,
+  onSelectSession,
+}: SessionSearchViewProps) {
   const { invoke } = useTauri();
   const [query, setQuery] = useState("");
   const [sessions, setSessions] = useState<SerSessionSummary[]>([]);
@@ -151,6 +184,7 @@ export function SessionSearchView({ projectPath, onSelectSession }: SessionSearc
             <SessionListItem
               key={session.session_id}
               session={session}
+              isSelected={selectedSessionId === session.session_id}
               onClick={() => onSelectSession(session.session_id)}
             />
           ))}
@@ -162,59 +196,50 @@ export function SessionSearchView({ projectPath, onSelectSession }: SessionSearc
 
 function SessionListItem({
   session,
+  isSelected,
   onClick,
 }: {
   session: SerSessionSummary;
+  isSelected: boolean;
   onClick: () => void;
 }) {
-  const displayTitle = session.custom_title || truncateText(session.initial_prompt, 80);
+  const displayTitle = getSessionTitle(session);
   const sessionIdShort = session.session_id.slice(0, 8);
+  const modifiedFileCount = session.modified_files.length;
 
   return (
     <button
       type="button"
       onClick={onClick}
+      data-selected={isSelected}
       className={cn(
-        "w-full rounded-xl border border-border bg-card p-4 text-left transition-colors",
-        "hover:bg-accent/50 focus-visible:outline-none focus-visible:ring-3 focus-visible:ring-ring/50"
+        "w-full rounded-xl border bg-card p-4 text-left transition-colors",
+        "hover:bg-accent/45 focus-visible:outline-none focus-visible:ring-3 focus-visible:ring-ring/50",
+        isSelected
+          ? "border-border border-l-2 border-l-primary bg-accent/40 shadow-sm hover:bg-accent/50"
+          : "border-border"
       )}
     >
-      <div className="mb-2 flex items-center gap-2 text-xs text-muted-foreground">
+      <p className="text-base font-medium leading-snug text-foreground" title={displayTitle}>
+        {truncateText(displayTitle, 96)}
+      </p>
+
+      <div className="mt-2 flex flex-wrap items-center gap-2 text-xs text-muted-foreground">
         <span className="font-mono">{sessionIdShort}</span>
-        {session.model && (
-          <span className="rounded-md bg-muted px-1.5 py-0.5">{session.model}</span>
-        )}
-        <span className="ml-auto flex items-center gap-1">
+        {session.model && <span className="rounded-md bg-muted/70 px-1.5 py-0.5">{session.model}</span>}
+        <span className="flex items-center gap-1">
           <Clock className="size-3" aria-hidden="true" />
           {formatRelativeTime(session.created_at)}
         </span>
-      </div>
-
-      <p className="mb-2 text-sm font-medium">{displayTitle}</p>
-
-      <div className="flex flex-wrap items-center gap-2">
-        <span className="flex items-center gap-1 text-xs text-muted-foreground">
+        <span className="flex items-center gap-1">
           <MessageSquare className="size-3" aria-hidden="true" />
           {session.turn_count} 轮
         </span>
-
-        {session.modified_files.length > 0 && (
-          <div className="flex flex-wrap gap-1">
-            {session.modified_files.slice(0, 3).map((file) => (
-              <span
-                key={file}
-                className="flex items-center gap-1 rounded-md bg-muted px-1.5 py-0.5 text-xs text-muted-foreground"
-              >
-                <FileText className="size-3" aria-hidden="true" />
-                {truncateText(file.split("/").pop() || file, 20)}
-              </span>
-            ))}
-            {session.modified_files.length > 3 && (
-              <span className="rounded-md bg-muted px-1.5 py-0.5 text-xs text-muted-foreground">
-                +{session.modified_files.length - 3}
-              </span>
-            )}
-          </div>
+        {modifiedFileCount > 0 && (
+          <span className="flex items-center gap-1 rounded-md bg-muted/70 px-1.5 py-0.5">
+            <FileText className="size-3" aria-hidden="true" />
+            {modifiedFileCount} 文件
+          </span>
         )}
       </div>
     </button>

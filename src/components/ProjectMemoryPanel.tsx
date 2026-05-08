@@ -29,8 +29,7 @@ export function ProjectMemoryPanel({ projectPath }: ProjectMemoryPanelProps) {
 
   const [selectedSessionId, setSelectedSessionId] = useState<string | null>(null);
   const [candidates, setCandidates] = useState<CandidateMemory[]>([]);
-
-
+  const [markedTurns, setMarkedTurns] = useState<Set<number>>(new Set());
 
   useEffect(() => {
     if (!projectPath) return;
@@ -81,9 +80,9 @@ export function ProjectMemoryPanel({ projectPath }: ProjectMemoryPanelProps) {
 
     async function loadContent() {
       try {
-        const result = await invoke<string, { path: string; relative_path: string }>(
+        const result = await invoke<string, { path: string; relativePath: string }>(
           "get_project_file_content",
-          { path: projectPath, relative_path: currentPath }
+          { path: projectPath, relativePath: currentPath }
         );
 
         if (isActive) {
@@ -132,7 +131,9 @@ export function ProjectMemoryPanel({ projectPath }: ProjectMemoryPanelProps) {
   }, [listen, projectPath, files]);
 
   function handleMarkMemory(turn: SessionTurn, turnIndex: number) {
-    const id = `${selectedSessionId}-${turnIndex}-${Date.now()}`;
+    if (!selectedSessionId || markedTurns.has(turnIndex)) return;
+
+    const id = `${selectedSessionId}-${turnIndex}`;
     const newCandidate: CandidateMemory = {
       id,
       content: turn.text,
@@ -143,11 +144,25 @@ export function ProjectMemoryPanel({ projectPath }: ProjectMemoryPanelProps) {
       status: "pending",
     };
 
-    setCandidates((prev) => [...prev, newCandidate]);
+    setMarkedTurns((prev) => {
+      if (prev.has(turnIndex)) return prev;
+
+      const next = new Set(prev);
+      next.add(turnIndex);
+      return next;
+    });
+    setCandidates((prev) => (prev.some((candidate) => candidate.id === id) ? prev : [...prev, newCandidate]));
   }
 
   function handleSelectSession(sessionId: string) {
     setSelectedSessionId(sessionId);
+    setMarkedTurns(
+      new Set(
+        candidates
+          .filter((candidate) => candidate.source_session_id === sessionId)
+          .map((candidate) => candidate.source_turn_index)
+      )
+    );
   }
 
   const pendingCount = candidates.filter((c) => c.status === "pending").length;
@@ -155,7 +170,7 @@ export function ProjectMemoryPanel({ projectPath }: ProjectMemoryPanelProps) {
 
   return (
     <div className="space-y-4">
-      <div className="flex items-center gap-1 rounded-xl border border-border bg-card p-1">
+      <div className="flex items-center gap-1 rounded-xl border border-border bg-card p-1 shadow-sm">
         <TabButton
           active={activeTab === "l1"}
           onClick={() => setActiveTab("l1")}
@@ -196,7 +211,7 @@ export function ProjectMemoryPanel({ projectPath }: ProjectMemoryPanelProps) {
           selectedSessionId={selectedSessionId}
           onSelectSession={handleSelectSession}
           onMarkMemory={handleMarkMemory}
-          markedTurns={new Set()}
+          markedTurns={markedTurns}
         />
       )}
 
@@ -324,26 +339,34 @@ function L2Panel({
   markedTurns: Set<number>;
 }) {
   return (
-    <div className="grid gap-4 lg:grid-cols-[1fr_1fr]">
-      <div className="space-y-4">
-        <p className="text-sm font-medium text-muted-foreground">搜索会话</p>
-        <SessionSearchView projectPath={projectPath} onSelectSession={onSelectSession} />
-      </div>
-
-      <div className="space-y-4">
-        <p className="text-sm font-medium text-muted-foreground">对话详情</p>
-        {selectedSessionId ? (
-          <TranscriptDetailView
-            sessionId={selectedSessionId}
+    <div className="overflow-hidden rounded-xl border border-border bg-card">
+      <div className="flex flex-col lg:flex-row">
+        <div className="space-y-4 border-b border-border bg-muted/40 p-4 lg:w-[22rem] lg:shrink-0 lg:border-b-0">
+          <p className="sticky top-0 z-10 mb-3 border-b border-border bg-inherit pb-3 text-sm font-medium text-muted-foreground">搜索会话</p>
+          <SessionSearchView
             projectPath={projectPath}
-            onMarkMemory={onMarkMemory}
-            markedTurns={markedTurns}
+            selectedSessionId={selectedSessionId}
+            onSelectSession={onSelectSession}
           />
-        ) : (
-          <div className="flex min-h-64 items-center justify-center rounded-xl border border-dashed border-border bg-card/60 p-5 text-sm text-muted-foreground">
-            选择左侧会话查看对话详情
-          </div>
-        )}
+        </div>
+
+        <div className="hidden lg:block w-[2px] shrink-0 bg-border/80" />
+
+        <div className="min-w-0 flex-1 space-y-4 bg-background p-4">
+          <p className="sticky top-0 z-10 mb-3 border-b border-border bg-inherit pb-3 text-sm font-medium text-muted-foreground">对话详情</p>
+          {selectedSessionId ? (
+            <TranscriptDetailView
+              sessionId={selectedSessionId}
+              projectPath={projectPath}
+              onMarkMemory={onMarkMemory}
+              markedTurns={markedTurns}
+            />
+          ) : (
+            <div className="flex min-h-64 items-center justify-center rounded-xl border border-dashed border-border bg-card/60 p-5 text-sm text-muted-foreground">
+              选择左侧会话查看对话详情
+            </div>
+          )}
+        </div>
       </div>
     </div>
   );
