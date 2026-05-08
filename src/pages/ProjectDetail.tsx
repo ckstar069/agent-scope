@@ -377,14 +377,20 @@ export function ProjectDetail({ projectPath = "" }: ProjectDetailProps) {
 
       {(!error || data) && (
         <>
-          <div className="grid gap-4 lg:grid-cols-[minmax(0,1.3fr)_minmax(0,0.7fr)]">
-            <Panel title="Stage 时间线" icon={Layers3} subtitle="L0 → L6 → Verilog → Synthesis → Hardware">
-              <StageTimeline currentStageIndex={currentStageIndex} stageError={data?.stage_error ?? null} />
-            </Panel>
+          <div className="flex flex-col gap-4 lg:flex-row">
+            <div className="flex-1">
+              <Panel title="Stage 时间线" icon={Layers3} subtitle="L0 → L6 → Verilog → Synthesis → Hardware">
+                <StageTimeline currentStageIndex={currentStageIndex} stageError={data?.stage_error ?? null} />
+              </Panel>
+            </div>
 
-            <Panel title="Git" icon={GitBranch} subtitle="工作区状态快照">
-              <GitPanel git={git} gitError={data?.git_error ?? null} />
-            </Panel>
+            <div className="hidden lg:block w-[2px] shrink-0 bg-border/80 self-stretch" />
+
+            <div className="lg:w-[38%]">
+              <Panel title="Git" icon={GitBranch} subtitle="工作区状态快照">
+                <GitPanel git={git} gitError={data?.git_error ?? null} />
+              </Panel>
+            </div>
           </div>
 
           <Panel title="参数快照" icon={SlidersHorizontal} subtitle="config/parameters.py 解析结果">
@@ -447,8 +453,8 @@ function Panel({
   title: string;
 }) {
   return (
-    <article className="rounded-xl border border-border bg-card p-5 text-card-foreground shadow-sm">
-      <header className="mb-5 flex items-start justify-between gap-4">
+    <article className="overflow-hidden rounded-xl border-2 border-border/70 bg-card p-5 text-card-foreground">
+      <header className="mb-5 flex items-start justify-between gap-4 border-b border-border pb-4">
         <div>
           <div className="flex items-center gap-2">
             <div className="flex size-9 items-center justify-center rounded-lg bg-muted text-muted-foreground">
@@ -578,7 +584,7 @@ function ConfigSnapshot({ config, configError }: { config: SerProjectConfig | nu
         {summaryConfigFields.map((field) => {
           const Icon = field.icon;
           return (
-            <div key={field.key} className="rounded-xl border border-border bg-muted/30 p-4">
+            <div key={field.key} className="rounded-xl border-2 border-border/60 bg-muted/30 p-4">
               <div className="mb-3 flex items-center justify-between gap-3">
                 <p className="text-xs font-medium uppercase tracking-wide text-muted-foreground">{field.label}</p>
                 <Icon className="size-4 text-muted-foreground" aria-hidden="true" />
@@ -591,8 +597,8 @@ function ConfigSnapshot({ config, configError }: { config: SerProjectConfig | nu
 
       <div className="grid gap-4 xl:grid-cols-2">
         {configSections.map((section) => (
-          <div key={section.title} className="rounded-xl border border-border">
-            <div className="border-b border-border px-4 py-3">
+          <div key={section.title} className="rounded-xl border-2 border-border/60">
+            <div className="border-b border-border bg-muted/20 px-4 py-3">
               <h3 className="text-sm font-semibold">{section.title}</h3>
             </div>
             <dl className="divide-y divide-border">
@@ -620,7 +626,7 @@ function MemoryPanel({ entries, memoryError }: { entries: SerMemoryEntry[]; memo
   }
 
   return (
-    <ScrollArea className="max-h-96 rounded-xl border border-border">
+    <ScrollArea className="max-h-96 rounded-xl border-2 border-border/60">
       <div className="divide-y divide-border">
         {entries.map((entry) => {
           const frontmatterEntries = Object.entries(entry.frontmatter);
@@ -676,7 +682,7 @@ function GitPanel({ git, gitError }: { git: SerGitStatus | null; gitError: strin
 
   return (
     <div className="space-y-4">
-      <div className="rounded-xl border border-border bg-muted/30 p-4">
+      <div className="rounded-xl border-2 border-border/60 bg-muted/30 p-4">
         <div className="mb-2 flex items-center gap-2 text-sm text-muted-foreground">
           <GitBranch className="size-4" aria-hidden="true" />
           <span>当前分支</span>
@@ -688,7 +694,7 @@ function GitPanel({ git, gitError }: { git: SerGitStatus | null; gitError: strin
         {statusItems.map((item) => {
           const Icon = item.icon;
           return (
-            <div key={item.label} className="rounded-xl border border-border p-3">
+            <div key={item.label} className="rounded-xl border-2 border-border/60 p-3">
               <div className="mb-2 flex items-center justify-between gap-2 text-xs text-muted-foreground">
                 <span>{item.label}</span>
                 <Icon className="size-3" aria-hidden="true" />
@@ -701,8 +707,8 @@ function GitPanel({ git, gitError }: { git: SerGitStatus | null; gitError: strin
 
       <div
         className={cn(
-          "flex items-center gap-2 rounded-xl border p-3 text-sm",
-          git.is_clean ? "border-primary/30 bg-primary/10 text-primary" : "border-border bg-muted/30 text-muted-foreground",
+          "flex items-center gap-2 rounded-xl border-2 p-3 text-sm",
+          git.is_clean ? "border-primary/40 bg-primary/10 text-primary" : "border-border/60 bg-muted/30 text-muted-foreground",
         )}
       >
         <HardDrive className="size-4" aria-hidden="true" />
@@ -712,7 +718,7 @@ function GitPanel({ git, gitError }: { git: SerGitStatus | null; gitError: strin
       {!git.is_clean && git.changed_files.length > 0 && (
         <div className="space-y-2">
           <p className="text-xs font-medium text-muted-foreground">变更文件</p>
-          <ScrollArea className="h-40 rounded-xl border border-border">
+          <ScrollArea className="h-40 rounded-xl border-2 border-border/60">
             <div className="divide-y divide-border">
               {git.changed_files.map((file) => (
                 <div key={file} className="flex items-center gap-2 px-3 py-2 text-xs">

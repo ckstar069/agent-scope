@@ -223,8 +223,9 @@ pub struct SerProjectFile {
 
 impl From<ProjectFile> for SerProjectFile {
     fn from(f: ProjectFile) -> Self {
-        let content_preview = if f.content.len() > 200 {
-            format!("{}...", &f.content[..200])
+        let content_preview = if f.content.chars().count() > 200 {
+            let truncated: String = f.content.chars().take(200).collect();
+            format!("{}...", truncated)
         } else {
             f.content.clone()
         };

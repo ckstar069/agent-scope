@@ -16,10 +16,10 @@ const navigationItems: Array<{
   label: string;
   route: AppRoute;
 }> = [
-  { icon: LayoutDashboard, label: "Dashboard", route: "dashboard" },
-  { icon: FolderKanban, label: "Projects", route: "projects" },
-  { icon: Bot, label: "Agents", route: "agents" },
-  { icon: Settings, label: "Settings", route: "settings" },
+  { icon: LayoutDashboard, label: "仪表盘", route: "dashboard" },
+  { icon: FolderKanban, label: "项目", route: "projects" },
+  { icon: Bot, label: "代理监控", route: "agents" },
+  { icon: Settings, label: "设置", route: "settings" },
 ];
 
 export function Sidebar({ activeRoute, isExpanded, onRouteChange, onToggle }: SidebarProps) {
@@ -77,7 +77,7 @@ export function Sidebar({ activeRoute, isExpanded, onRouteChange, onToggle }: Si
           onClick={onToggle}
         >
           {isExpanded ? <PanelLeftClose className="size-4" /> : <PanelLeftOpen className="size-4" />}
-          {isExpanded && <span>Collapse</span>}
+          {isExpanded && <span>收起</span>}
         </Button>
       </div>
     </aside>

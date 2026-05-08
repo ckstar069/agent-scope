@@ -24,6 +24,11 @@ pub fn run() {
             let registry = ProjectRegistry::load_or_default(storage_path);
 
             let agent_collector = AgentCollector::new();
+
+            for entry in registry.list() {
+                agent_collector.register_project(entry.path);
+            }
+
             let agent_handle = app.handle().clone();
             let _join_handle = agent_collector.start(agent_handle);
 
