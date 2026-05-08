@@ -7,7 +7,6 @@ import { cn } from "@/lib/utils";
 import { useTheme } from "@/hooks/useTheme";
 
 import { Sidebar } from "./Sidebar";
-import { ThemeToggle } from "./ThemeToggle";
 
 interface LayoutProps {
   activeRoute: AppRoute;
@@ -28,10 +27,6 @@ export function Layout({ activeRoute, children, onRouteChange }: LayoutProps) {
         onToggle={() => setIsSidebarExpanded((current) => !current)}
       />
       <main className="flex min-w-0 flex-1 flex-col bg-background">
-        {/* Header 工具栏 */}
-        <div className="flex items-center justify-end px-4 pt-4 sm:px-6 sm:pt-6 lg:px-8 lg:pt-8">
-          <ThemeToggle />
-        </div>
         <ScrollArea className="h-full">
           <div
             className={cn(

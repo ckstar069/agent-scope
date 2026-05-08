@@ -1,4 +1,4 @@
-import { Bot, FolderKanban, LayoutDashboard, PanelLeftClose, PanelLeftOpen, Settings } from "lucide-react";
+import { Bot, LayoutDashboard, PanelLeftClose, PanelLeftOpen, Settings } from "lucide-react";
 
 import type { AppRoute } from "@/App";
 import { Button } from "@/components/ui/button";
@@ -17,7 +17,6 @@ const navigationItems: Array<{
   route: AppRoute;
 }> = [
   { icon: LayoutDashboard, label: "仪表盘", route: "dashboard" },
-  { icon: FolderKanban, label: "项目", route: "projects" },
   { icon: Bot, label: "代理监控", route: "agents" },
   { icon: Settings, label: "设置", route: "settings" },
 ];

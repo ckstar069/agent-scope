@@ -3,9 +3,11 @@ import { useEffect, useMemo, useRef, useState } from "react";
 import {
   AlertCircle,
   ArrowDown,
+  ArrowLeft,
   ArrowRight,
   BookOpen,
   CheckCircle2,
+  ChevronDown,
   Circle,
   Clock,
   Cpu,
@@ -20,6 +22,8 @@ import {
   SlidersHorizontal,
 } from "lucide-react";
 
+import { Button } from "@/components/ui/button";
+import { Collapsible, CollapsibleContent } from "@/components/ui/collapsible";
 import { ProjectMemoryPanel } from "@/components/ProjectMemoryPanel";
 import { ScrollArea } from "@/components/ui/scroll-area";
 import { useTauri } from "@/hooks/useTauri";
@@ -27,6 +31,8 @@ import { cn } from "@/lib/utils";
 
 interface ProjectDetailProps {
   projectPath?: string;
+  onSelectProject?: (projectPath: string) => void;
+  onBack?: () => void;
 }
 
 interface SerStage {
@@ -265,7 +271,7 @@ function classifyGitError(message: string) {
   return { title: "Git 状态读取失败", tone: "destructive" as const };
 }
 
-export function ProjectDetail({ projectPath = "" }: ProjectDetailProps) {
+export function ProjectDetail({ projectPath = "", onSelectProject, onBack }: ProjectDetailProps) {
   const { invoke, listen } = useTauri();
   const [data, setData] = useState<TemplateDataPayload | null>(null);
   const [isLoading, setIsLoading] = useState(false);
@@ -356,14 +362,21 @@ export function ProjectDetail({ projectPath = "" }: ProjectDetailProps) {
   const hasProjectPath = projectPath.trim().length > 0;
 
   if (!hasProjectPath) {
-    return <EmptyProjectState />;
+    return <EmptyProjectState onSelectProject={onSelectProject} />;
   }
 
   return (
     <section className="space-y-6">
       <div className="flex flex-col gap-4 lg:flex-row lg:items-end lg:justify-between">
         <div className="space-y-2">
-          <p className="text-sm font-medium text-foreground/70">Projects</p>
+          <div className="flex items-center gap-2">
+            {onBack && (
+              <Button type="button" variant="ghost" size="sm" className="h-8 px-2 text-foreground/70" onClick={onBack}>
+                <ArrowLeft className="size-4" aria-hidden="true" />
+                返回仪表盘
+              </Button>
+            )}
+          </div>
           <h1 className="text-3xl font-semibold tracking-tight">项目详情</h1>
           <p className="max-w-3xl break-all text-sm text-foreground/70">{projectPath}</p>
         </div>
@@ -379,7 +392,7 @@ export function ProjectDetail({ projectPath = "" }: ProjectDetailProps) {
         <>
           <div className="flex flex-col gap-4 lg:flex-row">
             <div className="flex-1">
-              <Panel title="Stage 时间线" icon={Layers3} subtitle="L0 → L6 → Verilog → Synthesis → Hardware">
+              <Panel title="Stage 时间线" icon={Layers3} subtitle="L0 → L6 → Verilog → Synthesis → Hardware" accent="blue">
                 <StageTimeline currentStageIndex={currentStageIndex} stageError={data?.stage_error ?? null} />
               </Panel>
             </div>
@@ -393,15 +406,15 @@ export function ProjectDetail({ projectPath = "" }: ProjectDetailProps) {
             </div>
           </div>
 
-          <Panel title="参数快照" icon={SlidersHorizontal} subtitle="config/parameters.py 解析结果">
+              <Panel title="参数快照" icon={SlidersHorizontal} subtitle="config/parameters.py 解析结果" accent="green">
             <ConfigSnapshot config={config} configError={data?.config_error ?? null} />
           </Panel>
 
-          <Panel title="Memory" icon={MemoryStick} subtitle=".claude/memory/*.md">
+              <Panel title="Memory" icon={MemoryStick} subtitle=".claude/memory/*.md" accent="amber">
             <MemoryPanel entries={data?.memories ?? []} memoryError={data?.memory_error ?? null} />
           </Panel>
 
-          <Panel title="项目记忆" icon={BookOpen} subtitle="CLAUDE.md、规则、笔记、设计文档">
+          <Panel title="项目记忆" icon={BookOpen} subtitle="CLAUDE.md、规则、笔记、设计文档" accent="purple">
             <ProjectMemoryPanel projectPath={projectPath} />
           </Panel>
         </>
@@ -410,21 +423,88 @@ export function ProjectDetail({ projectPath = "" }: ProjectDetailProps) {
   );
 }
 
-function EmptyProjectState() {
+interface ProjectEntry {
+  path: string;
+  added_at: number;
+}
+
+function EmptyProjectState({ onSelectProject }: { onSelectProject?: (projectPath: string) => void }) {
+  const { invoke } = useTauri();
+  const [projects, setProjects] = useState<ProjectEntry[]>([]);
+  const [isLoading, setIsLoading] = useState(true);
+
+  useEffect(() => {
+    let isActive = true;
+
+    async function loadProjects() {
+      setIsLoading(true);
+      try {
+        const entries = await invoke<ProjectEntry[]>("list_projects");
+        if (isActive) {
+          setProjects(entries);
+        }
+      } catch {
+        if (isActive) {
+          setProjects([]);
+        }
+      } finally {
+        if (isActive) {
+          setIsLoading(false);
+        }
+      }
+    }
+
+    void loadProjects();
+
+    return () => {
+      isActive = false;
+    };
+  }, [invoke]);
+
   return (
     <section className="space-y-6">
       <div className="space-y-2">
         <p className="text-sm font-medium text-foreground/70">Projects</p>
         <h1 className="text-3xl font-semibold tracking-tight">项目详情</h1>
-        <p className="max-w-2xl text-sm text-foreground/70">请选择一个模板项目后查看 Stage、参数、Memory 与 Git 快照。</p>
+        <p className="max-w-2xl text-sm text-foreground/70">
+          {projects.length > 0
+            ? "选择一个已注册的项目查看 Stage、参数、Memory 与 Git 快照。"
+            : "请先在设置中添加监控项目，或从仪表盘选择一个项目。"}
+        </p>
       </div>
 
-      <div className="flex min-h-72 items-center justify-center rounded-lg border border-dashed border-border bg-card text-card-foreground">
-        <div className="text-center">
-          <FolderKanban className="mx-auto mb-3 size-8 text-foreground/60" aria-hidden="true" />
-          <p className="text-sm text-foreground/70">尚未传入项目路径</p>
+      {isLoading ? (
+        <div className="flex min-h-72 items-center justify-center rounded-lg border border-dashed border-border bg-card text-card-foreground">
+          <Loader2 className="size-6 animate-spin text-foreground/60" aria-hidden="true" />
         </div>
-      </div>
+      ) : projects.length === 0 ? (
+        <div className="flex min-h-72 items-center justify-center rounded-lg border border-dashed border-border bg-card text-card-foreground">
+          <div className="text-center">
+            <FolderKanban className="mx-auto mb-3 size-8 text-foreground/60" aria-hidden="true" />
+            <p className="text-sm text-foreground/70">暂无已注册项目</p>
+          </div>
+        </div>
+      ) : (
+        <div className="grid gap-4" style={{ gridTemplateColumns: "repeat(auto-fit, minmax(min(100%, 280px), 1fr))" }}>
+          {projects.map((project) => (
+            <button
+              key={project.path}
+              type="button"
+              onClick={() => onSelectProject?.(project.path)}
+              className="flex flex-col gap-2 rounded-lg border border-border/60 bg-card p-4 text-left transition-all hover:border-primary/40 hover:shadow-sm"
+            >
+              <div className="flex items-center gap-3">
+                <div className="flex size-10 shrink-0 items-center justify-center rounded-lg bg-muted text-foreground/60">
+                  <FolderKanban className="size-5" aria-hidden="true" />
+                </div>
+                <div className="min-w-0">
+                  <p className="truncate font-mono text-sm font-medium text-foreground">{project.path}</p>
+                </div>
+              </div>
+            </button>
+          ))}
+        </div>
+      )}
     </section>
   );
 }
@@ -441,32 +521,60 @@ function ErrorBanner({ message }: { message: string }) {
   );
 }
 
+type PanelAccent = "blue" | "green" | "amber" | "purple";
+
+const ACCENT_TOP_STYLES: Record<PanelAccent, string> = {
+  blue: "from-blue-500/40 via-blue-400/20 to-transparent",
+  green: "from-green-500/40 via-green-400/20 to-transparent",
+  amber: "from-amber-500/40 via-amber-400/20 to-transparent",
+  purple: "from-purple-500/40 via-purple-400/20 to-transparent",
+};
+
 function Panel({
   children,
   icon: Icon,
   subtitle,
   title,
+  accent = "blue",
 }: {
   children: ReactNode;
   icon: DetailIcon;
   subtitle: string;
   title: string;
+  accent?: PanelAccent;
 }) {
+  const topGradient = ACCENT_TOP_STYLES[accent];
+  const [open, setOpen] = useState(true);
+
   return (
-    <article className="overflow-hidden rounded-xl border border-border/60 bg-card p-4 text-card-foreground">
-      <header className="mb-4 flex items-start justify-between gap-4 border-b border-border/60 pb-3">
-        <div>
-          <div className="flex items-center gap-2">
-            <div className="flex size-8 items-center justify-center rounded-lg bg-muted text-foreground/70">
-              <Icon className="size-4" aria-hidden="true" />
+    <Collapsible open={open} onOpenChange={setOpen}>
+      <article className="overflow-hidden rounded-xl border border-border/60 bg-card text-card-foreground">
+        <div className={cn("h-[2px] bg-gradient-to-r", topGradient)} />
+        <button
+          type="button"
+          className="flex w-full cursor-pointer items-start justify-between gap-4 p-4 pb-3 text-left transition-colors hover:bg-muted/30"
+          onClick={() => setOpen((prev) => !prev)}
+        >
+          <div className="min-w-0 flex-1">
+            <div className="flex items-center gap-2">
+              <div className="flex size-8 shrink-0 items-center justify-center rounded-lg bg-muted text-foreground/70">
+                <Icon className="size-4" aria-hidden="true" />
+              </div>
+              <h2 className="text-base font-semibold tracking-tight">{title}</h2>
             </div>
-            <h2 className="text-base font-semibold tracking-tight">{title}</h2>
+            <p className="mt-1.5 text-sm text-foreground/70">{subtitle}</p>
           </div>
-          <p className="mt-1.5 text-sm text-foreground/70">{subtitle}</p>
-        </div>
-      </header>
-      {children}
-    </article>
+          <div className="mt-1 shrink-0 text-foreground/50 transition-transform duration-200">
+            <ChevronDown className={cn("size-5 transition-transform duration-200", open && "rotate-180")} aria-hidden="true" />
+          </div>
+        </button>
+        <CollapsibleContent>
+          <div className="border-t border-border/60 px-4 pb-4">
+            {children}
+          </div>
+        </CollapsibleContent>
+      </article>
+    </Collapsible>
   );
 }
 
@@ -630,7 +738,15 @@ function MemoryPanel({ entries, memoryError }: { entries: SerMemoryEntry[]; memo
   }
 
   if (entries.length === 0) {
-    return <InlineNotice message="暂无 Memory 条目。" />;
+    return (
+      <div className="flex flex-col items-center justify-center gap-3 rounded-lg border border-dashed border-border bg-muted/30 p-6 text-sm text-foreground/70">
+        <FileText className="size-6 text-foreground/50" aria-hidden="true" />
+        <div className="text-center">
+          <p>项目暂无记忆文件</p>
+          <p className="mt-1 text-xs text-foreground/50">在项目根目录创建 .claude/memory/*.md 即可自动采集</p>
+        </div>
+      </div>
+    );
   }
 
   return (

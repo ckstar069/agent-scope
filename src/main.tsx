@@ -5,7 +5,8 @@ import "./index.css";
 
 function initFontSize() {
   const stored = localStorage.getItem("ptv:font-size");
-  if (stored === "compact" || stored === "normal" || stored === "large") {
+  const validSizes = ["compact", "normal", "large", "xlarge"];
+  if (stored && validSizes.includes(stored)) {
     document.documentElement.setAttribute("data-font-size", stored);
   }
 }

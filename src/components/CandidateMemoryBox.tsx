@@ -103,8 +103,8 @@ export function CandidateMemoryBox({
     return (
       <div className="flex flex-col items-center justify-center py-12 text-sm text-muted-foreground">
         <Bookmark className="mb-2 size-8 opacity-50" aria-hidden="true" />
-        <p>暂无候选记忆</p>
-        <p className="mt-1 text-xs">在对话中点击标记重要消息来添加</p>
+      <p>暂无记忆标记</p>
+      <p className="mt-1 text-xs">在对话中点击标记重要消息来添加</p>
       </div>
     );
   }

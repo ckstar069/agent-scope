@@ -2,13 +2,13 @@ import type { CSSProperties } from "react";
 import { useEffect, useMemo, useState } from "react";
 import { Activity, AlertTriangle, Bot, ChevronRight, Clock, FolderKanban, FolderPlus, GitBranch, Loader2, Plus } from "lucide-react";
 
-import type { AppRoute } from "@/App";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { useTauri } from "@/hooks/useTauri";
 
 interface DashboardProps {
-  onRouteChange: (route: AppRoute, projectPath?: string) => void;
+  onSelectProject: (projectPath: string) => void;
+  onNavigateSettings: () => void;
 }
 
 interface ProjectEntry {
@@ -69,7 +69,7 @@ const stageTokenPairs = [
 
 const collator = new Intl.Collator("zh-CN", { numeric: true, sensitivity: "base" });
 
-export function Dashboard({ onRouteChange }: DashboardProps) {
+export function Dashboard({ onSelectProject, onNavigateSettings }: DashboardProps) {
   const { invoke, listen } = useTauri();
   const [projects, setProjects] = useState<ProjectEntry[]>([]);
   const [projectData, setProjectData] = useState<Record<string, TemplateDataPayload>>({});
@@ -178,10 +178,10 @@ export function Dashboard({ onRouteChange }: DashboardProps) {
             汇总已注册 FPGA 项目的 Stage、Git 工作区状态和实时 Agent 活跃度。
           </p>
         </div>
-        <Button type="button" variant="outline" onClick={() => onRouteChange("settings")}>
-          <Plus className="size-4" aria-hidden="true" />
-          添加项目
-        </Button>
+          <Button type="button" variant="outline" onClick={onNavigateSettings}>
+            <Plus className="size-4" aria-hidden="true" />
+            添加项目
+          </Button>
       </div>
 
       {error && (
@@ -211,7 +211,7 @@ export function Dashboard({ onRouteChange }: DashboardProps) {
             <p className="mt-2 text-sm text-muted-foreground">
               添加从 ai_project_template 创建的项目后，这里会按名称排序展示 Stage、Git 状态和 Agent 数量。
             </p>
-            <Button type="button" className="mt-5" onClick={() => onRouteChange("settings")}>
+            <Button type="button" className="mt-5" onClick={onNavigateSettings}>
               <FolderPlus className="size-4" aria-hidden="true" />
               添加项目
             </Button>
@@ -220,7 +220,7 @@ export function Dashboard({ onRouteChange }: DashboardProps) {
       ) : (
         <div className="grid gap-4 xl:grid-cols-2">
           {dashboardProjects.map((project) => (
-            <ProjectCard key={project.path} project={project} onOpen={() => onRouteChange("projects", project.path)} />
+            <ProjectCard key={project.path} project={project} onOpen={() => onSelectProject(project.path)} />
           ))}
         </div>
       )}

@@ -229,7 +229,7 @@ function SessionListItem({
         {session.model && <span className="rounded-md bg-muted/70 px-1.5 py-0.5">{session.model}</span>}
         <span className="flex items-center gap-1">
           <Clock className="size-3" aria-hidden="true" />
-          {formatRelativeTime(session.created_at)}
+          {formatRelativeTime(session.created_at * 1000)}
         </span>
         <span className="flex items-center gap-1">
           <MessageSquare className="size-3" aria-hidden="true" />

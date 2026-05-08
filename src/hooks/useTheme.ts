@@ -3,7 +3,7 @@ import { useState, useEffect } from "react";
 /**
  * 主题类型：light（浅色）、dark（深色）、system（跟随系统）
  */
-type Theme = "light" | "dark" | "system";
+export type Theme = "light" | "dark" | "system";
 
 const STORAGE_KEY = "ptv-theme";
 

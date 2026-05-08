@@ -188,7 +188,7 @@ export function ProjectMemoryPanel({ projectPath }: ProjectMemoryPanelProps) {
           active={activeTab === "l3"}
           onClick={() => setActiveTab("l3")}
           icon={Bookmark}
-          label="候选记忆"
+          label="记忆标记"
           badge={pendingCount > 0 ? pendingCount : undefined}
         />
       </div>
@@ -312,7 +312,7 @@ function L1Panel({
         </aside>
       )}
 
-      <div>
+      <div className="max-h-[calc(100vh-14rem)] overflow-y-auto rounded-xl border border-border/60 bg-card/80 p-4 shadow-sm sm:p-5">
         {selectedPath ? (
           <MarkdownRenderer content={content} />
         ) : (

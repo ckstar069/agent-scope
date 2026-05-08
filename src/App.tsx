@@ -6,30 +6,47 @@ import { Dashboard } from "@/pages/Dashboard";
 import { ProjectDetail } from "@/pages/ProjectDetail";
 import { Settings } from "@/pages/Settings";
 
-export type AppRoute = "dashboard" | "projects" | "agents" | "settings";
+export type AppRoute = "dashboard" | "agents" | "settings";
 
 function App() {
   const [activeRoute, setActiveRoute] = useState<AppRoute>("dashboard");
   const [currentProjectPath, setCurrentProjectPath] = useState("");
 
-  function handleRouteChange(route: AppRoute, projectPath?: string) {
-    if (projectPath !== undefined) {
-      setCurrentProjectPath(projectPath);
-    }
+  function handleRouteChange(route: AppRoute) {
     setActiveRoute(route);
+  }
+
+  function handleSelectProject(projectPath: string) {
+    setCurrentProjectPath(projectPath);
+  }
+
+  function handleBackToDashboard() {
+    setCurrentProjectPath("");
   }
 
   const page = useMemo(() => {
     switch (activeRoute) {
-      case "projects":
-        return <ProjectDetail projectPath={currentProjectPath} />;
       case "agents":
         return <AgentMonitor />;
       case "settings":
         return <Settings />;
       case "dashboard":
       default:
-        return <Dashboard onRouteChange={handleRouteChange} />;
+        if (currentProjectPath) {
+          return (
+            <ProjectDetail
+              projectPath={currentProjectPath}
+              onSelectProject={handleSelectProject}
+              onBack={handleBackToDashboard}
+            />
+          );
+        }
+        return (
+          <Dashboard
+            onSelectProject={handleSelectProject}
+            onNavigateSettings={() => setActiveRoute("settings")}
+          />
+        );
     }
   }, [activeRoute, currentProjectPath]);
 

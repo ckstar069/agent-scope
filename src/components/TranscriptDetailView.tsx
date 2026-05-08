@@ -188,7 +188,7 @@ export function TranscriptDetailView({
         </h3>
         <div className="mt-2 flex flex-wrap gap-2 text-xs text-muted-foreground">
           {transcript.model && <span>模型: {transcript.model}</span>}
-          <span>时间: {new Date(transcript.created_at).toLocaleString("zh-CN")}</span>
+          <span>时间: {new Date(transcript.created_at * 1000).toLocaleString("zh-CN")}</span>
           <span>文件: {transcript.modified_files.length}</span>
         </div>
       </div>
