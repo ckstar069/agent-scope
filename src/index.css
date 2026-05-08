@@ -49,6 +49,9 @@
 }
 
 :root {
+    /* 字号控制系统：3档预设，通过 html[data-font-size] 切换 */
+    --base-font-size: 14px;
+
     --background: oklch(1 0 0);
     --foreground: oklch(0.145 0 0);
     --card: oklch(1 0 0);
@@ -83,6 +86,33 @@
     --sidebar-ring: oklch(0.708 0 0);
     --sidebar-width-collapsed: 4rem;
     --sidebar-width-expanded: 12.5rem;
+
+    /* 状态色语义化 */
+    --status-success: oklch(0.55 0.15 145);
+    --status-success-bg: oklch(0.55 0.15 145 / 0.12);
+    --status-success-border: oklch(0.55 0.15 145 / 0.35);
+    --status-warning: oklch(0.65 0.18 85);
+    --status-warning-bg: oklch(0.65 0.18 85 / 0.12);
+    --status-warning-border: oklch(0.65 0.18 85 / 0.35);
+    --status-error: oklch(0.577 0.245 27.325);
+    --status-error-bg: oklch(0.577 0.245 27.325 / 0.12);
+    --status-error-border: oklch(0.577 0.245 27.325 / 0.35);
+    --status-info: oklch(0.55 0.15 240);
+    --status-info-bg: oklch(0.55 0.15 240 / 0.12);
+    --status-info-border: oklch(0.55 0.15 240 / 0.35);
+}
+
+/* 3档字号预设：compact(13px)、normal(15px)、large(17px) */
+html[data-font-size="compact"] {
+    --base-font-size: 13px;
+}
+
+html[data-font-size="normal"] {
+    --base-font-size: 15px;
+}
+
+html[data-font-size="large"] {
+    --base-font-size: 17px;
 }
 
 .dark {
@@ -97,7 +127,7 @@
     --secondary: oklch(0.269 0 0);
     --secondary-foreground: oklch(0.985 0 0);
     --muted: oklch(0.269 0 0);
-    --muted-foreground: oklch(0.708 0 0);
+    --muted-foreground: oklch(0.85 0 0);
     --accent: oklch(0.269 0 0);
     --accent-foreground: oklch(0.985 0 0);
     --destructive: oklch(0.704 0.191 22.216);
@@ -119,6 +149,19 @@
     --sidebar-ring: oklch(0.556 0 0);
     --sidebar-width-collapsed: 4rem;
     --sidebar-width-expanded: 12.5rem;
+
+    --status-success: oklch(0.65 0.15 145);
+    --status-success-bg: oklch(0.65 0.15 145 / 0.15);
+    --status-success-border: oklch(0.65 0.15 145 / 0.4);
+    --status-warning: oklch(0.75 0.18 85);
+    --status-warning-bg: oklch(0.75 0.18 85 / 0.15);
+    --status-warning-border: oklch(0.75 0.18 85 / 0.4);
+    --status-error: oklch(0.75 0.245 27.325);
+    --status-error-bg: oklch(0.75 0.245 27.325 / 0.15);
+    --status-error-border: oklch(0.75 0.245 27.325 / 0.4);
+    --status-info: oklch(0.65 0.15 240);
+    --status-info-bg: oklch(0.65 0.15 240 / 0.15);
+    --status-info-border: oklch(0.65 0.15 240 / 0.4);
 }
 
 @layer base {

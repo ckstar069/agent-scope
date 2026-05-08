@@ -363,11 +363,11 @@ export function ProjectDetail({ projectPath = "" }: ProjectDetailProps) {
     <section className="space-y-6">
       <div className="flex flex-col gap-4 lg:flex-row lg:items-end lg:justify-between">
         <div className="space-y-2">
-          <p className="text-sm font-medium text-muted-foreground">Projects</p>
+          <p className="text-sm font-medium text-foreground/70">Projects</p>
           <h1 className="text-3xl font-semibold tracking-tight">项目详情</h1>
-          <p className="max-w-3xl break-all text-sm text-muted-foreground">{projectPath}</p>
+          <p className="max-w-3xl break-all text-sm text-foreground/70">{projectPath}</p>
         </div>
-        <div className="flex items-center gap-2 rounded-xl border border-border bg-card px-3 py-2 text-sm text-muted-foreground shadow-sm">
+        <div className="flex items-center gap-2 rounded-lg border border-border bg-card px-3 py-2 text-sm text-foreground/70 shadow-sm">
           {isLoading ? <Loader2 className="size-4 animate-spin" aria-hidden="true" /> : <Clock className="size-4" aria-hidden="true" />}
           <span>更新：{isLoading ? "采集中" : formatTimestamp(data?.timestamp_ms)}</span>
         </div>
@@ -414,15 +414,15 @@ function EmptyProjectState() {
   return (
     <section className="space-y-6">
       <div className="space-y-2">
-        <p className="text-sm font-medium text-muted-foreground">Projects</p>
+        <p className="text-sm font-medium text-foreground/70">Projects</p>
         <h1 className="text-3xl font-semibold tracking-tight">项目详情</h1>
-        <p className="max-w-2xl text-sm text-muted-foreground">请选择一个模板项目后查看 Stage、参数、Memory 与 Git 快照。</p>
+        <p className="max-w-2xl text-sm text-foreground/70">请选择一个模板项目后查看 Stage、参数、Memory 与 Git 快照。</p>
       </div>
 
-      <div className="flex min-h-72 items-center justify-center rounded-xl border border-dashed border-border bg-card text-card-foreground">
+      <div className="flex min-h-72 items-center justify-center rounded-lg border border-dashed border-border bg-card text-card-foreground">
         <div className="text-center">
-          <FolderKanban className="mx-auto mb-3 size-8 text-muted-foreground" aria-hidden="true" />
-          <p className="text-sm text-muted-foreground">尚未传入项目路径</p>
+          <FolderKanban className="mx-auto mb-3 size-8 text-foreground/60" aria-hidden="true" />
+          <p className="text-sm text-foreground/70">尚未传入项目路径</p>
         </div>
       </div>
     </section>
@@ -453,16 +453,16 @@ function Panel({
   title: string;
 }) {
   return (
-    <article className="overflow-hidden rounded-xl border-2 border-border/70 bg-card p-5 text-card-foreground">
-      <header className="mb-5 flex items-start justify-between gap-4 border-b border-border pb-4">
+    <article className="overflow-hidden rounded-xl border border-border/60 bg-card p-4 text-card-foreground">
+      <header className="mb-4 flex items-start justify-between gap-4 border-b border-border/60 pb-3">
         <div>
           <div className="flex items-center gap-2">
-            <div className="flex size-9 items-center justify-center rounded-lg bg-muted text-muted-foreground">
+            <div className="flex size-8 items-center justify-center rounded-lg bg-muted text-foreground/70">
               <Icon className="size-4" aria-hidden="true" />
             </div>
-            <h2 className="text-lg font-semibold tracking-tight">{title}</h2>
+            <h2 className="text-base font-semibold tracking-tight">{title}</h2>
           </div>
-          <p className="mt-2 text-sm text-muted-foreground">{subtitle}</p>
+          <p className="mt-1.5 text-sm text-foreground/70">{subtitle}</p>
         </div>
       </header>
       {children}
@@ -482,7 +482,9 @@ function StageTimeline({ currentStageIndex, stageError }: { currentStageIndex: n
     }
 
     const updateItemsPerRow = () => {
-      const nextItemsPerRow = Math.max(1, Math.min(5, Math.floor(container.clientWidth / 120)));
+      const rootFontSize = parseFloat(getComputedStyle(document.documentElement).fontSize);
+      const itemMinWidth = rootFontSize * 8.5;
+      const nextItemsPerRow = Math.max(1, Math.min(5, Math.floor(container.clientWidth / itemMinWidth)));
       setItemsPerRow(nextItemsPerRow);
     };
 
@@ -531,14 +533,14 @@ function StageTimeline({ currentStageIndex, stageError }: { currentStageIndex: n
                         "flex size-10 items-center justify-center rounded-full border transition-colors",
                         isCurrent && "border-primary bg-primary text-primary-foreground",
                         isDone && "border-primary/50 bg-primary/10 text-primary",
-                        !isCurrent && !isDone && "border-border bg-muted text-muted-foreground",
+                        !isCurrent && !isDone && "border-border bg-muted text-foreground/60",
                       )}
                     >
                       <Icon className="size-4" aria-hidden="true" />
                     </div>
-                    <p className={cn("mt-3 text-sm font-medium", isCurrent ? "text-foreground" : "text-muted-foreground")}>{stage.label}</p>
-                    <p className="mt-1 text-xs text-muted-foreground">{stage.description}</p>
-                    <p className="mt-2 rounded-md bg-muted px-2 py-1 text-xs text-muted-foreground">耗时 --</p>
+                    <p className={cn("mt-3 text-sm font-medium", isCurrent ? "text-foreground" : "text-foreground/70")}>{stage.label}</p>
+                    <p className="mt-1 text-xs text-foreground/60">{stage.description}</p>
+                    <p className="mt-2 rounded-md bg-muted px-2 py-1 text-xs text-foreground/60">耗时 --</p>
                     {isLogicalRowEnd && hasNextRow && (
                       <div className="mt-3 flex flex-col items-center" aria-hidden="true">
                         <div className={cn("h-4 w-px", isDone ? "bg-primary/60" : "bg-border")} />
@@ -579,32 +581,38 @@ function ConfigSnapshot({ config, configError }: { config: SerProjectConfig | nu
   }
 
   return (
-    <div className="space-y-5">
-      <div className="grid gap-3 md:grid-cols-4">
+    <div className="space-y-4">
+      <div
+        className="grid gap-3"
+        style={{ gridTemplateColumns: "repeat(auto-fit, minmax(min(100%, 200px), 1fr))" }}
+      >
         {summaryConfigFields.map((field) => {
           const Icon = field.icon;
           return (
-            <div key={field.key} className="rounded-xl border-2 border-border/60 bg-muted/30 p-4">
-              <div className="mb-3 flex items-center justify-between gap-3">
-                <p className="text-xs font-medium uppercase tracking-wide text-muted-foreground">{field.label}</p>
-                <Icon className="size-4 text-muted-foreground" aria-hidden="true" />
+            <div key={field.key} className="rounded-lg border border-border/50 bg-muted/30 p-3">
+              <div className="mb-2 flex items-center justify-between gap-3">
+                <p className="text-xs font-medium uppercase tracking-wide text-foreground/60">{field.label}</p>
+                <Icon className="size-4 text-foreground/60" aria-hidden="true" />
               </div>
-              <p className="truncate text-lg font-semibold">{formatValue(config[field.key])}</p>
+              <p className="truncate text-base font-semibold">{formatValue(config[field.key])}</p>
             </div>
           );
         })}
       </div>
 
-      <div className="grid gap-4 xl:grid-cols-2">
+      <div
+        className="grid gap-4"
+        style={{ gridTemplateColumns: "repeat(auto-fit, minmax(min(100%, 360px), 1fr))" }}
+      >
         {configSections.map((section) => (
-          <div key={section.title} className="rounded-xl border-2 border-border/60">
-            <div className="border-b border-border bg-muted/20 px-4 py-3">
+          <div key={section.title} className="rounded-lg border border-border/50">
+            <div className="border-b border-border/60 bg-muted/20 px-3 py-2.5">
               <h3 className="text-sm font-semibold">{section.title}</h3>
             </div>
-            <dl className="divide-y divide-border">
+            <dl className="divide-y divide-border/60">
               {section.fields.map((field) => (
-                <div key={field.key} className="grid grid-cols-[minmax(0,0.8fr)_minmax(0,1fr)] gap-4 px-4 py-3 text-sm">
-                  <dt className="text-muted-foreground">{field.label}</dt>
+                <div key={field.key} className="grid grid-cols-[minmax(0,0.8fr)_minmax(0,1fr)] gap-3 px-3 py-2.5 text-sm">
+                  <dt className="text-foreground/70">{field.label}</dt>
                   <dd className="min-w-0 truncate text-right font-medium">{formatValue(config[field.key])}</dd>
                 </div>
               ))}
@@ -626,35 +634,35 @@ function MemoryPanel({ entries, memoryError }: { entries: SerMemoryEntry[]; memo
   }
 
   return (
-    <ScrollArea className="max-h-96 rounded-xl border-2 border-border/60">
-      <div className="divide-y divide-border">
+    <ScrollArea className="max-h-96 rounded-lg border border-border/50">
+      <div className="divide-y divide-border/60">
         {entries.map((entry) => {
           const frontmatterEntries = Object.entries(entry.frontmatter);
           const preview = entry.content_preview.trim() || "无正文预览";
 
           return (
-            <article key={entry.filename} className="space-y-3 p-4">
+            <article key={entry.filename} className="space-y-2 p-3">
               <div className="flex flex-col gap-2 md:flex-row md:items-center md:justify-between">
                 <div className="flex min-w-0 items-center gap-2">
-                  <FileText className="size-4 shrink-0 text-muted-foreground" aria-hidden="true" />
+                  <FileText className="size-4 shrink-0 text-foreground/60" aria-hidden="true" />
                   <h3 className="truncate text-sm font-semibold">{entry.filename}</h3>
                 </div>
-                <span className="rounded-md bg-muted px-2 py-1 text-xs text-muted-foreground">YAML frontmatter</span>
+                <span className="rounded-md bg-muted px-2 py-1 text-xs text-foreground/60">YAML frontmatter</span>
               </div>
 
               {frontmatterEntries.length > 0 ? (
                 <div className="flex flex-wrap gap-2">
                   {frontmatterEntries.map(([key, value]) => (
-                    <span key={key} className="rounded-md border border-border bg-background px-2 py-1 text-xs text-muted-foreground">
+                    <span key={key} className="rounded-md border border-border/50 bg-background px-2 py-1 text-xs text-foreground/70">
                       <span className="font-medium text-foreground">{key}</span>: {value}
                     </span>
                   ))}
                 </div>
               ) : (
-                <p className="text-xs text-muted-foreground">无 frontmatter</p>
+                <p className="text-xs text-foreground/60">无 frontmatter</p>
               )}
 
-              <p className="whitespace-pre-wrap text-sm leading-6 text-muted-foreground">{preview}</p>
+              <p className="whitespace-pre-wrap text-sm leading-relaxed text-foreground/70">{preview}</p>
             </article>
           );
         })}
@@ -674,32 +682,41 @@ function GitPanel({ git, gitError }: { git: SerGitStatus | null; gitError: strin
   }
 
   const statusItems = [
-    { label: "修改", value: git.modified_count, icon: GitCompare },
-    { label: "暂存", value: git.staged_count, icon: CheckCircle2 },
-    { label: "未追踪", value: git.untracked_count, icon: FileText },
-    { label: "冲突", value: git.conflict_count, icon: AlertCircle },
+    { label: "修改", value: git.modified_count, icon: GitCompare, tone: "warning" as const },
+    { label: "暂存", value: git.staged_count, icon: CheckCircle2, tone: "success" as const },
+    { label: "未追踪", value: git.untracked_count, icon: FileText, tone: "info" as const },
+    { label: "冲突", value: git.conflict_count, icon: AlertCircle, tone: "error" as const },
   ];
 
   return (
-    <div className="space-y-4">
-      <div className="rounded-xl border-2 border-border/60 bg-muted/30 p-4">
-        <div className="mb-2 flex items-center gap-2 text-sm text-muted-foreground">
+    <div className="space-y-3">
+      <div className="rounded-lg border border-border/50 bg-muted/30 p-3">
+        <div className="mb-1.5 flex items-center gap-2 text-sm text-foreground/70">
           <GitBranch className="size-4" aria-hidden="true" />
           <span>当前分支</span>
         </div>
-        <p className="truncate text-xl font-semibold">{git.branch || "非 Git 仓库"}</p>
+        <p className="truncate text-lg font-semibold">{git.branch || "非 Git 仓库"}</p>
       </div>
 
-      <div className="grid grid-cols-2 gap-3">
+      <div
+        className="grid gap-3"
+        style={{ gridTemplateColumns: "repeat(auto-fit, minmax(min(100%, 100px), 1fr))" }}
+      >
         {statusItems.map((item) => {
           const Icon = item.icon;
+          const toneStyles = {
+            success: "border-[var(--status-success-border)] bg-[var(--status-success-bg)] text-[var(--status-success)]",
+            warning: "border-[var(--status-warning-border)] bg-[var(--status-warning-bg)] text-[var(--status-warning)]",
+            error: "border-[var(--status-error-border)] bg-[var(--status-error-bg)] text-[var(--status-error)]",
+            info: "border-[var(--status-info-border)] bg-[var(--status-info-bg)] text-[var(--status-info)]",
+          };
           return (
-            <div key={item.label} className="rounded-xl border-2 border-border/60 p-3">
-              <div className="mb-2 flex items-center justify-between gap-2 text-xs text-muted-foreground">
+            <div key={item.label} className={cn("rounded-lg border p-2.5", toneStyles[item.tone])}>
+              <div className="mb-1.5 flex items-center justify-between gap-2 text-xs opacity-80">
                 <span>{item.label}</span>
                 <Icon className="size-3" aria-hidden="true" />
               </div>
-              <p className="text-2xl font-semibold">{item.value}</p>
+              <p className="text-xl font-semibold">{item.value}</p>
             </div>
           );
         })}
@@ -707,8 +724,10 @@ function GitPanel({ git, gitError }: { git: SerGitStatus | null; gitError: strin
 
       <div
         className={cn(
-          "flex items-center gap-2 rounded-xl border-2 p-3 text-sm",
-          git.is_clean ? "border-primary/40 bg-primary/10 text-primary" : "border-border/60 bg-muted/30 text-muted-foreground",
+          "flex items-center gap-2 rounded-lg border p-2.5 text-sm",
+          git.is_clean
+            ? "border-[var(--status-success-border)] bg-[var(--status-success-bg)] text-[var(--status-success)]"
+            : "border-[var(--status-warning-border)] bg-[var(--status-warning-bg)] text-[var(--status-warning)]",
         )}
       >
         <HardDrive className="size-4" aria-hidden="true" />
@@ -717,12 +736,12 @@ function GitPanel({ git, gitError }: { git: SerGitStatus | null; gitError: strin
 
       {!git.is_clean && git.changed_files.length > 0 && (
         <div className="space-y-2">
-          <p className="text-xs font-medium text-muted-foreground">变更文件</p>
-          <ScrollArea className="h-40 rounded-xl border-2 border-border/60">
-            <div className="divide-y divide-border">
+          <p className="text-xs font-medium text-foreground/70">变更文件</p>
+          <ScrollArea className="h-40 rounded-lg border border-border/50">
+            <div className="divide-y divide-border/60">
               {git.changed_files.map((file) => (
                 <div key={file} className="flex items-center gap-2 px-3 py-2 text-xs">
-                  <GitCompare className="size-3 text-muted-foreground" />
+                  <GitCompare className="size-3 text-foreground/60" />
                   <span className="truncate font-mono">{file}</span>
                 </div>
               ))}
@@ -736,7 +755,7 @@ function GitPanel({ git, gitError }: { git: SerGitStatus | null; gitError: strin
 
 function InlineNotice({ message }: { message: string }) {
   return (
-    <div className="flex items-center gap-2 rounded-xl border border-dashed border-border bg-muted/30 p-4 text-sm text-muted-foreground">
+    <div className="flex items-center gap-2 rounded-lg border border-dashed border-border bg-muted/30 p-3 text-sm text-foreground/70">
       <AlertCircle className="size-4 shrink-0" aria-hidden="true" />
       <span>{message}</span>
     </div>
@@ -745,10 +764,10 @@ function InlineNotice({ message }: { message: string }) {
 
 function ErrorNotice({ message, title, tone }: { message: string; title: string; tone: "destructive" | "warning" | "muted" }) {
   const className = cn(
-    "flex items-start gap-3 rounded-xl border p-4 text-sm",
-    tone === "destructive" && "border-destructive/40 bg-destructive/10 text-destructive",
-    tone === "warning" && "border-amber-500/30 bg-amber-500/10 text-amber-700 dark:text-amber-300",
-    tone === "muted" && "border-border bg-muted/30 text-muted-foreground",
+    "flex items-start gap-3 rounded-lg border p-3 text-sm",
+    tone === "destructive" && "border-[var(--status-error-border)] bg-[var(--status-error-bg)] text-[var(--status-error)]",
+    tone === "warning" && "border-[var(--status-warning-border)] bg-[var(--status-warning-bg)] text-[var(--status-warning)]",
+    tone === "muted" && "border-border bg-muted/30 text-foreground/70",
   );
 
   return (
@@ -756,7 +775,7 @@ function ErrorNotice({ message, title, tone }: { message: string; title: string;
       <AlertCircle className="mt-0.5 size-4 shrink-0" aria-hidden="true" />
       <div className="min-w-0 space-y-1">
         <p className="font-medium">{title}</p>
-        <p className="whitespace-pre-wrap text-xs opacity-85">{message}</p>
+        <p className="whitespace-pre-wrap text-xs opacity-90">{message}</p>
       </div>
     </div>
   );

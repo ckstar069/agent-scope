@@ -1,12 +1,14 @@
 import { useCallback, useEffect, useMemo, useState, type ComponentProps } from "react";
 import { open } from "@tauri-apps/plugin-dialog";
-import { AlertTriangle, CheckCircle2, FolderCog, FolderOpen, FolderPlus, Loader2, RefreshCw, Trash2 } from "lucide-react";
+import { AlertTriangle, CheckCircle2, FolderCog, FolderOpen, FolderPlus, Loader2, RefreshCw, Trash2, Type } from "lucide-react";
 
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle } from "@/components/ui/dialog";
 import { Input } from "@/components/ui/input";
+import { useFontSize, type FontSize } from "@/hooks/useFontSize";
 import { useTauri } from "@/hooks/useTauri";
+import { cn } from "@/lib/utils";
 
 interface ProjectEntry {
   path: string;
@@ -16,8 +18,15 @@ interface ProjectEntry {
 const collator = new Intl.Collator("zh-CN", { numeric: true, sensitivity: "base" });
 type FormSubmitEvent = Parameters<NonNullable<ComponentProps<"form">["onSubmit"]>>[0];
 
+const fontSizeOptions: { value: FontSize; label: string; description: string }[] = [
+  { value: "compact", label: "紧凑", description: "13px — 适合小屏 / 更多信息密度" },
+  { value: "normal", label: "标准", description: "15px — 平衡阅读与信息密度" },
+  { value: "large", label: "大字号", description: "17px — 大屏高分辨率首选" },
+];
+
 export function Settings() {
   const { invoke } = useTauri();
+  const { fontSize, setFontSize } = useFontSize();
   const [projects, setProjects] = useState<ProjectEntry[]>([]);
   const [projectPath, setProjectPath] = useState("");
   const [isLoading, setIsLoading] = useState(true);
@@ -176,6 +185,45 @@ export function Settings() {
           <div className="mt-4 space-y-2" aria-live="polite">
             {error && <Message tone="error" text={error} />}
             {success && <Message tone="success" text={success} />}
+          </div>
+        </CardContent>
+      </Card>
+
+      <Card>
+        <CardHeader>
+          <div className="flex items-start gap-3">
+            <div className="flex size-10 shrink-0 items-center justify-center rounded-lg bg-muted text-muted-foreground">
+              <Type className="size-5" aria-hidden="true" />
+            </div>
+            <div className="space-y-1">
+              <CardTitle>界面字号</CardTitle>
+              <CardDescription>调整全局文字大小。较大字号会自动优化布局以防止内容溢出。</CardDescription>
+            </div>
+          </div>
+        </CardHeader>
+        <CardContent>
+          <div className="grid gap-3 sm:grid-cols-3">
+            {fontSizeOptions.map((option) => (
+              <button
+                key={option.value}
+                type="button"
+                onClick={() => setFontSize(option.value)}
+                className={cn(
+                  "relative flex flex-col items-start gap-1 rounded-xl border-2 p-4 text-left transition-all",
+                  fontSize === option.value
+                    ? "border-primary bg-primary/5"
+                    : "border-border hover:border-primary/30 hover:bg-muted/40",
+                )}
+              >
+                {fontSize === option.value && (
+                  <span className="absolute right-3 top-3 flex size-5 items-center justify-center rounded-full bg-primary text-primary-foreground">
+                    <CheckCircle2 className="size-3.5" aria-hidden="true" />
+                  </span>
+                )}
+                <span className="text-sm font-semibold">{option.label}</span>
+                <span className="text-xs text-muted-foreground">{option.description}</span>
+              </button>
+            ))}
           </div>
         </CardContent>
       </Card>
