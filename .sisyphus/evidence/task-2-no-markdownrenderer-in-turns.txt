@@ -1,0 +1,8 @@
+Command:
+grep -n "MarkdownRenderer" "src/components/TranscriptDetailView.tsx" "src/components/SessionSearchView.tsx"; true
+
+Output:
+(no output)
+
+Conclusion:
+Transcript turn rendering files do not import or invoke MarkdownRenderer. Existing L1 static memory rendering remains outside this proof scope.

@@ -1,0 +1,9 @@
+Title fallback verification
+
+1. custom_title="$@", initial_prompt="[SYSTEM DIRECTIVE: ...]" -> 无标题会话 abc12345
+2. custom_title="   "，initial_prompt="修复对话搜索标题层级，让主标题更醒目" -> 修复对话搜索标题层级，让主标题更醒目
+3. custom_title="会话搜索视觉层级调整" -> 会话搜索视觉层级调整
+4. initial_prompt 长度 >= 500 -> 无标题会话 long0000
+
+Playwright UI observed selected title: 无标题会话 abc12345
+Invalid placeholder $@ did not appear as primary title.

@@ -1,0 +1,78 @@
+# Task 1: Real JSONL Shape Evidence
+
+## Source
+- File: `d907e492-446c-4f75-8bbf-d1170e9c572b.jsonl`
+- Location: Linux test machine (100.85.255.89)
+- Path: `~/.claude/projects/-home-yufei-Repo-fpga-project-coarse-cfo/`
+- Size: 233,666 bytes (74 lines)
+
+## Entry Types & Structure
+
+| Line # | type | Keys | Content Location | Notes |
+|--------|------|------|------------------|-------|
+| 1 | `permission-mode` | `type`, `permissionMode`, `sessionId` | None | Session metadata |
+| 2-3 | `file-history-snapshot` | `type`, `messageId`, `snapshot`, `isSnapshotUpdate` | None | File tracking |
+| 4 | `user` | `parentUuid`, `isSidechain`, `promptId`, `type`, `message`, `uuid`, `timestamp`, `permissionMode`, `userType`, `entrypoint`, `cwd`, `sessionId`, `version`, `gitBranch` | `message.content` (string, 2 chars) | Content = "$@" |
+| 5 | `attachment` | `parentUuid`, `isSidechain`, `attachment`, `type`, `uuid`, `timestamp`, `userType`, `entrypoint`, `cwd`, `sessionId`, `version`, `gitBranch` | None (has `attachment.content`) | Skill attachment |
+| 6 | `queue-operation` | `type`, `operation`, `timestamp`, `sessionId`, `content` | **top-level `content`** (string, 6 chars) | Non-user entry with top-level content |
+| 7 | `system` | `parentUuid`, `isSidechain`, `type`, `subtype`, `level`, `error`, `retryInMs`, `retryAttempt`, `maxRetries`, `timestamp`, `uuid`, ... | None | Error/retry info |
+| 8 | `queue-operation` | `type`, `operation`, `timestamp`, `sessionId` | None | No content |
+| 9 | `user` | Same as line 4 | `message.content` (blocks[1]) | Contains "[Request interrupted by user]" |
+| 10 | `file-history-snapshot` | Same as lines 2-3 | None | |
+| 11 | `user` | Same as line 4 + `permissionMode` | `message.content` (string, 6 chars) | Content = "分析当前项目" |
+| 12 | `file-history-snapshot` | Same as lines 2-3 | None | |
+| 13 | `user` | Same as line 4 + `permissionMode` | `message.content` (string, 6 chars) | Content = "分析当前项目" |
+| 14-17 | `assistant` | `parentUuid`, `isSidechain`, `message`, `type`, `uuid`, `timestamp`, `userType`, `entrypoint`, `cwd`, `sessionId`, `version`, `gitBranch` | `message.content` (blocks[1]) | Model = "kimi-for-coding" |
+| 18-20 | `user` | + `toolUseResult`, `sourceToolAssistantUUID` | `message.content` (blocks[1]) | Tool result responses |
+| 21 | `last-prompt` | `type`, `lastPrompt`, `leafUuid`, `sessionId` | None | Session state |
+| 22 | `permission-mode` | Same as line 1 | None | |
+| 23-25 | `assistant` | Same as lines 14-17 | `message.content` (blocks[1]) | Model = "kimi-for-coding" |
+| ... | `assistant` | Same | `message.content` (blocks[1-3]) | Some have multiple blocks |
+
+## Key Findings
+
+### User Content Location
+- **ALL** `type="user"` entries use `message.content` (NOT top-level `content`)
+- User content can be: `string` (short prompts) or `blocks[]` (interrupted/tool results)
+- One `queue-operation` entry uses top-level `content`, but it's NOT a user message
+
+### Assistant Content Format
+- **ALL** `type="assistant"` entries use `message.content` as `blocks[]` array
+- Each block has `type: "text"` or `type: "tool_use"`
+- Model name is at `message.model` (e.g., "kimi-for-coding")
+
+### Tool Use Pattern
+- **NO** top-level `tool_use` or `tool_result` entries found
+- Tool use is embedded inside assistant `message.content` blocks:
+  ```json
+  {"type": "tool_use", "name": "Read", "input": {"file_path": "..."}}
+  ```
+- Tool results appear as `type="user"` entries with `toolUseResult` and `sourceToolAssistantUUID` fields
+
+### Custom-Title
+- **ZERO** `custom-title` entries found in this file
+- **ZERO** `custom-title` entries found across ALL project JSONL files on the machine
+- Parser fallback to `content` field (lines 476-485) is defensive but not triggered by real data
+
+### `$@` Pattern
+- Found in user `message.content` string (line 4): literal "$@" (2 chars)
+- Found in assistant `message.content` blocks (line 73+): embedded in analysis text
+- Total occurrences: 6
+
+### `[Request interrupted by user]`
+- Found in user `message.content` blocks[1] (line 9)
+- This is a system-generated message when user interrupts streaming
+
+### Other Types
+- `permission-mode`: Session permission state
+- `file-history-snapshot`: File backup tracking
+- `attachment`: Skill/attachment data with `attachment.content`
+- `queue-operation`: Queue state, may have top-level `content`
+- `system`: Error/retry metadata
+- `last-prompt`: Session leaf prompt tracking
+
+## Content Redaction Proof
+- No full transcript content copied
+- Only structural metadata (field names, types, nesting levels) documented
+- Content values shown only as length indicators or first 80 chars with "..."
+- All evidence in this file is < 500 chars of original content

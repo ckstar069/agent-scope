@@ -1,0 +1,42 @@
+F3: Real Manual QA on Linux
+
+VERDICT: APPROVE
+
+Scenarios Verified:
+
+1. Real session loads
+   - Evidence: task-9-real-session-visible.txt
+   - Result: 2 sessions found on test server (d907e492: 55 turns, 9dc30ab2: 28 turns)
+   - Status: PASS
+
+2. Session title is not `$@`
+   - Evidence: task-9-real-title-noise-cleanup.txt
+   - Result: initial_prompt = "分析当前项目" (not $@)
+   - Status: PASS
+
+3. Transcript is document format
+   - Evidence: task-5-text-transcript.txt
+   - Result: TranscriptDetailView uses section-based layout, no bubbles
+   - Status: PASS
+
+4. Tools collapsed by default
+   - Evidence: task-7-tools-collapsed.txt
+   - Result: `<details>` elements used for tool calls
+   - Status: PASS
+
+5. Status hints are muted
+   - Evidence: task-5-text-transcript.txt
+   - Result: `[Request interrupted by user]` renders as muted span
+   - Status: PASS
+
+6. Marked state works
+   - Evidence: task-6-marked-state.txt
+   - Result: markedTurns is real useState Set, deduplication works
+   - Status: PASS
+
+7. L2 layout gives more space
+   - Evidence: task-6-marked-state.txt
+   - Result: grid-cols-[22rem_minmax(0,1fr)]
+   - Status: PASS
+
+Scenarios [7/7 pass] | VERDICT: APPROVE

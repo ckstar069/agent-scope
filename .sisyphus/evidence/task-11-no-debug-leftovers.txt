@@ -1,0 +1,14 @@
+Task 11: Debug Leftover Search
+
+Search results for debug leftovers in modified files:
+- src/components/ProjectMemoryPanel.tsx: no matches
+- src/components/SessionSearchView.tsx: no matches
+- src/components/TranscriptDetailView.tsx: no matches
+- src-tauri/src/collectors/template/session_transcript.rs: no matches
+- src-tauri/src/commands.rs: no matches
+
+One pre-existing TODO found in src-tauri/src/watcher.rs (line 407):
+  // TODO: 在集成到 Tauri 后替换为 log/tracing
+This is not related to the current changes and was present before v0.3.
+
+Conclusion: No debug leftovers introduced.

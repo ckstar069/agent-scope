@@ -1,0 +1,10 @@
+Task 7 证据：工具折叠与状态提示
+
+- 工具调用仍使用原生 `<details>`，未设置 `open` 属性，因此默认折叠。
+- `<summary>` 展示「工具调用」和每个工具名 chip，展开后才显示工具列表，避免长工具信息打断阅读流。
+- `[Request interrupted by user]` 由 `renderTextWithStatusHints` 识别，并渲染为 muted 行内标签：`rounded-md bg-muted px-1.5 py-0.5 text-xs text-muted-foreground`。
+- 工具折叠区、状态提示均复用现有 shadcn/Tailwind token，没有新增依赖或脱离设计系统的样式。
+
+核验片段：
+- `<details className="mt-3 rounded-lg border border-border bg-muted/35 p-3 text-sm">`
+- `if (part === "[Request interrupted by user]")`

@@ -1,0 +1,10 @@
+Task 5 证据：TranscriptDetailView 文档阅读器
+
+- 已确认 `src/components/TranscriptDetailView.tsx` 未导入或使用 `MarkdownRenderer` 渲染转录 turn。
+- 转录正文按 section 顺序渲染：`TranscriptTurnSection` 使用 `<section className="rounded-xl border border-border bg-card ...">`，用户与助手均为满宽文档段落，不存在聊天气泡布局。
+- 搜索结果中未发现真实实现里的 `max-w-[85%]` 或 `justify-end` 布局类；这些字符串仅保留在顶部契约注释中作为禁止规则。
+- 代码块由 `renderTranscriptText` 解析 fenced code 后输出 `<pre>`，并在 `<pre>` 上使用 `overflow-x-auto`，长代码只在代码块内部横向滚动。
+
+核验片段：
+- `renderTranscriptText(turn.text)`
+- `<pre className="overflow-x-auto rounded-lg border border-border bg-muted/45 p-3 text-xs text-foreground">`

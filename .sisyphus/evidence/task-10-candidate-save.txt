@@ -1,0 +1,22 @@
+Task 10: Candidate Memory Save Verification
+
+Verification: Code review of save flow
+
+Save Flow Analysis:
+1. handleMarkMemory() in ProjectMemoryPanel.tsx:
+   - Checks markedTurns.has(turnIndex) to prevent duplicates
+   - Creates candidate with stable ID: `${selectedSessionId}-${turnIndex}`
+   - Calls setCandidates() with deduplication check
+
+2. save_candidate_memory() in commands.rs (lines 680-769):
+   - Unchanged from v0.3
+   - Writes to .sisyphus/notepads/project-memory/decisions.md
+   - Appends entry with timestamp, category, content, source
+
+3. CandidateMemoryBox component:
+   - Unchanged during this plan
+   - Receives candidates prop and onUpdateCandidates callback
+
+Conclusion: Save flow is intact and functional. The only change was fixing
+markedTurns state management (Wave 2 Task 6), which improves rather than
+regresses the candidate creation flow.

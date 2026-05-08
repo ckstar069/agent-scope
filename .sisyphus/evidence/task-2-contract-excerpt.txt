@@ -1,0 +1,31 @@
+src/components/TranscriptDetailView.tsx UI contract excerpt:
+
+对话详情文档式渲染契约（L2「对话搜索」专用）。
+
+目标形态：把会话转录视为可阅读的技术文档，而不是即时通讯界面。
+后续实现 Task 5/6/7 时必须遵守以下规则：
+
+1. 文档结构
+   - 顶部是会话摘要头：标题、模型、创建时间、修改文件数量。
+   - 正文按原始顺序渲染为连续 section：用户段落与助手段落都占满正文宽度。
+   - 状态提示（如 [Request interrupted by user]）只渲染为 muted/gray 行内标签，不能作为主内容强调。
+   - 工具调用渲染为独立的可折叠区域，默认收起；摘要行展示工具名 chip/badge，点击后展开详情。
+   - thinking / redacted_thinking 默认隐藏，不参与正文渲染；只有显式调试入口才允许查看。
+
+2. 正文排版规则
+   - 直接使用 prose/prose-sm、text-muted-foreground、border-border、bg-card 等现有设计 token。
+   - 代码块使用 <pre>，并在代码块本地设置 overflow-x-auto；长行只能在代码块内横向滚动。
+   - 禁止 max-w-[85%]、justify-end 或按角色左右错位的消息布局。
+   - 禁止在转录段落内嵌入带目录侧栏的完整文档渲染组件；该组件仅用于 L1 静态记忆文档。
+
+3. 标记动作规则
+   - 标记按钮放在 section 级别：优先位于段落标题旁，其次位于段落末尾动作区。
+   - 已标记状态用「已标记」badge 或按钮状态变化表达。
+   - 标记动作继续调用 onMarkMemory(turn, turnIndex)，以保留现有候选记忆生成流程。
+
+Interfaces added:
+- TranscriptTurnRenderContract
+- TranscriptSectionContract
+- TranscriptStatusHint
+- ToolCallDisplay
+- TranscriptMarkAction

@@ -1,0 +1,25 @@
+F4: Scope Fidelity Check
+
+VERDICT: APPROVE
+
+Scope Verification:
+
+Modified Files (expected):
+1. src-tauri/src/collectors/template/session_transcript.rs — parser fixes
+2. src-tauri/src/commands.rs — no functional changes (only temp test, cleaned)
+3. src/components/ProjectMemoryPanel.tsx — L2 layout + markedTurns
+4. src/components/SessionSearchView.tsx — title fallback + selected state
+5. src/components/TranscriptDetailView.tsx — document reader
+
+No Changes To (guardrails respected):
+- package.json — no new dependencies
+- Cargo.toml — no new dependencies  
+- abtop-collector/ — no changes
+- L1 MarkdownRenderer logic — only used in L1Panel
+- L3 persistence format — save_candidate_memory unchanged
+- No AI summarization/extraction code
+- No real-time streaming implementation
+
+Scope Creep: NONE
+
+Scope [CLEAN] | VERDICT: APPROVE

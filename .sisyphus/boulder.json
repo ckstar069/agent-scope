@@ -1,50 +1,57 @@
 {
-  "active_plan": "/Users/ckstar/Repo/ai_project_template_visualization/.sisyphus/plans/ptv-v0.3.md",
-  "started_at": "2026-05-07T01:16:52.790Z",
+  "active_plan": "/Users/ckstar/Repo/ai_project_template_visualization/.sisyphus/plans/dialog-search-text-view-fix.md",
+  "started_at": "2026-05-07T08:20:04.068Z",
   "session_ids": [
     "ses_20515bf64ffeIr6P84PM66d3Pv"
   ],
   "session_origins": {
     "ses_20515bf64ffeIr6P84PM66d3Pv": "direct"
   },
-  "plan_name": "ptv-v0.3",
+  "plan_name": "dialog-search-text-view-fix",
   "agent": "atlas",
   "task_sessions": {
     "todo:1": {
       "task_key": "todo:1",
       "task_label": "1",
-      "task_title": "**Rust 后端：`project_files.rs` 收集器 + 单元测试**",
-      "session_id": "ses_1fffac4fdffe0p5lq9biB2vvbm",
+      "task_title": "**Capture and codify real Claude JSONL fixtures**",
+      "session_id": "ses_1fe7301e2ffeBVwU6d2kF9431M",
       "agent": "Sisyphus-Junior",
-      "category": "unspecified-high",
-      "updated_at": "2026-05-07T01:31:02.802Z"
+      "category": "deep",
+      "updated_at": "2026-05-07T08:38:32.875Z"
     },
-    "todo:2": {
-      "task_key": "todo:2",
-      "task_label": "2",
-      "task_title": "**Rust 后端：扩展 WatchedCollector + Tauri 命令**",
-      "session_id": "ses_1ffd02d50ffewADs2xi7iAFaS9",
+    "todo:3": {
+      "task_key": "todo:3",
+      "task_label": "3",
+      "task_title": "**Parser cleanup and Rust tests**",
+      "session_id": "ses_1fe62bb4dffer8I8dgBrnQ3T8t",
       "agent": "Sisyphus-Junior",
-      "category": "unspecified-high",
-      "updated_at": "2026-05-07T02:09:19.694Z"
+      "category": "deep",
+      "updated_at": "2026-05-07T08:49:31.785Z"
     },
     "todo:5": {
       "task_key": "todo:5",
       "task_label": "5",
-      "task_title": "**前端：ProjectMemoryPanel L1 静态记忆集成**",
-      "session_id": "ses_1ffc9f955ffe72wBctvZwolGQM",
+      "task_title": "**Replace bubble transcript view with text reader**",
+      "session_id": "ses_1fe51296fffeoDTBAzkFk5QaUk",
       "agent": "Sisyphus-Junior",
       "category": "visual-engineering",
-      "updated_at": "2026-05-07T02:20:36.903Z"
+      "updated_at": "2026-05-07T09:07:40.242Z"
     },
-    "todo:6": {
-      "task_key": "todo:6",
-      "task_label": "6",
-      "task_title": "**Rust 后端：session_transcript.rs 收集器 + 简单搜索**",
-      "session_id": "ses_1ffbba4daffehR9GlLMX6SMmdq",
-      "agent": "Sisyphus-Junior",
-      "category": "unspecified-high",
-      "updated_at": "2026-05-07T02:36:15.630Z"
+    "todo:10": {
+      "task_key": "todo:10",
+      "task_label": "10",
+      "task_title": "**Regression tests for static memory and candidate memory**",
+      "session_id": "ses_1fe3d04abffewGtbccpywF2zwR",
+      "agent": "explore",
+      "updated_at": "2026-05-07T09:30:25.746Z"
+    },
+    "final-wave:f1": {
+      "task_key": "final-wave:f1",
+      "task_label": "F1",
+      "task_title": "**Plan Compliance Audit** — `oracle`",
+      "session_id": "ses_1fda7122effeh9f9ZCnHiOb3eu",
+      "agent": "oracle",
+      "updated_at": "2026-05-07T12:14:29.930Z"
     }
   }
 }

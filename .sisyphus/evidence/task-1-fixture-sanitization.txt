@@ -1,0 +1,73 @@
+# Task 1: Fixture Sanitization Evidence
+
+## Sanitization Rules Applied
+
+1. **No absolute paths in fixtures** — All paths use generic names (`/tmp/test-project`, `test.py`, `sort.py`)
+2. **No real user content** — All text content is synthetic/generic:
+   - "你好，帮我写代码" → generic example
+   - "帮我写一个排序函数" → generic example
+   - "[Request interrupted by user]" → system message (already public pattern)
+   - "$@" → special pattern (literal string, no user data)
+3. **No real session IDs** — Use generic names like `ses_test.jsonl`
+4. **No timestamps from real data** — Use synthetic dates like `2024-05-07T10:30:00.000Z`
+5. **No real file paths** — Use generic names
+6. **No model names from real data** — Use generic `claude-sonnet` instead of `kimi-for-coding`
+
+## Synthetic Fixtures Created
+
+### 1. Top-Level `content` User Messages (Synthetic)
+```jsonl
+{"type":"user","content":"用户直接消息","timestamp":"2024-05-07T10:30:00.000Z"}
+```
+- **Purpose**: Test parser handling of user messages with top-level `content` (not `message.content`)
+- **Note**: Real JSONL uses `message.content` for user, but this format may exist in other Claude versions
+- **Current parser behavior**: DOES NOT parse this (reads `message.content` only)
+- **Test expectation**: Documents current limitation for Task 3 fix
+
+### 2. Assistant `message.content` Block Messages (Real Pattern)
+```jsonl
+{"type":"assistant","message":{"model":"claude-sonnet","content":[{"type":"text","text":"好的，我来写排序函数"},{"type":"tool_use","name":"write","input":{"file_path":"sort.py"}}]},"timestamp":"2024-05-07T10:31:00.000Z"}
+```
+- **Purpose**: Test parsing of assistant messages with text + tool_use blocks
+- **Real data match**: Matches lines 14-17, 23-25 pattern exactly
+- **Test expectation**: Text extracted, tools collected, files tracked
+
+### 3. custom-title Fallback (Synthetic)
+```jsonl
+{"type":"custom-title","title":"我的会话标题"}
+{"type":"custom-title","content":"另一个标题"}
+```
+- **Purpose**: Test custom-title parsing with both `title` and `content` fields
+- **Real data match**: Not found in real data, but defensive fallback
+- **Test expectation**: Title extracted from either field
+
+### 4. `$@` Filtering (Real Pattern + Synthetic)
+```jsonl
+{"type":"user","message":{"content":"$@"},"timestamp":"2024-05-07T10:30:00.000Z"}
+```
+- **Purpose**: Test parser handling of `$@` special pattern
+- **Real data match**: Line 4 of real JSONL is exactly `"$@"`
+- **Current parser behavior**: Extracts as normal text (no filtering yet)
+- **Test expectation**: Verifies `$@` is not dropped/crashed; filtering TBD in Task 3
+
+### 5. `[Request interrupted by user]` (Real Pattern)
+```jsonl
+{"type":"user","message":{"content":[{"type":"text","text":"[Request interrupted by user]"}]},"timestamp":"2024-05-07T10:30:00.000Z"}
+```
+- **Purpose**: Test parsing of interrupted request messages
+- **Real data match**: Line 9 of real JSONL matches this pattern
+- **Test expectation**: Text extracted normally, treated as user turn
+
+### 6. User with `toolUseResult` (Real Pattern)
+```jsonl
+{"type":"user","message":{"content":[{"type":"text","text":"工具结果"}]},"toolUseResult":{"status":"success"},"sourceToolAssistantUUID":"abc-123","timestamp":"2024-05-07T10:30:00.000Z"}
+```
+- **Purpose**: Test parsing of user entries that are tool result responses
+- **Real data match**: Lines 18-20 pattern
+- **Test expectation**: Parsed as normal user turn (tool result fields ignored by parser)
+
+## Verification
+- All fixtures use synthetic data only
+- No real user prompts, file paths, or session IDs
+- No sensitive content from the 233 KB real JSONL file
+- Total copied content from real file: < 200 chars (only structural field names and type values)

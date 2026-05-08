@@ -1,0 +1,110 @@
+=== F1 合规审计 — 证据 ===
+审计时间: 2026-05-07
+审计范围: 计划文件 dialog-search-text-view-fix.md 中所有 Must Have / Must NOT Have
+
+=======================================================================
+                          Must Have [4/4]
+=======================================================================
+
+[✓] Must Have #1: 文本式 transcript reader，不是聊天气泡
+    证据: TranscriptDetailView.tsx
+      - L173-208: 渲染为 <section> 元素（非气泡）
+      - L25: 注释明确禁止 max-w-[85%]、justify-end
+      - L259: prose prose-sm max-w-none（全宽文本，无气泡约束）
+      - Grep 验证: max-w-[85%]、justify-end、TurnBubble 均未出现在转录渲染代码中
+      - 仅出现在 Layout.tsx(header区) 和 shadcn/ui dialog.tsx 的非转录组件
+
+[✓] Must Have #2: Parser 同时支持顶层 content 和 message.content
+    证据: session_transcript.rs L458-461
+      - let top_level_content = val.get("content");
+      - let msg_content = msg.and_then(|m| m.get("content"));
+      - let content = top_level_content.or(msg_content);
+      - 测试 test_top_level_user_content 通过 ✅
+      - 测试 test_parse_string_content 通过 ✅
+      - 21/21 Rust tests pass, 0 failed
+
+[✓] Must Have #3: 候选记忆标记能力保留
+    证据: ProjectMemoryPanel.tsx
+      - L133-155: handleMarkMemory 函数存在，含去重逻辑
+      - L32: markedTurns 状态 (useState<Set<number>>)
+      - L214: 传入 L2Panel → L359 传入 TranscriptDetailView
+      - TranscriptDetailView L192: isMarked={markedTurns.has(index)}
+      - L244-256: 标记按钮（Bookmark 图标 + "已标记"/"标记" 文字切换）
+
+[✓] Must Have #4: 真实测试机数据验证
+    证据: .sisyphus/evidence/task-9-real-session-visible.txt
+      - 服务器: 100.85.255.89
+      - 项目: /home/yufei/Repo/fpga_project_coarse_cfo
+      - 2 个会话已解析:
+        * 9dc30ab2: initial_prompt=<local-command-caveat>..., turns=28
+        * d907e492: initial_prompt=分析当前项目, turns=55
+      - [x] 真实会话出现在 parser 输出
+      - [x] 标题/提示不是 $@
+      - [x] 中文内容正确解析
+      - 后端测试: 22 passed (21 unit + 1 integration), 0 failed
+
+=======================================================================
+                        Must NOT Have [5/5]
+=======================================================================
+
+[✓] Must NOT Have #1: 不改 L1 静态记忆的 MarkdownRenderer 用途
+    证据: Grep 全项目搜索 MarkdownRenderer
+      - MarkdownRenderer.tsx: 定义
+      - ProjectMemoryPanel.tsx: 仅在 L1Panel (L317) 中使用 <MarkdownRenderer content={content} />
+      - TranscriptDetailView.tsx: 无导入/使用 MarkdownRenderer
+      - TranscriptDetailView 使用自有的 renderTranscriptText() 函数
+
+[✓] Must NOT Have #2: 不做 AI 自动总结/提取
+    证据: Grep 全项目搜索 AI/summarize/extract/auto.*memory 模式
+      - 仅匹配到 MarkdownRenderer.tsx 中的 extractHeadings/extractTextFromNode
+        这两函数是从 Markdown 文本中提取 TOC 标题（纯机械操作，非 AI）
+      - 无 OpenAI/Anthropic/LLM API 调用
+      - 无自动总结/提取功能代码
+
+[✓] Must NOT Have #3: 不实现实时 transcript streaming
+    证据: Grep 全项目搜索 stream/WebSocket/socket/EventSource/SSE 模式
+      - 前端: 0 匹配
+      - 后端: 0 匹配
+      - 无实时流式传输代码
+
+[✓] Must NOT Have #4: 不改 L3 候选记忆写入格式
+    证据:
+      - commands.rs L681: save_candidate_memory 未修改（写入 decisions.md）
+      - CandidateMemoryBox.tsx L82-91: 调用签名未变
+        { path, memory: { content, source_session_id, source_turn_index, source_snippet, category } }
+      - ProjectMemoryPanel.tsx L137-145: CandidateMemory 结构未变
+        { id, content, source_session_id, source_turn_index, source_snippet, category, status }
+      - 输出路径: .sisyphus/notepads/project-memory/decisions.md
+
+[✓] Must NOT Have #5: 不引入新的大型 UI/Markdown 库
+    证据: package.json 依赖检查
+      - 现有依赖: react-markdown, remark-gfm（初始脚手架即存在）
+      - 依赖列表与初始提交一致，无新增大型 UI/Markdown 库
+      - dependencies: @base-ui/react, @fontsource-variable/geist, @tailwindcss/vite,
+        @tauri-apps/*, class-variance-authority, clsx, lucide-react, react, react-dom,
+        react-markdown, recharts, remark-gfm, shadcn, tailwind-merge, tailwindcss,
+        tw-animate-css
+
+=======================================================================
+                     构建与测试验证
+=======================================================================
+
+[✓] Rust 测试:    21 passed, 0 failed, 0 ignored
+[✓] 前端构建:     tsc + vite build 成功 (exit 0)
+[✓] 后端类型:     cargo check 编译通过
+
+=======================================================================
+                        最终裁决
+=======================================================================
+
+  Must Have    [ 4 / 4 ]  ██████████████████████████████  100%
+  Must NOT Have [ 5 / 5 ]  ██████████████████████████████  100%
+  Build         PASS
+  Tests         PASS (21/21)
+  Real Data     VERIFIED (2 sessions on real Linux server)
+
+  >>> VERDICT: APPROVE <<<
+
+  所有 Must Have 和 Must NOT Have 均已通过验证。
+  无需修改代码；无需人工介入。
+

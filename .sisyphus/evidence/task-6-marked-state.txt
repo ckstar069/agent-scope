@@ -1,0 +1,12 @@
+Task 6 证据：L2 markedTurns 状态与布局
+
+- 已将 `markedTurns={new Set()}` 替换为真实 React 状态：`const [markedTurns, setMarkedTurns] = useState<Set<number>>(new Set());`。
+- `L2Panel` 继续向 `TranscriptDetailView` 透传同一个 `markedTurns` 状态集合，标记态可在当前面板会话内保持。
+- `handleMarkMemory` 现在先检查 `markedTurns.has(turnIndex)`，已标记 turn 不再创建重复候选记忆。
+- 候选记忆 id 已移除 `Date.now()`，改为稳定 id：`${selectedSessionId}-${turnIndex}`，并通过 `prev.some((candidate) => candidate.id === id)` 兜底去重。
+- L2 网格布局已从均分两列调整为 `lg:grid-cols-[22rem_minmax(0,1fr)]`，左侧会话列表固定 22rem，右侧详情区获得剩余宽度。
+
+核验片段：
+- `markedTurns={markedTurns}`
+- `if (!selectedSessionId || markedTurns.has(turnIndex)) return;`
+- `<div className="grid gap-4 lg:grid-cols-[22rem_minmax(0,1fr)]">`

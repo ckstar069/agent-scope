@@ -1,0 +1,9 @@
+Task 9: Title and Noise Cleanup Verification
+
+Noise filtering verified on real data:
+- No '$@' in any session initial_prompt or custom_title
+- System messages (e.g., <local-command-caveat>) present but not filtered by current rules
+- Real user content ('分析当前项目') correctly extracted and used as initial_prompt
+
+Note: <local-command-caveat> prefix from first session is a system-level message
+that may warrant future filtering, but it does not appear as '$@' or empty string.

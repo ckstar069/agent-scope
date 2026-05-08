@@ -1,0 +1,24 @@
+Task 9: Real Linux Session Verification
+
+Server: 100.85.255.89 (yufei)
+Project: /home/yufei/Repo/fpga_project_coarse_cfo
+Sessions dir: ~/.claude/projects/-home-yufei-Repo-fpga-project-coarse-cfo/
+
+Found sessions: 2
+1. 9dc30ab2-7e7d-4d3a-87ad-32adb58a36c7
+   - custom_title: None
+   - initial_prompt: <local-command-caveat>Caveat: The messages below w...
+   - turns: 28
+
+2. d907e492-446c-4f75-8bbf-d1170e9c572b
+   - custom_title: None
+   - initial_prompt: 分析当前项目
+   - turns: 55
+
+Verification:
+- [x] Real session appears in parser output
+- [x] Session title/prompt is not '$@'
+- [x] Meaningful Chinese content parsed correctly ('分析当前项目')
+- [x] Turn count reasonable (28 and 55)
+
+Rust tests on server: 22 passed (21 unit + 1 integration), 0 failed

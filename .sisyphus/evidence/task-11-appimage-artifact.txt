@@ -1,0 +1,18 @@
+Task 11: Release AppImage Rebuild and Artifact Verification
+
+Build completed on Linux test server (100.85.255.89)
+Timestamp: 2026-05-07 20:07-20:08
+
+Artifacts generated:
+- AppImage: 76M  | src-tauri/target/release/bundle/appimage/ptv_0.1.0_amd64.AppImage
+- deb:      5.0M | src-tauri/target/release/bundle/deb/ptv_0.1.0_amd64.deb  
+- rpm:      5.0M | src-tauri/target/release/bundle/rpm/ptv-0.1.0-1.x86_64.rpm
+
+Build output:
+- Frontend build: passed (tsc + vite build)
+- Rust release build: passed (optimized, 21.94s)
+- Bundle generation: 3 bundles finished successfully
+
+Debug leftovers check:
+- No console.log, dbg!, [DEBUG, TODO, FIXME, HACK in changed frontend files
+- One pre-existing TODO comment in watcher.rs (line 407), not related to this change
