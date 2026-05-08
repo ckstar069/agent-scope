@@ -13,6 +13,7 @@ import { cn } from "@/lib/utils";
 type RawAgentStatus = "Thinking" | "Executing" | "Waiting" | "RateLimited" | "Done";
 type DisplayStatus = "Active" | "Idle" | "Offline";
 type TokenRateUnit = "second" | "minute";
+type RateType = "realtime" | "1min" | "total";
 type AgentDetailTab = "timeline" | "subagents" | "fileaudit";
 
 interface AgentInfo {
@@ -38,6 +39,8 @@ interface AgentInfo {
   context_history: number[];
   compaction_count: number;
   token_rate: number;
+  token_rate_1m: number;
+  token_rate_total: number;
   pid: number;
   version: string;
   effort: string;
@@ -86,6 +89,7 @@ export function AgentMonitor() {
   const [snapshot, setSnapshot] = useState<AgentUpdatePayload | null>(null);
   const [listenError, setListenError] = useState<string | null>(null);
   const [rateUnit, setRateUnit] = useState<TokenRateUnit>("second");
+  const [rateType, setRateType] = useState<RateType>("1min");
   const [filterText, setFilterText] = useState("");
   const [expandedSessionId, setExpandedSessionId] = useState<string | null>(null);
   const [now, setNow] = useState(() => Date.now());
@@ -158,7 +162,7 @@ export function AgentMonitor() {
 
     return unmappedAgents.filter((agent) => matchesAgentFilter(agent, normalizedFilter));
   }, [normalizedFilter, unmappedAgents]);
-  const maxRate = useMemo(() => Math.max(1, ...allAgents.map((agent) => getDisplayRate(agent.token_rate, rateUnit))), [allAgents, rateUnit]);
+  const maxRate = useMemo(() => Math.max(1, ...allAgents.map((agent) => getDisplayRate(agent, rateType, rateUnit))), [allAgents, rateType, rateUnit]);
   const totalSessions = snapshot?.total_sessions ?? 0;
   const totalCount = allAgents.length;
   const matchedCount = filteredProjects.reduce((sum, project) => sum + project.agents.length, 0) + filteredUnmappedAgents.length;
@@ -193,21 +197,44 @@ export function AgentMonitor() {
           </div>
         </div>
 
-        <div className="flex flex-wrap items-center gap-2">
-          <Button
-            type="button"
-            variant={rateUnit === "second" ? "secondary" : "outline"}
-            onClick={() => setRateUnit("second")}
-          >
-            token/s
-          </Button>
-          <Button
-            type="button"
-            variant={rateUnit === "minute" ? "secondary" : "outline"}
-            onClick={() => setRateUnit("minute")}
-          >
-            token/min
-          </Button>
+        <div className="flex flex-wrap items-center gap-3">
+          <div className="flex items-center gap-1">
+            <span className="text-xs font-medium text-muted-foreground mr-1">速率类型</span>
+            {(["realtime", "1min", "total"] as RateType[]).map((type) => (
+              <Button
+                key={type}
+                type="button"
+                variant={rateType === type ? "secondary" : "outline"}
+                size="sm"
+                className="h-8 px-2.5 text-xs"
+                onClick={() => setRateType(type)}
+              >
+                {type === "realtime" ? "实时" : type === "1min" ? "1分钟" : "全程"}
+              </Button>
+            ))}
+          </div>
+          <div className="h-6 w-px bg-border" />
+          <div className="flex items-center gap-1">
+            <span className="text-xs font-medium text-muted-foreground mr-1">单位</span>
+            <Button
+              type="button"
+              variant={rateUnit === "second" ? "secondary" : "outline"}
+              size="sm"
+              className="h-8 px-2.5 text-xs"
+              onClick={() => setRateUnit("second")}
+            >
+              token/s
+            </Button>
+            <Button
+              type="button"
+              variant={rateUnit === "minute" ? "secondary" : "outline"}
+              size="sm"
+              className="h-8 px-2.5 text-xs"
+              onClick={() => setRateUnit("minute")}
+            >
+              token/min
+            </Button>
+          </div>
         </div>
       </div>
 
@@ -264,6 +291,7 @@ export function AgentMonitor() {
               project={project}
               maxRate={maxRate}
               rateUnit={rateUnit}
+              rateType={rateType}
               expandedSessionId={expandedSessionId}
               onToggleSession={handleToggle}
             />
@@ -274,6 +302,7 @@ export function AgentMonitor() {
               project={{ project_path: "未关联", agents: filteredUnmappedAgents, count: filteredUnmappedAgents.length }}
               maxRate={maxRate}
               rateUnit={rateUnit}
+              rateType={rateType}
               expandedSessionId={expandedSessionId}
               onToggleSession={handleToggle}
               isUnmapped
@@ -311,19 +340,21 @@ interface ProjectAgentCardProps {
   project: ProjectAgents;
   maxRate: number;
   rateUnit: TokenRateUnit;
+  rateType: RateType;
   expandedSessionId: string | null;
   onToggleSession: (sessionId: string) => void;
   isUnmapped?: boolean;
 }
 
-function ProjectAgentCard({ project, maxRate, rateUnit, expandedSessionId, onToggleSession, isUnmapped = false }: ProjectAgentCardProps) {
+function ProjectAgentCard({ project, maxRate, rateUnit, rateType, expandedSessionId, onToggleSession, isUnmapped = false }: ProjectAgentCardProps) {
+  const [isExpanded, setIsExpanded] = useState(true);
   const displayName = isUnmapped ? "未关联" : getProjectName(project.project_path, project.agents[0]?.project_name);
   const cardAccent = isUnmapped ? "from-muted via-muted-foreground/30 to-muted" : "from-stage-l0 via-stage-l2 to-stage-l5";
 
   return (
     <Card className="overflow-hidden">
       <div className={cn("h-1 bg-gradient-to-r", cardAccent)} />
-      <CardHeader className="flex-row items-start justify-between gap-4">
+      <CardHeader className="flex-row items-center justify-between gap-4">
         <div className="min-w-0 space-y-2">
           <div className="flex items-center gap-3">
             <div className="flex size-10 shrink-0 items-center justify-center rounded-lg bg-muted text-muted-foreground">
@@ -335,23 +366,43 @@ function ProjectAgentCard({ project, maxRate, rateUnit, expandedSessionId, onTog
             </div>
           </div>
         </div>
-        <span className="inline-flex shrink-0 items-center rounded-full border border-border bg-muted/40 px-2.5 py-1 text-xs font-medium text-muted-foreground">
-          {project.count} sessions
-        </span>
+        <div className="flex shrink-0 items-center gap-2">
+          <span className="inline-flex items-center rounded-full border border-border bg-muted/40 px-2.5 py-1 text-xs font-medium text-muted-foreground">
+            {project.count} sessions
+          </span>
+          <Button
+            type="button"
+            variant="ghost"
+            size="icon"
+            className="size-8"
+            aria-label={isExpanded ? "收起会话" : "展开会话"}
+            onClick={() => setIsExpanded((prev) => !prev)}
+          >
+            {isExpanded ? <ChevronDown className="size-4" /> : <ChevronRight className="size-4" />}
+          </Button>
+        </div>
       </CardHeader>
 
-      <CardContent className="space-y-3">
-        {project.agents.map((agent) => (
-          <AgentSessionRow
-            key={agent.session_id}
-            agent={agent}
-            maxRate={maxRate}
-            rateUnit={rateUnit}
-            isExpanded={expandedSessionId === agent.session_id}
-            onToggle={() => onToggleSession(agent.session_id)}
-          />
-        ))}
-      </CardContent>
+      <div
+        className={cn(
+          "overflow-hidden transition-[max-height,opacity] duration-300 ease-in-out",
+          isExpanded ? "max-h-[9999px] opacity-100" : "max-h-0 opacity-0",
+        )}
+      >
+        <CardContent className="space-y-3">
+          {project.agents.map((agent) => (
+            <AgentSessionRow
+              key={agent.session_id}
+              agent={agent}
+              maxRate={maxRate}
+              rateUnit={rateUnit}
+              rateType={rateType}
+              isExpanded={expandedSessionId === agent.session_id}
+              onToggle={() => onToggleSession(agent.session_id)}
+            />
+          ))}
+        </CardContent>
+      </div>
     </Card>
   );
 }
@@ -360,14 +411,15 @@ interface AgentSessionRowProps {
   agent: AgentInfo;
   maxRate: number;
   rateUnit: TokenRateUnit;
+  rateType: RateType;
   isExpanded: boolean;
   onToggle: () => void;
 }
 
-function AgentSessionRow({ agent, maxRate, rateUnit, isExpanded, onToggle }: AgentSessionRowProps) {
+function AgentSessionRow({ agent, maxRate, rateUnit, rateType, isExpanded, onToggle }: AgentSessionRowProps) {
   const [activeTab, setActiveTab] = useState<AgentDetailTab>("timeline");
   const displayStatus = toDisplayStatus(agent.status);
-  const displayRate = getDisplayRate(agent.token_rate, rateUnit);
+  const displayRate = getDisplayRate(agent, rateType, rateUnit);
   const ratePercent = clamp((displayRate / maxRate) * 100, 0, 100);
   const context = getContextUsage(agent);
   const rateStyle = { "--rate-fill": `${ratePercent}%` } as React.CSSProperties;
@@ -440,6 +492,9 @@ function AgentSessionRow({ agent, maxRate, rateUnit, isExpanded, onToggle }: Age
         )}
       >
         <div className="mt-4 border-t border-border pt-4">
+          <div className="mb-4">
+            <TokenTrendSparkline tokenHistory={agent.token_history} />
+          </div>
           <div className="mb-3 flex gap-1 border-b border-border pb-2">
             <DetailTabButton active={activeTab === "timeline"} onClick={() => setActiveTab("timeline")}>
               工具调用
@@ -548,8 +603,20 @@ function toDisplayStatus(status: RawAgentStatus): DisplayStatus {
   return "Active";
 }
 
-function getDisplayRate(tokenRate: number, unit: TokenRateUnit) {
-  return unit === "second" ? tokenRate : tokenRate * 60;
+function getDisplayRate(agent: AgentInfo, rateType: RateType, unit: TokenRateUnit): number {
+  let baseRate: number;
+  switch (rateType) {
+    case "realtime":
+      baseRate = agent.token_rate;
+      break;
+    case "1min":
+      baseRate = agent.token_rate_1m;
+      break;
+    case "total":
+      baseRate = agent.token_rate_total;
+      break;
+  }
+  return unit === "second" ? baseRate : baseRate * 60;
 }
 
 function getContextUsage(agent: AgentInfo) {
@@ -615,6 +682,44 @@ function matchesAgentFilter(agent: AgentInfo, filter: string): boolean {
     agent.model.toLowerCase().includes(lower) ||
     agent.status.toLowerCase().includes(lower) ||
     agent.cwd.toLowerCase().includes(lower)
+  );
+}
+
+function TokenTrendSparkline({ tokenHistory }: { tokenHistory: number[] }) {
+  if (tokenHistory.length < 2) {
+    return (
+      <div className="rounded-lg border border-dashed border-border bg-background/60 px-3 py-4 text-center text-xs text-muted-foreground">
+        历史数据不足，无法生成趋势图
+      </div>
+    );
+  }
+
+  const max = Math.max(...tokenHistory);
+  const min = Math.min(...tokenHistory);
+  const range = max - min || 1;
+
+  return (
+    <div className="space-y-2">
+      <p className="text-xs font-medium text-muted-foreground">Token 生成趋势</p>
+      <div className="flex items-end gap-px h-16 rounded-lg border border-border bg-background/60 p-2">
+        {/* eslint-disable-next-line react/no-array-index-key */}
+        {tokenHistory.map((value, i) => {
+          const height = `${((value - min) / range) * 100}%`;
+          return (
+            <div
+              key={i}
+              className="flex-1 bg-primary/50 rounded-t-sm min-w-[2px] transition-all duration-300"
+              style={{ height }}
+              title={`Turn ${i + 1}: ${value.toLocaleString("zh-CN")} tokens`}
+            />
+          );
+        })}
+      </div>
+      <div className="flex justify-between text-xs text-muted-foreground">
+        <span>最低: {formatTokens(min)}</span>
+        <span>最高: {formatTokens(max)}</span>
+      </div>
+    </div>
   );
 }
 

@@ -104,6 +104,10 @@ pub struct AgentInfo {
     pub first_assistant_text: String,
     /// Token 速率（token/秒），基于最近 2 秒采样计算
     pub token_rate: f64,
+    /// 最近 1 分钟平均 Token 速率（token/秒）
+    pub token_rate_1m: f64,
+    /// 会话开始至今平均 Token 速率（token/秒）
+    pub token_rate_total: f64,
     /// 进程 PID
     pub pid: u32,
     /// 版本号
@@ -195,6 +199,9 @@ pub struct AgentCollector {
     running: Arc<AtomicBool>,
     /// 上一次各 session 的 active_tokens，用于计算 token_rate
     last_tokens: Arc<Mutex<HashMap<String, (u64, Instant)>>>,
+    /// 每个 session 的 token 历史采样：[(timestamp, total_tokens), ...]
+    /// 保留最近 1 分钟的采样（30 个点，每 2 秒一个）
+    token_history_samples: Arc<Mutex<HashMap<String, Vec<(Instant, u64)>>>>,
 }
 
 impl AgentCollector {
@@ -204,6 +211,7 @@ impl AgentCollector {
             registered_paths: Arc::new(Mutex::new(Vec::new())),
             running: Arc::new(AtomicBool::new(false)),
             last_tokens: Arc::new(Mutex::new(HashMap::new())),
+            token_history_samples: Arc::new(Mutex::new(HashMap::new())),
         }
     }
 
@@ -241,6 +249,7 @@ impl AgentCollector {
         let running = self.running.clone();
         let registered_paths = self.registered_paths.clone();
         let last_tokens = self.last_tokens.clone();
+        let token_history_samples = self.token_history_samples.clone();
 
         thread::Builder::new()
             .name("ptv-agent-collector".into())
@@ -262,6 +271,7 @@ impl AgentCollector {
                                 sessions,
                                 &registered_paths,
                                 &last_tokens,
+                                &token_history_samples,
                             );
 
                             if let Err(e) = app_handle.emit("agent-update", &payload) {
@@ -315,10 +325,38 @@ impl Default for AgentCollector {
 // 辅助函数
 // ============================================================================
 
+/// 计算 1 分钟速率和全程速率
+fn compute_token_rates(samples: &[(Instant, u64)]) -> (f64, f64) {
+    if samples.len() < 2 {
+        return (0.0, 0.0);
+    }
+
+    let first = samples[0];
+    let last = samples[samples.len() - 1];
+    let delta_tokens = last.1.saturating_sub(first.1);
+    let delta_secs = last.0.duration_since(first.0).as_secs_f64();
+    let rate_1m = if delta_secs > 0.0 {
+        delta_tokens as f64 / delta_secs
+    } else {
+        0.0
+    };
+
+    let now = Instant::now();
+    let delta_secs_total = now.duration_since(first.0).as_secs_f64();
+    let rate_total = if delta_secs_total > 0.0 {
+        delta_tokens as f64 / delta_secs_total
+    } else {
+        0.0
+    };
+
+    (rate_1m, rate_total)
+}
+
 /// 将 AgentSession 转换为可序列化的 AgentInfo
 fn session_to_info(
     session: &AgentSession,
     last_tokens: &Arc<Mutex<HashMap<String, (u64, Instant)>>>,
+    token_history_samples: &Arc<Mutex<HashMap<String, Vec<(Instant, u64)>>>>,
 ) -> AgentInfo {
     let now = Instant::now();
     let active_tokens = session.active_tokens();
@@ -343,6 +381,40 @@ fn session_to_info(
                 0.0
             }
         }
+    };
+
+    // 更新 token 历史采样，计算 1 分钟速率
+    let token_rate_1m = {
+        let mut history = token_history_samples.lock().unwrap();
+        let samples = history.entry(session.session_id.clone()).or_default();
+        samples.push((now, active_tokens));
+
+        // 清理超过 1 分钟的旧采样点
+        let one_minute = Duration::from_secs(60);
+        samples.retain(|(t, _)| now.duration_since(*t) <= one_minute);
+
+        // 计算 1 分钟速率：窗口内 token 增量 / 时间差
+        if samples.len() >= 2 {
+            let first = samples[0];
+            let last = samples[samples.len() - 1];
+            let delta_tokens = last.1.saturating_sub(first.1);
+            let delta_secs = last.0.duration_since(first.0).as_secs_f64();
+            if delta_secs > 0.0 {
+                delta_tokens as f64 / delta_secs
+            } else {
+                0.0
+            }
+        } else {
+            0.0
+        }
+    };
+
+    // 全程速率：基于会话总 token 数 / 会话持续时间
+    let elapsed_secs = session.elapsed().as_secs_f64();
+    let token_rate_total = if elapsed_secs > 0.0 {
+        active_tokens as f64 / elapsed_secs
+    } else {
+        0.0
     };
 
     AgentInfo {
@@ -380,6 +452,8 @@ fn session_to_info(
         initial_prompt: session.initial_prompt.clone(),
         first_assistant_text: session.first_assistant_text.clone(),
         token_rate,
+        token_rate_1m,
+        token_rate_total,
         pid: session.pid,
         version: session.version.clone(),
         effort: session.effort.clone(),
@@ -408,6 +482,7 @@ fn build_payload(
     sessions: Vec<AgentSession>,
     registered_paths: &Arc<Mutex<Vec<String>>>,
     last_tokens: &Arc<Mutex<HashMap<String, (u64, Instant)>>>,
+    token_history_samples: &Arc<Mutex<HashMap<String, Vec<(Instant, u64)>>>>,
 ) -> AgentUpdatePayload {
     let paths = registered_paths.lock().unwrap().clone();
     let timestamp_ms = std::time::SystemTime::now()
@@ -419,7 +494,7 @@ fn build_payload(
     let mut unmapped: Vec<AgentInfo> = Vec::new();
 
     for session in &sessions {
-        let info = session_to_info(session, last_tokens);
+        let info = session_to_info(session, last_tokens, token_history_samples);
 
         // 按 cwd 前缀匹配注册项目
         let matched_project = paths.iter().find(|p| {
@@ -463,6 +538,16 @@ fn build_payload(
     }
 
     let total_sessions = sessions.len();
+
+    // 清理已结束 session 的历史采样数据
+    let active_session_ids: std::collections::HashSet<String> = sessions
+        .iter()
+        .map(|s| s.session_id.clone())
+        .collect();
+    {
+        let mut history = token_history_samples.lock().unwrap();
+        history.retain(|session_id, _| active_session_ids.contains(session_id));
+    }
 
     AgentUpdatePayload {
         projects,
@@ -532,6 +617,7 @@ mod tests {
     #[test]
     fn test_session_to_info_basic() {
         let last_tokens = Arc::new(Mutex::new(HashMap::new()));
+        let token_history_samples = Arc::new(Mutex::new(HashMap::new()));
         let session = AgentSession {
             agent_cli: "claude",
             pid: 1234,
@@ -575,12 +661,14 @@ mod tests {
             file_accesses: vec![],
         };
 
-        let info = session_to_info(&session, &last_tokens);
+        let info = session_to_info(&session, &last_tokens, &token_history_samples);
         assert_eq!(info.agent_type, "claude");
         assert_eq!(info.session_id, "test-session-1");
         assert_eq!(info.pid, 1234);
         assert_eq!(info.status, SerializableStatus::Thinking);
         assert_eq!(info.token_rate, 0.0); // 首次采集，无历史记录
+        assert_eq!(info.token_rate_1m, 0.0);
+        assert_eq!(info.token_rate_total, 0.0);
         assert_eq!(info.children.len(), 1);
         assert_eq!(info.children[0].port, Some(3000));
         // 新增字段验证
@@ -594,6 +682,7 @@ mod tests {
     #[test]
     fn test_build_payload_mapping() {
         let last_tokens = Arc::new(Mutex::new(HashMap::new()));
+        let token_history_samples = Arc::new(Mutex::new(HashMap::new()));
         let registered_paths = Arc::new(Mutex::new(vec![
             "/home/user/project-a".to_string(),
             "/home/user/project-b".to_string(),
@@ -713,7 +802,7 @@ mod tests {
             },
         ];
 
-        let payload = build_payload(sessions, &registered_paths, &last_tokens);
+        let payload = build_payload(sessions, &registered_paths, &last_tokens, &token_history_samples);
 
         assert_eq!(payload.total_sessions, 3);
         assert_eq!(payload.projects.len(), 2);
@@ -744,12 +833,13 @@ mod tests {
     #[test]
     fn test_build_payload_empty_projects() {
         let last_tokens = Arc::new(Mutex::new(HashMap::new()));
+        let token_history_samples = Arc::new(Mutex::new(HashMap::new()));
         let registered_paths = Arc::new(Mutex::new(vec![
             "/home/user/project-a".to_string(),
         ]));
 
         let sessions: Vec<AgentSession> = vec![];
-        let payload = build_payload(sessions, &registered_paths, &last_tokens);
+        let payload = build_payload(sessions, &registered_paths, &last_tokens, &token_history_samples);
 
         assert_eq!(payload.total_sessions, 0);
         assert_eq!(payload.projects.len(), 1);
@@ -760,6 +850,7 @@ mod tests {
     #[test]
     fn test_session_to_info_with_tool_calls() {
         let last_tokens = Arc::new(Mutex::new(HashMap::new()));
+        let token_history_samples = Arc::new(Mutex::new(HashMap::new()));
         let session = AgentSession {
             agent_cli: "claude",
             pid: 1,
@@ -809,7 +900,7 @@ mod tests {
             file_accesses: vec![],
         };
 
-        let info = session_to_info(&session, &last_tokens);
+        let info = session_to_info(&session, &last_tokens, &token_history_samples);
         assert_eq!(info.tool_calls.len(), 2);
         assert_eq!(info.tool_calls[0].name, "Read");
         assert_eq!(info.tool_calls[0].arg, "src/main.rs");
@@ -821,6 +912,7 @@ mod tests {
     #[test]
     fn test_session_to_info_with_subagents() {
         let last_tokens = Arc::new(Mutex::new(HashMap::new()));
+        let token_history_samples = Arc::new(Mutex::new(HashMap::new()));
         let session = AgentSession {
             agent_cli: "claude",
             pid: 1,
@@ -870,7 +962,7 @@ mod tests {
             file_accesses: vec![],
         };
 
-        let info = session_to_info(&session, &last_tokens);
+        let info = session_to_info(&session, &last_tokens, &token_history_samples);
         assert_eq!(info.subagents.len(), 2);
         assert_eq!(info.subagents[0].name, "build");
         assert_eq!(info.subagents[0].status, "running");
@@ -882,6 +974,7 @@ mod tests {
     #[test]
     fn test_session_to_info_with_file_accesses() {
         let last_tokens = Arc::new(Mutex::new(HashMap::new()));
+        let token_history_samples = Arc::new(Mutex::new(HashMap::new()));
         let session = AgentSession {
             agent_cli: "claude",
             pid: 1,
@@ -936,7 +1029,7 @@ mod tests {
             ],
         };
 
-        let info = session_to_info(&session, &last_tokens);
+        let info = session_to_info(&session, &last_tokens, &token_history_samples);
         assert_eq!(info.file_accesses.len(), 3);
         assert_eq!(info.file_accesses[0].path, "src/main.rs");
         assert_eq!(info.file_accesses[0].operation, "R");
@@ -948,6 +1041,7 @@ mod tests {
     #[test]
     fn test_session_to_info_empty_fields() {
         let last_tokens = Arc::new(Mutex::new(HashMap::new()));
+        let token_history_samples = Arc::new(Mutex::new(HashMap::new()));
         let session = AgentSession {
             agent_cli: "claude",
             pid: 1,
@@ -986,7 +1080,7 @@ mod tests {
             file_accesses: vec![],
         };
 
-        let info = session_to_info(&session, &last_tokens);
+        let info = session_to_info(&session, &last_tokens, &token_history_samples);
         assert!(info.tool_calls.is_empty());
         assert!(info.subagents.is_empty());
         assert!(info.file_accesses.is_empty());
