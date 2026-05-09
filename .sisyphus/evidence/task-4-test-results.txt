@@ -1,0 +1,129 @@
+
+running 110 tests
+test collectors::agent::tests::test_agent_collector_new ... ok
+test collectors::agent::tests::test_register_unregister_project ... ok
+test collectors::agent::tests::test_serializable_status_from ... ok
+test collectors::agent::tests::test_build_payload_mapping ... ok
+test collectors::agent::tests::test_session_to_info_with_subagents ... ok
+test collectors::agent::tests::test_session_to_info_basic ... FAILED
+test collectors::agent::tests::test_session_to_info_empty_fields ... ok
+test collectors::agent::tests::test_build_payload_empty_projects ... ok
+test collectors::agent::tests::test_session_to_info_with_file_accesses ... ok
+test collectors::agent::tests::test_session_to_info_with_tool_calls ... ok
+test collectors::template::config::tests::test_parse_nonexistent_path ... ok
+test collectors::template::config::tests::test_config_collector_file_not_found ... ok
+test collectors::template::config::tests::test_find_python_success ... ok
+test collectors::template::config::tests::test_find_python_all_fail ... ok
+test collectors::template::config::tests::test_find_python_fallback_order ... ok
+test collectors::template::git::tests::test_git_collector_no_repo ... ok
+test collectors::template::project_files::tests::test_collect_empty_project ... ok
+test collectors::template::project_files::tests::test_collect_large_file_truncation ... ok
+test collectors::template::project_files::tests::test_collect_missing_directories_silent ... ok
+test collectors::template::config::tests::test_parse_export_failure ... ok
+test collectors::template::config::tests::test_parse_runtime_error ... ok
+test collectors::template::config::tests::test_parse_syntax_error ... ok
+test collectors::template::session_transcript::tests::test_assistant_multiple_tool_use_blocks ... ok
+test collectors::template::project_files::tests::test_collect_root_files ... ok
+test collectors::template::session_transcript::tests::test_custom_title_noise_filtered ... ok
+test collectors::template::session_transcript::tests::test_empty_dir_returns_empty ... ok
+test collectors::template::session_transcript::tests::test_encode_cwd_path_absolute ... ok
+test collectors::template::session_transcript::tests::test_custom_title_not_found_in_real_data_but_parsed ... ok
+test collectors::template::session_transcript::tests::test_encode_cwd_path_empty ... ok
+test collectors::template::session_transcript::tests::test_encode_cwd_path_without_leading_slash ... ok
+test collectors::template::session_transcript::tests::test_encode_cwd_path_single_dir ... ok
+test collectors::template::session_transcript::tests::test_merge_consecutive_same_role ... ok
+test collectors::template::session_transcript::tests::test_merge_preserves_earliest_timestamp ... ok
+test collectors::template::project_files::tests::test_collect_mixed_directories ... ok
+test collectors::template::session_transcript::tests::test_metadata_only_parsing ... ok
+test collectors::template::project_files::tests::test_collect_sisyphus_nested ... ok
+test collectors::template::session_transcript::tests::test_parse_blocks_content ... ok
+test collectors::template::session_transcript::tests::test_search_by_initial_prompt ... ok
+test collectors::template::session_transcript::tests::test_sessions_dir_unix ... ok
+test collectors::template::session_transcript::tests::test_parse_blocks_with_tools ... ok
+test collectors::template::session_transcript::tests::test_parse_string_content ... ok
+test collectors::template::git::tests::test_git_collector_clean_repo ... ok
+test collectors::template::session_transcript::tests::test_top_level_user_content ... ok
+test collectors::template::session_transcript::tests::test_skip_system_and_tool_types ... ok
+test collectors::template::session_transcript::tests::test_transcript_noise_filters ... ok
+test collectors::template::session_transcript::tests::test_user_interrupted_request ... ok
+test collectors::template::session_transcript::tests::test_xml_system_tags_are_stripped_from_turn_text ... ok
+test collectors::template::session_transcript::tests::test_user_with_tool_use_result ... ok
+test collectors::template::session_transcript::tests::test_user_dollar_at_pattern ... ok
+test collectors::template::stage::tests::test_stage_collector_file_not_found ... ok
+test collectors::template::stage::tests::test_stage_display ... ok
+test collectors::template::stage::tests::test_stage_collector_empty_file ... ok
+test collectors::template::stage::tests::test_stage_ordinal ... ok
+test collectors::template::stage::tests::test_stage_parse_basic ... ok
+test collectors::template::stage::tests::test_stage_parse_invalid ... ok
+test collectors::template::stage::tests::test_stage_parse_prefixed ... ok
+test collectors::template::stage::tests::test_stage_collector_unknown_stage ... ok
+test collectors::template::stage::tests::test_stage_collector_success ... ok
+test collectors::template::stage::tests::test_stage_parse_whitespace ... ok
+test collectors::template::template_fingerprint::tests::test_build_nonexistent_path ... ok
+test collectors::template::template_fingerprint::tests::test_build_empty_path ... ok
+test collectors::template::stage::tests::test_stage_collector_with_newline ... ok
+test collectors::template::template_fingerprint::tests::test_load_missing_file ... ok
+test collectors::template::template_fingerprint::tests::test_save_and_load_template_path ... ok
+test collectors::template::template_fingerprint::tests::test_load_corrupt_settings ... ok
+test collectors::template::tests::test_source_layout_unknown ... ok
+test collectors::template::template_fingerprint::tests::test_fingerprint_skips_non_md ... ok
+test collectors::template::tests::test_source_layout_flat ... ok
+test collectors::template::tests::test_source_layout_namespaced ... ok
+test collectors::template::template_fingerprint::tests::test_build_fingerprint ... ok
+test registry::tests::test_add_duplicate_normalized ... ok
+test registry::tests::test_add_duplicate_rejected ... ok
+test registry::tests::test_add_nonexistent_path_fails ... ok
+test registry::tests::test_add_project ... ok
+test registry::tests::test_default_data_dir ... ok
+test registry::tests::test_full_lifecycle ... ok
+test registry::tests::test_get_nonexistent_returns_not_found ... ok
+test registry::tests::test_get_project ... ok
+test registry::tests::test_list_after_add ... ok
+test registry::tests::test_list_empty ... ok
+test registry::tests::test_list_sorted ... ok
+test registry::tests::test_load_or_default_corrupted_file ... ok
+test registry::tests::test_load_or_default_nonexistent_file ... ok
+test registry::tests::test_multiple_projects ... ok
+test registry::tests::test_persistence ... ok
+test registry::tests::test_persistence_after_remove ... ok
+test registry::tests::test_remove_nonexistent_returns_not_found ... ok
+test registry::tests::test_remove_project ... ok
+test watcher::tests::test_add_remove_paths ... ok
+test collectors::template::tests::test_template_data_collector_with_stage ... ok
+test collectors::template::tests::test_template_data_collector_empty_project ... ok
+test collectors::template::tests::test_template_data_collector_with_flat_layout ... ok
+test watcher::tests::test_default ... ok
+test watcher::tests::test_set_interval ... ok
+test collectors::template::git::tests::test_git_collector_with_untracked ... ok
+test collectors::template::git::tests::test_git_collector_with_modified ... ok
+test collectors::template::git::tests::test_git_collector_with_staged ... ok
+test watcher::tests::test_current_stage_change ... ok
+test watcher::tests::test_deeply_nested_file_change ... ok
+test watcher::tests::test_watch_directory_file_created ... ok
+test watcher::tests::test_watch_directory_recursive ... ok
+test watcher::tests::test_stop_stops_events ... ok
+test watcher::tests::test_watch_file_created ... ok
+test watcher::tests::test_watch_file_deleted ... ok
+test watcher::tests::test_concurrent_changes ... ok
+test watcher::tests::test_watch_empty_directory ... ok
+test watcher::tests::test_watch_directory_non_recursive ... ok
+test watcher::tests::test_watch_nonexistent_file_no_panic ... ok
+test watcher::tests::test_watch_single_file_modified ... ok
+test collectors::template::tests::test_watched_collector_start_stop ... ok
+
+failures:
+
+---- collectors::agent::tests::test_session_to_info_basic stdout ----
+
+thread 'collectors::agent::tests::test_session_to_info_basic' (2507555) panicked at src/collectors/agent/mod.rs:671:9:
+assertion `left == right` failed
+  left: 8.716118222204296e-7
+ right: 0.0
+note: run with `RUST_BACKTRACE=1` environment variable to display a backtrace
+
+
+failures:
+    collectors::agent::tests::test_session_to_info_basic
+
+test result: FAILED. 109 passed; 1 failed; 0 ignored; 0 measured; 0 filtered out; finished in 1.67s
+

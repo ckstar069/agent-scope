@@ -1,0 +1,32 @@
+=== cargo test -p ptv 结果 ===
+日期: 2026-05-09
+相关任务: Task 3 — 批量测试路径修复
+
+运行命令: cargo test -p ptv
+工作目录: src-tauri/
+
+结果: 108 passed; 1 failed; 0 ignored
+
+--------------------------------------------------
+通过: 108 个测试
+--------------------------------------------------
+（完整列表见上方输出，涵盖 config、template_fingerprint、
+registry、watcher 等所有修改过的模块）
+
+--------------------------------------------------
+失败: 1 个测试（预先存在，与本次修改无关）
+--------------------------------------------------
+test collectors::agent::tests::test_session_to_info_basic
+原因: 浮点数精度断言失败（left: 8.716e-7, right: 0.0）
+说明: 该测试涉及 token 速率计算的时间精度问题，与路径硬编码无关
+
+--------------------------------------------------
+关键通过测试验证:
+--------------------------------------------------
+- collectors::template::config::tests::test_parse_nonexistent_path — ok
+- collectors::template::template_fingerprint::tests::test_build_nonexistent_path — ok
+- collectors::template::template_fingerprint::tests::test_save_and_load_template_path — ok
+- registry::tests::test_add_nonexistent_path_fails — ok
+- watcher::tests::test_add_remove_paths — ok
+
+结论: 所有 5 个涉及路径修改的测试全部通过。

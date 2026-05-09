@@ -1,0 +1,40 @@
+=== grep 确认无残留硬编码路径 ===
+日期: 2026-05-09
+相关任务: Task 3 — 批量测试路径修复
+
+搜索命令:
+grep -r '"/tmp/\|"/Users/\|"/home/' src-tauri/src/ --include='*.rs'
+
+==========================================
+残留匹配分析:
+==========================================
+
+一、registry.rs:103
+  内容: /// let storage = PathBuf::from("/tmp/projects.json");
+  类型: 文档注释（doc comment）
+  状态: 由 Task 2 处理（#[cfg(not(windows))] 门控 doctest）
+
+二、watcher.rs:71-72
+  内容: /// watcher.add(PathBuf::from("/tmp/test/.current_stage"), false);
+        /// watcher.add(PathBuf::from("/tmp/test/.claude/memory"), true);
+  类型: 文档注释（doc comment）
+  状态: 由 Task 2 处理（#[cfg(not(windows))] 门控 doctest）
+
+三、session_transcript.rs:22-23, 898
+  内容: encode_cwd_path 示例中的 "/Users/" 和 "/home/"
+  类型: 文档注释（doc comment）/ doctest
+  状态: 由 Task 2 处理（#[cfg(not(windows))] 门控 doctest）
+
+四、agent/mod.rs:578-587 及其他
+  内容: "/home/user/project-*" mock 数据
+  类型: 模拟测试数据（语义无关）
+  状态: 任务明确标注"无需修改"
+
+==========================================
+结论:
+==========================================
+所有非文档注释、非 mock 数据中的硬编码 Unix 路径
+（/tmp/test1, /tmp/test2, /tmp/nonexistent_* 等）
+已全部替换为 std::env::temp_dir()。
+
+无残留硬编码路径在有效代码中。

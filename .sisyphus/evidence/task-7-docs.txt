@@ -1,0 +1,11 @@
+=== Task 7: 文档更新验证 ===
+时间: 2026-05-09
+
+验证项:
+1. README.md 包含 "Windows 10+（测试中，NSIS 安装包）": ✅
+2. README.md 包含 Windows 依赖说明（WebView2 + VS Build Tools）: ✅
+3. README.md 包含 Windows 构建命令: ✅
+4. AGENTS.md 平台声明 "macOS + Linux + Windows（测试中）": ✅
+5. AGENTS.md 关键决策表包含 Windows 支持行: ✅
+
+结果: PASS

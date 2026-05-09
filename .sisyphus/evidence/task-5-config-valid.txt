@@ -1,0 +1,12 @@
+=== Task 5: NSIS 配置验证 ===
+时间: 2026-05-09
+
+验证项:
+1. tauri.conf.json JSON 格式: python3 -m json.tool 验证通过
+2. icon.ico 存在: 86642 bytes
+3. NSIS 配置内容:
+   - installMode: perMachine
+   - displayLanguageSelector: true
+4. 无 MSI/wix 配置: grep 零匹配
+
+结果: PASS
