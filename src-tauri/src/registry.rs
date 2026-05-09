@@ -377,7 +377,7 @@ mod tests {
     fn test_add_nonexistent_path_fails() {
         let (_, json_path) = test_env();
         let mut registry = ProjectRegistry::new(json_path);
-        let non_existent = PathBuf::from("/tmp/__ptv_nonexistent_test_xyz__");
+        let non_existent = std::env::temp_dir().join("__ptv_nonexistent_test_xyz__");
 
         let result = registry.add(&non_existent);
         assert!(

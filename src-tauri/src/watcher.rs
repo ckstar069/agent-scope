@@ -823,9 +823,9 @@ mod tests {
     #[test]
     fn test_add_remove_paths() {
         let mut watcher = FileWatcher::new();
-        let p1 = PathBuf::from("/tmp/test1");
-        let p2 = PathBuf::from("/tmp/test1"); // same as p1
-        let p3 = PathBuf::from("/tmp/test2");
+        let p1 = std::env::temp_dir().join("test1");
+        let p2 = std::env::temp_dir().join("test1"); // same as p1
+        let p3 = std::env::temp_dir().join("test2");
 
         watcher.add(p1.clone(), false);
         watcher.add(p2.clone(), false); // duplicate, should be ignored

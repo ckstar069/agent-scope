@@ -360,7 +360,7 @@ mod tests {
 
     #[test]
     fn test_build_nonexistent_path() {
-        let fp = TemplateFingerprint::build(Path::new("/tmp/nonexistent-ptv-test-path"));
+        let fp = TemplateFingerprint::build(&std::env::temp_dir().join("nonexistent-ptv-test-path"));
         assert!(fp.is_ok());
         assert!(fp.unwrap().paths.is_empty());
     }
@@ -374,7 +374,7 @@ mod tests {
         assert!(load_template_path(data_dir).is_none());
 
         // 保存路径
-        let template_path = PathBuf::from("/tmp/my-template");
+        let template_path = std::env::temp_dir().join("my-template");
         save_template_path(data_dir, &template_path).unwrap();
 
         // 加载验证
