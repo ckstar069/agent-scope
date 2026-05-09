@@ -1321,4 +1321,29 @@ mod tests {
         let ctx = parse_jsonl_file(&path.join("ses_test.jsonl"), false).unwrap();
         assert_eq!(ctx.custom_title.as_deref(), Some("有效标题"));
     }
+
+    // -----------------------------------------------------------------------
+    // sessions_dir 路径计算测试
+    // -----------------------------------------------------------------------
+
+    #[cfg(not(windows))]
+    #[test]
+    fn test_sessions_dir_unix() {
+        let project_path = Path::new("/Users/test/my-project");
+        let result = sessions_dir(project_path);
+        let encoded = encode_cwd_path("/Users/test/my-project");
+        let home = dirs::home_dir().unwrap_or_default();
+        let expected = home.join(".claude").join("projects").join(encoded);
+        assert_eq!(result, expected);
+    }
+
+    #[cfg(windows)]
+    #[test]
+    fn test_sessions_dir_windows() {
+        let project_path = Path::new("C:\\Users\\test\\project");
+        let result = sessions_dir(project_path);
+        let home = dirs::home_dir().unwrap_or_default();
+        let expected = home.join(".claude").join("projects");
+        assert_eq!(result, expected);
+    }
 }

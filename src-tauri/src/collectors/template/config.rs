@@ -284,7 +284,7 @@ mod tests {
 
     #[test]
     fn test_parse_nonexistent_path() {
-        let result = parse_parameters_py(Path::new("/tmp/nonexistent_parameters_file.py"));
+        let result = parse_parameters_py(&std::env::temp_dir().join("nonexistent_parameters_file.py"));
         assert!(matches!(result, Err(ParameterError::FileNotFound(msg)) if msg.contains("nonexistent_parameters_file.py")));
     }
 
