@@ -3,7 +3,7 @@ pub mod commands;
 pub mod registry;
 pub mod watcher;
 
-use commands::{add_project, get_latest_session, get_project_data, get_project_files, get_project_file_content, get_session_transcript, list_project_sessions, list_projects, remove_project, save_candidate_memory, search_sessions, start_watching, stop_watching};
+use commands::{add_project, get_latest_session, get_project_data, get_project_files, get_project_file_content, get_session_transcript, get_template_path, list_project_sessions, list_projects, remove_project, save_candidate_memory, search_sessions, set_template_path, start_watching, stop_watching};
 use collectors::agent::AgentCollector;
 use registry::ProjectRegistry;
 
@@ -51,6 +51,8 @@ pub fn run() {
             search_sessions,
             get_session_transcript,
             save_candidate_memory,
+            set_template_path,
+            get_template_path,
         ])
         .run(tauri::generate_context!())
         .expect("error while running tauri application");

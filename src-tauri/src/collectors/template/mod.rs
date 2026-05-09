@@ -8,19 +8,19 @@ use crate::watcher::FileWatcher;
 
 pub use config::{parse_parameters_py, ConfigCollector, ParameterError, ProjectConfig};
 pub use git::{GitCollector, GitError, GitStatus};
-pub use memory::{MemoryCollector, MemoryEntry, MemoryError};
 pub use project_files::{ProjectFile, ProjectFilesCollector, ProjectFilesError};
 pub use session_transcript::{
     SessionSummary, SessionTranscript, SessionTranscriptCollector, SessionTurn, TranscriptError,
 };
 pub use stage::{Stage, StageCollector, StageError};
+pub use template_fingerprint::{load_template_path, save_template_path, TemplateFingerprint};
 
 pub mod config;
 pub mod git;
-pub mod memory;
 pub mod project_files;
 pub mod session_transcript;
 pub mod stage;
+pub mod template_fingerprint;
 
 // ============================================================================
 // SourceLayout — 源码布局类型
@@ -79,8 +79,6 @@ pub struct TemplateData {
     pub stage: Result<Stage, StageError>,
     /// 项目配置
     pub config: Result<ProjectConfig, ParameterError>,
-    /// 记忆条目列表
-    pub memories: Result<Vec<MemoryEntry>, MemoryError>,
     /// 项目文件列表
     pub project_files: Result<Vec<ProjectFile>, ProjectFilesError>,
     /// Git 状态
@@ -99,7 +97,6 @@ impl TemplateData {
             config: Err(ParameterError::FileNotFound(
                 path.join("config/parameters.py").to_string_lossy().to_string(),
             )),
-            memories: Ok(Vec::new()),
             project_files: Ok(Vec::new()),
             git: Ok(GitStatus::no_repo()),
             layout: SourceLayout::Unknown,
@@ -110,7 +107,6 @@ impl TemplateData {
     pub fn is_complete(&self) -> bool {
         self.stage.is_ok()
             && self.config.is_ok()
-            && self.memories.is_ok()
             && self.project_files.is_ok()
             && self.git.is_ok()
     }
@@ -122,9 +118,9 @@ impl TemplateData {
 
 /// 模板项目数据统一采集器
 ///
-/// 协调 [`StageCollector`]、[`ConfigCollector`]、[`MemoryCollector`]、
+/// 协调 [`StageCollector`]、[`ConfigCollector`]、
 /// [`ProjectFilesCollector`]、[`GitCollector`]
-/// 五个采集器，提供单次采集和持续监听两种模式。
+/// 四个采集器，提供单次采集和持续监听两种模式。
 pub struct TemplateDataCollector {
     project_path: PathBuf,
 }
@@ -142,7 +138,6 @@ impl TemplateDataCollector {
         TemplateData {
             stage: StageCollector::collect(&self.project_path),
             config: ConfigCollector::collect(&self.project_path),
-            memories: MemoryCollector::collect(&self.project_path),
             project_files: ProjectFilesCollector::collect(&self.project_path),
             git: GitCollector::collect(&self.project_path),
             layout,
@@ -164,7 +159,6 @@ impl TemplateDataCollector {
 /// 监听路径：
 /// - `.current_stage` — 阶段变化
 /// - `config/parameters.py` — 配置变化
-/// - `.claude/memory/` — 记忆文件变化
 ///
 /// 变化后 5 秒内触发重新采集（防抖）。
 pub struct WatchedCollector {
@@ -221,7 +215,6 @@ impl WatchedCollector {
             let mut watcher = FileWatcher::with_interval(Duration::from_millis(500));
             watcher.add(path.join(".current_stage"), false);
             watcher.add(path.join("config").join("parameters.py"), false);
-            watcher.add(path.join(".claude").join("memory"), true);
 
             // 项目文件白名单目录监听
             watcher.add(path.join("CLAUDE.md"), false);

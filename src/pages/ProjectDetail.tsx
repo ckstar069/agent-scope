@@ -18,7 +18,6 @@ import {
   HardDrive,
   Layers3,
   Loader2,
-  MemoryStick,
   SlidersHorizontal,
 } from "lucide-react";
 
@@ -77,12 +76,6 @@ interface SerProjectConfig {
   min_negative?: number | null;
 }
 
-interface SerMemoryEntry {
-  filename: string;
-  frontmatter: Record<string, string>;
-  content_preview: string;
-}
-
 interface SerGitStatus {
   branch: string;
   modified_count: number;
@@ -99,8 +92,6 @@ interface TemplateDataPayload {
   stage_error: string | null;
   config: SerProjectConfig | null;
   config_error: string | null;
-  memories: SerMemoryEntry[];
-  memory_error: string | null;
   git: SerGitStatus;
   git_error: string | null;
   layout: string;
@@ -408,10 +399,6 @@ export function ProjectDetail({ projectPath = "", onSelectProject, onBack }: Pro
 
               <Panel title="参数快照" icon={SlidersHorizontal} subtitle="config/parameters.py 解析结果" accent="green">
             <ConfigSnapshot config={config} configError={data?.config_error ?? null} />
-          </Panel>
-
-              <Panel title="Memory" icon={MemoryStick} subtitle=".claude/memory/*.md" accent="amber">
-            <MemoryPanel entries={data?.memories ?? []} memoryError={data?.memory_error ?? null} />
           </Panel>
 
           <Panel title="项目记忆" icon={BookOpen} subtitle="CLAUDE.md、规则、笔记、设计文档" accent="purple">
@@ -729,61 +716,6 @@ function ConfigSnapshot({ config, configError }: { config: SerProjectConfig | nu
         ))}
       </div>
     </div>
-  );
-}
-
-function MemoryPanel({ entries, memoryError }: { entries: SerMemoryEntry[]; memoryError: string | null }) {
-  if (memoryError) {
-    return <ErrorNotice message={memoryError} title="Memory 读取失败" tone="warning" />;
-  }
-
-  if (entries.length === 0) {
-    return (
-      <div className="flex flex-col items-center justify-center gap-3 rounded-lg border border-dashed border-border bg-muted/30 p-6 text-sm text-foreground/70">
-        <FileText className="size-6 text-foreground/50" aria-hidden="true" />
-        <div className="text-center">
-          <p>项目暂无记忆文件</p>
-          <p className="mt-1 text-xs text-foreground/50">在项目根目录创建 .claude/memory/*.md 即可自动采集</p>
-        </div>
-      </div>
-    );
-  }
-
-  return (
-    <ScrollArea className="max-h-96 rounded-lg border border-border/50">
-      <div className="divide-y divide-border/60">
-        {entries.map((entry) => {
-          const frontmatterEntries = Object.entries(entry.frontmatter);
-          const preview = entry.content_preview.trim() || "无正文预览";
-
-          return (
-            <article key={entry.filename} className="space-y-2 p-3">
-              <div className="flex flex-col gap-2 md:flex-row md:items-center md:justify-between">
-                <div className="flex min-w-0 items-center gap-2">
-                  <FileText className="size-4 shrink-0 text-foreground/60" aria-hidden="true" />
-                  <h3 className="truncate text-sm font-semibold">{entry.filename}</h3>
-                </div>
-                <span className="rounded-md bg-muted px-2 py-1 text-xs text-foreground/60">YAML frontmatter</span>
-              </div>
-
-              {frontmatterEntries.length > 0 ? (
-                <div className="flex flex-wrap gap-2">
-                  {frontmatterEntries.map(([key, value]) => (
-                    <span key={key} className="rounded-md border border-border/50 bg-background px-2 py-1 text-xs text-foreground/70">
-                      <span className="font-medium text-foreground">{key}</span>: {value}
-                    </span>
-                  ))}
-                </div>
-              ) : (
-                <p className="text-xs text-foreground/60">无 frontmatter</p>
-              )}
-
-              <p className="whitespace-pre-wrap text-sm leading-relaxed text-foreground/70">{preview}</p>
-            </article>
-          );
-        })}
-      </div>
-    </ScrollArea>
   );
 }
 

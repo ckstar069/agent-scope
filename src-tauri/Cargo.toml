@@ -1,6 +1,6 @@
 [package]
 name = "ptv"
-version = "0.1.0"
+version = "0.2.0"
 description = "Project Template Visualizer - 跨项目监控桌面应用"
 authors = ["ckstar"]
 edition = "2021"

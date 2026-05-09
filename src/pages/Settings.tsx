@@ -37,6 +37,10 @@ export function Settings() {
   const [pendingRemoval, setPendingRemoval] = useState<ProjectEntry | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [success, setSuccess] = useState<string | null>(null);
+  const [templatePath, setTemplatePath] = useState("");
+  const [isSaving, setIsSaving] = useState(false);
+  const [templateError, setTemplateError] = useState<string | null>(null);
+  const [templateSuccess, setTemplateSuccess] = useState<string | null>(null);
 
   const sortedProjects = useMemo(() => [...projects].sort((a, b) => collator.compare(a.path, b.path)), [projects]);
 
@@ -57,6 +61,12 @@ export function Settings() {
   useEffect(() => {
     loadProjects();
   }, [loadProjects]);
+
+  useEffect(() => {
+    invoke<string>("get_template_path")
+      .then((path) => setTemplatePath(path))
+      .catch((err) => setTemplateError(`加载模板路径失败：${normalizeCommandError(err)}`));
+  }, [invoke]);
 
   async function handleAddProject(event: FormSubmitEvent) {
     event.preventDefault();
@@ -124,6 +134,39 @@ export function Settings() {
     }
   }
 
+  async function handleTemplateBrowse() {
+    try {
+      const selected = await open({
+        directory: true,
+        multiple: false,
+        title: "选择模板项目目录",
+      });
+
+      if (selected && typeof selected === "string") {
+        setTemplatePath(selected);
+        setTemplateError(null);
+        setTemplateSuccess(null);
+      }
+    } catch (err) {
+      console.error("浏览目录失败:", err);
+    }
+  }
+
+  async function handleSaveTemplate() {
+    setIsSaving(true);
+    setTemplateError(null);
+    setTemplateSuccess(null);
+
+    try {
+      await invoke<void, { path: string }>("set_template_path", { path: templatePath });
+      setTemplateSuccess("已保存模板项目路径");
+    } catch (err) {
+      setTemplateError(`保存失败：${normalizeCommandError(err)}`);
+    } finally {
+      setIsSaving(false);
+    }
+  }
+
   return (
     <section className="space-y-6">
       <div className="flex flex-col gap-4 lg:flex-row lg:items-end lg:justify-between">
@@ -187,6 +230,54 @@ export function Settings() {
           <div className="mt-4 space-y-2" aria-live="polite">
             {error && <Message tone="error" text={error} />}
             {success && <Message tone="success" text={success} />}
+          </div>
+        </CardContent>
+      </Card>
+
+      <Card className="overflow-hidden">
+        <div className="h-1 bg-gradient-to-r from-primary/80 via-muted-foreground/40 to-transparent" />
+        <CardHeader>
+          <div className="flex items-start gap-3">
+            <div className="flex size-10 shrink-0 items-center justify-center rounded-lg bg-muted text-muted-foreground">
+              <FolderCog className="size-5" aria-hidden="true" />
+            </div>
+            <div className="space-y-1">
+              <CardTitle>模板项目路径</CardTitle>
+              <CardDescription>用于区分文件来源（模板 vs 项目特有）</CardDescription>
+            </div>
+          </div>
+        </CardHeader>
+        <CardContent>
+          <div className="flex flex-col gap-3 lg:flex-row">
+            <div className="flex min-w-0 flex-1 gap-2">
+              <label htmlFor="template-path" className="sr-only">
+                模板路径
+              </label>
+              <Input
+                id="template-path"
+                value={templatePath}
+                placeholder="/Users/ckstar/Repo/ai_project_template"
+                aria-invalid={Boolean(templateError)}
+                disabled={isSaving}
+                onChange={(event) => {
+                  setTemplatePath(event.target.value);
+                  if (templateError) setTemplateError(null);
+                  if (templateSuccess) setTemplateSuccess(null);
+                }}
+              />
+              <Button type="button" variant="outline" disabled={isSaving} onClick={handleTemplateBrowse} title="浏览目录">
+                <FolderOpen className="size-4" aria-hidden="true" />
+              </Button>
+            </div>
+            <Button type="button" className="lg:w-32" disabled={isSaving} onClick={handleSaveTemplate}>
+              {isSaving ? <Loader2 className="size-4 animate-spin" aria-hidden="true" /> : <FolderCog className="size-4" aria-hidden="true" />}
+              保存
+            </Button>
+          </div>
+
+          <div className="mt-4 space-y-2" aria-live="polite">
+            {templateError && <Message tone="error" text={templateError} />}
+            {templateSuccess && <Message tone="success" text={templateSuccess} />}
           </div>
         </CardContent>
       </Card>

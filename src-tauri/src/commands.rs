@@ -1,5 +1,5 @@
 use serde::{Deserialize, Serialize};
-use std::collections::HashMap;
+use std::collections::{HashMap, HashSet};
 use std::path::PathBuf;
 use std::sync::atomic::{AtomicBool, Ordering};
 use std::sync::{Arc, Mutex};
@@ -8,9 +8,9 @@ use tauri::{AppHandle, Emitter, Manager, State};
 
 use crate::collectors::agent::AgentCollector;
 use crate::collectors::template::{
-    ProjectFile, ProjectFilesCollector, SessionSummary, SessionTranscript,
-    SessionTranscriptCollector, SessionTurn, SourceLayout, TemplateData, TemplateDataCollector,
-    WatchedCollector,
+    load_template_path, save_template_path, ProjectFile, ProjectFilesCollector, SessionSummary,
+    SessionTranscript, SessionTranscriptCollector, SessionTurn, SourceLayout, TemplateData,
+    TemplateDataCollector, TemplateFingerprint, WatchedCollector,
 };
 use crate::registry::{ProjectEntry, ProjectRegistry};
 
@@ -153,28 +153,6 @@ impl From<crate::collectors::template::ProjectConfig> for SerProjectConfig {
 }
 
 #[derive(Debug, Clone, Serialize)]
-pub struct SerMemoryEntry {
-    pub filename: String,
-    pub frontmatter: HashMap<String, String>,
-    pub content_preview: String,
-}
-
-impl From<crate::collectors::template::MemoryEntry> for SerMemoryEntry {
-    fn from(entry: crate::collectors::template::MemoryEntry) -> Self {
-        let content_preview = if entry.content.len() > 500 {
-            format!("{}...", &entry.content[..500])
-        } else {
-            entry.content.clone()
-        };
-        Self {
-            filename: entry.filename,
-            frontmatter: entry.frontmatter,
-            content_preview,
-        }
-    }
-}
-
-#[derive(Debug, Clone, Serialize)]
 pub struct SerGitStatus {
     pub branch: String,
     pub modified_count: usize,
@@ -219,6 +197,7 @@ pub struct SerProjectFile {
     pub source_group: String,
     pub content_preview: String,
     pub mtime_ms: u64,
+    pub origin: String,
 }
 
 impl From<ProjectFile> for SerProjectFile {
@@ -238,6 +217,7 @@ impl From<ProjectFile> for SerProjectFile {
             source_group,
             content_preview,
             mtime_ms: f.mtime_ms,
+            origin: f.origin,
         }
     }
 }
@@ -347,17 +327,47 @@ fn is_whitelisted_path(relative_path: &str) -> bool {
     whitelist_dirs.iter().any(|&dir| parent.starts_with(dir))
 }
 
-#[tauri::command]
-pub fn get_project_files(path: String) -> Result<Vec<SerProjectFile>, String> {
+/// get_project_files 内部实现，支持测试直接调用（无需 Tauri State）
+pub fn get_project_files_impl(
+    path: String,
+    template_paths: Option<std::collections::HashSet<String>>,
+) -> Result<Vec<SerProjectFile>, String> {
     let path_buf = PathBuf::from(&path);
     if !path_buf.exists() || !path_buf.is_dir() {
         return Err(describe_path_error(&path));
     }
 
     match ProjectFilesCollector::collect(&path_buf) {
-        Ok(files) => Ok(files.into_iter().map(SerProjectFile::from).collect()),
+        Ok(mut files) => {
+            if let Some(ref paths) = template_paths {
+                for file in &mut files {
+                    file.origin = if paths.contains(&file.relative_path) {
+                        "template".to_string()
+                    } else {
+                        "project".to_string()
+                    };
+                }
+            }
+            Ok(files.into_iter().map(SerProjectFile::from).collect())
+        }
         Err(e) => Err(e.to_string()),
     }
+}
+
+#[tauri::command]
+pub fn get_project_files(
+    path: String,
+    state: State<'_, AppState>,
+) -> Result<Vec<SerProjectFile>, String> {
+    let template_paths: Option<std::collections::HashSet<String>> = {
+        let fp = state
+            .template_fingerprint
+            .lock()
+            .map_err(|e| format!("锁获取失败: {}", e))?;
+        fp.as_ref().map(|cache| cache.paths.clone())
+    };
+
+    get_project_files_impl(path, template_paths)
 }
 
 #[tauri::command]
@@ -388,8 +398,6 @@ pub struct TemplateDataPayload {
     pub stage_error: Option<String>,
     pub config: Option<SerProjectConfig>,
     pub config_error: Option<String>,
-    pub memories: Vec<SerMemoryEntry>,
-    pub memory_error: Option<String>,
     pub git: SerGitStatus,
     pub git_error: Option<String>,
     pub layout: String,
@@ -413,14 +421,6 @@ impl TemplateDataPayload {
             Err(e) => (None, Some(e.to_string())),
         };
 
-        let (memories, memory_error) = match data.memories {
-            Ok(entries) => {
-                let ser: Vec<SerMemoryEntry> = entries.into_iter().map(SerMemoryEntry::from).collect();
-                (ser, None)
-            }
-            Err(e) => (Vec::new(), Some(e.to_string())),
-        };
-
         let (git, git_error) = match data.git {
             Ok(g) => (SerGitStatus::from(g), None),
             Err(e) => (SerGitStatus::default(), Some(e.to_string())),
@@ -438,8 +438,6 @@ impl TemplateDataPayload {
             stage_error,
             config,
             config_error,
-            memories,
-            memory_error,
             git,
             git_error,
             layout,
@@ -448,10 +446,19 @@ impl TemplateDataPayload {
     }
 }
 
+/// 模板指纹缓存 — 记录模板目录中所有文件路径的快照
+#[derive(Debug, Clone)]
+pub struct TemplateFingerprintCache {
+    pub paths: HashSet<String>,
+    pub generated_at: std::time::Instant,
+}
+
 pub struct AppState {
     pub registry: Mutex<ProjectRegistry>,
     pub watchers: Mutex<HashMap<String, Arc<AtomicBool>>>,
     pub agent_collector: Mutex<AgentCollector>,
+    pub template_path: Mutex<Option<PathBuf>>,
+    pub template_fingerprint: Mutex<Option<TemplateFingerprintCache>>,
 }
 
 impl AppState {
@@ -460,6 +467,8 @@ impl AppState {
             registry: Mutex::new(registry),
             watchers: Mutex::new(HashMap::new()),
             agent_collector: Mutex::new(agent_collector),
+            template_path: Mutex::new(None),
+            template_fingerprint: Mutex::new(None),
         }
     }
 }
@@ -768,11 +777,86 @@ pub fn save_candidate_memory(
     Ok(())
 }
 
+// ============================================================================
+// 模板路径管理
+// ============================================================================
+
+#[tauri::command]
+pub fn set_template_path(
+    path: String,
+    state: State<'_, AppState>,
+) -> Result<(), String> {
+    let path_buf = PathBuf::from(&path);
+
+    if !path_buf.exists() {
+        return Err(format!("路径不存在: {}", path));
+    }
+    if !path_buf.is_dir() {
+        return Err(format!("路径不是目录: {}", path));
+    }
+
+    let fingerprint = TemplateFingerprint::build(&path_buf)
+        .map_err(|e| format!("构建模板指纹失败: {}", e))?;
+
+    {
+        let mut tp = state.template_path.lock().map_err(|e| format!("锁获取失败: {}", e))?;
+        *tp = Some(path_buf.clone());
+    }
+    {
+        let mut fp = state
+            .template_fingerprint
+            .lock()
+            .map_err(|e| format!("锁获取失败: {}", e))?;
+        *fp = Some(TemplateFingerprintCache {
+            paths: fingerprint.paths,
+            generated_at: std::time::Instant::now(),
+        });
+    }
+
+    let data_dir = ProjectRegistry::default_data_dir();
+    save_template_path(&data_dir, &path_buf)
+        .map_err(|e| format!("保存模板路径失败: {}", e))?;
+
+    Ok(())
+}
+
+#[tauri::command]
+pub fn get_template_path(state: State<'_, AppState>) -> Result<Option<String>, String> {
+    let tp = state
+        .template_path
+        .lock()
+        .map_err(|e| format!("锁获取失败: {}", e))?;
+    Ok(tp.as_ref().map(|p| p.to_string_lossy().to_string()))
+}
+
 pub fn init_app_state(
     app: &tauri::App,
     registry: ProjectRegistry,
     agent_collector: AgentCollector,
 ) {
     let state = AppState::new(registry, agent_collector);
+
+    let data_dir = ProjectRegistry::default_data_dir();
+    if let Some(template_path) = load_template_path(&data_dir) {
+        if template_path.exists() && template_path.is_dir() {
+            if let Ok(fingerprint) = TemplateFingerprint::build(&template_path) {
+                if let Ok(mut tp) = state.template_path.lock() {
+                    *tp = Some(template_path);
+                }
+                if let Ok(mut fp) = state.template_fingerprint.lock() {
+                    *fp = Some(TemplateFingerprintCache {
+                        paths: fingerprint.paths,
+                        generated_at: std::time::Instant::now(),
+                    });
+                }
+            }
+        } else {
+            eprintln!(
+                "[init_app_state] 警告: 已保存的模板路径不存在或不是目录: {}",
+                template_path.display()
+            );
+        }
+    }
+
     app.manage(state);
 }

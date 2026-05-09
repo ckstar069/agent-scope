@@ -1,5 +1,5 @@
 import { useMemo, useState } from "react";
-import { ChevronDown, ChevronRight, FileText, FolderTree } from "lucide-react";
+import { ChevronDown, ChevronRight, FileText, FolderTree, AlertTriangle } from "lucide-react";
 
 import { Collapsible, CollapsibleContent, CollapsibleTrigger } from "@/components/ui/collapsible";
 import { cn } from "@/lib/utils";
@@ -11,10 +11,13 @@ type KnownSourceGroup = (typeof SOURCE_GROUP_ORDER)[number];
 export interface SerProjectFile {
   relative_path: string;
   source_group: KnownSourceGroup | string;
+  origin?: string;
   content_preview?: string;
   content_truncated?: boolean;
   mtime_ms?: number;
 }
+
+type OriginFilter = "all" | "template" | "project";
 
 interface MemoryFileTreeProps {
   files: SerProjectFile[];
@@ -39,6 +42,7 @@ const SOURCE_GROUP_LABELS: Record<KnownSourceGroup, string> = {
 };
 
 export function MemoryFileTree({ files, selectedPath, onSelect, changedPaths }: MemoryFileTreeProps) {
+  const [originFilter, setOriginFilter] = useState<OriginFilter>("all");
   const [openGroups, setOpenGroups] = useState<Record<KnownSourceGroup, boolean>>(() => ({
     root: true,
     rules: true,
@@ -49,14 +53,16 @@ export function MemoryFileTree({ files, selectedPath, onSelect, changedPaths }: 
   }));
 
   const groupedFiles = useMemo<GroupedFiles[]>(() => {
+    const visibleFiles = files.filter((file) => isVisibleByOrigin(file, originFilter));
+
     return SOURCE_GROUP_ORDER.map((group) => ({
       group,
       label: SOURCE_GROUP_LABELS[group],
-      files: files
+      files: visibleFiles
         .filter((file) => file.source_group === group)
         .sort((left, right) => left.relative_path.localeCompare(right.relative_path, "zh-CN")),
     })).filter((group) => group.files.length > 0);
-  }, [files]);
+  }, [files, originFilter]);
 
   if (files.length === 0) {
     return (
@@ -66,8 +72,32 @@ export function MemoryFileTree({ files, selectedPath, onSelect, changedPaths }: 
     );
   }
 
+  // 检测是否所有文件的来源都是 "unknown"（未配置模板路径）
+  const allUnknown = files.length > 0 && files.every((f) => f.origin === "unknown");
+
   return (
     <nav className="rounded-xl border border-border bg-card/70 p-2 text-card-foreground shadow-sm" aria-label="记忆文件导航">
+      {allUnknown && (
+        <div className="mb-2 flex items-center gap-2 rounded-lg border border-amber-200 bg-amber-50 px-2.5 py-2 text-xs text-amber-800">
+          <AlertTriangle className="size-4 shrink-0" aria-hidden="true" />
+          <span>未配置模板项目路径，无法区分文件来源。请在「设置 → 模板项目路径」中进行配置。</span>
+        </div>
+      )}
+      <div className="mb-2 flex items-center justify-between gap-3 rounded-lg border border-border/70 bg-muted/30 px-2.5 py-2">
+        <label htmlFor="memory-origin-filter" className="text-xs font-medium text-muted-foreground">
+          来源筛选
+        </label>
+        <select
+          id="memory-origin-filter"
+          value={originFilter}
+          onChange={(event) => setOriginFilter(event.target.value as OriginFilter)}
+          className="h-8 rounded-md border border-border bg-background px-2 text-xs text-foreground shadow-sm outline-none transition-colors hover:bg-muted focus-visible:border-ring focus-visible:ring-3 focus-visible:ring-ring/50"
+        >
+          <option value="all">全部</option>
+          <option value="template">模板记忆</option>
+          <option value="project">项目记忆</option>
+        </select>
+      </div>
       <div className="space-y-1" role="tree">
         {groupedFiles.map((group) => (
           <Collapsible
@@ -116,6 +146,8 @@ interface MemoryFileTreeItemProps {
 }
 
 function MemoryFileTreeItem({ file, isSelected, isChanged, onSelect }: MemoryFileTreeItemProps) {
+  const originMeta = getOriginMeta(file.origin);
+
   return (
     <button
       type="button"
@@ -129,10 +161,52 @@ function MemoryFileTreeItem({ file, isSelected, isChanged, onSelect }: MemoryFil
       onClick={() => onSelect(file.relative_path)}
     >
       <FileText className="size-4 shrink-0 text-muted-foreground" aria-hidden="true" />
-      <span className="min-w-0 truncate font-mono text-xs">{getFilename(file.relative_path)}</span>
+      <span className="flex min-w-0 items-center gap-1.5">
+        <span className={cn("text-[10px] leading-none", originMeta.dotClass)} aria-hidden="true">
+          ●
+        </span>
+        <span className="min-w-0 truncate font-mono text-xs">{getFilename(file.relative_path)}</span>
+        <span className={cn("shrink-0 text-[10px]", originMeta.labelClass)}>{originMeta.label}</span>
+      </span>
       {isChanged && <span className="size-2 rounded-full bg-destructive" title="文件已变更" aria-hidden="true" />}
     </button>
   );
+}
+
+function isVisibleByOrigin(file: SerProjectFile, filter: OriginFilter) {
+  if (filter === "all") {
+    return true;
+  }
+
+  if (filter === "template") {
+    return file.origin === "template";
+  }
+
+  return file.origin === "project" || file.origin === "unknown";
+}
+
+function getOriginMeta(origin: string | undefined) {
+  if (origin === "project") {
+    return {
+      label: "项目",
+      dotClass: "text-blue-500",
+      labelClass: "text-blue-500",
+    };
+  }
+
+  if (origin === "template") {
+    return {
+      label: "模板",
+      dotClass: "text-green-500",
+      labelClass: "text-green-500",
+    };
+  }
+
+  return {
+    label: "未知",
+    dotClass: "text-muted-foreground",
+    labelClass: "text-muted-foreground",
+  };
 }
 
 function getFilename(relativePath: string) {

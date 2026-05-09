@@ -101,6 +101,7 @@ pub struct ProjectFile {
     pub source_group: String,
     /// 文件最后修改时间（Unix 毫秒时间戳）
     pub mtime_ms: u64,
+    pub origin: String,
 }
 
 // ============================================================================
@@ -342,6 +343,7 @@ impl ProjectFilesCollector {
             content_truncated,
             source_group: source_group.to_string(),
             mtime_ms,
+            origin: "unknown".to_string(),
         }))
     }
 

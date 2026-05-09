@@ -13,7 +13,6 @@
 //! ## 使用场景
 //!
 //! - 监听 `.current_stage` 文件变化 → 触发 Stage 重新采集
-//! - 监听 `.claude/memory/` 目录变化 → 触发 Memory 重新采集
 //! - 监听 `config/parameters.py` 变化 → 触发 Config 重新采集
 
 use std::collections::HashMap;
@@ -902,51 +901,6 @@ mod tests {
         assert!(
             stage_updated,
             ".current_stage change should trigger Modified within 3s"
-        );
-
-        handles.stop_and_join().ok();
-    }
-
-    /// 测试：模拟 `.claude/memory/` 目录内文件变化（递归监听）
-    #[test]
-    fn test_memory_directory_change() {
-        let (dir, _guard) = temp_dir();
-        let memory_dir = dir.join(".claude").join("memory");
-        let memory_file = memory_dir.join("user-guidelines.md");
-
-        // 先创建目录和初始文件
-        write_file(&memory_file, "initial");
-
-        let mut watcher = FileWatcher::with_interval(Duration::from_millis(50));
-        watcher.add(memory_dir.clone(), true); // recursive
-
-        let (tx, rx) = mpsc::channel();
-        let handles = watcher
-            .start(move |event| {
-                let _ = tx.send(event);
-            })
-            .expect("failed to start watcher");
-
-        thread::sleep(Duration::from_millis(100));
-
-        // 修改 memory 文件
-        write_file(&memory_file, "updated content");
-
-        let deadline = Instant::now() + Duration::from_secs(3);
-        let mut memory_updated = false;
-        while Instant::now() < deadline {
-            if let Ok(event) = rx.try_recv() {
-                if event.kind_str() == "modified" && event.path() == memory_file {
-                    memory_updated = true;
-                    break;
-                }
-            }
-            thread::sleep(Duration::from_millis(10));
-        }
-
-        assert!(
-            memory_updated,
-            "memory file change should trigger Modified within 3s"
         );
 
         handles.stop_and_join().ok();
