@@ -1,57 +1,24 @@
 {
-  "active_plan": "/Users/ckstar/Repo/ai_project_template_visualization/.sisyphus/plans/dialog-search-text-view-fix.md",
-  "started_at": "2026-05-07T08:20:04.068Z",
+  "active_plan": "/Users/ckstar/Repo/ai_project_template_visualization/.sisyphus/plans/ptv-v0.5-windows-support.md",
+  "started_at": "2026-05-09T07:54:26.881Z",
   "session_ids": [
-    "ses_20515bf64ffeIr6P84PM66d3Pv"
+    "ses_1f4681a2dffecnrFcuyumBqmFU"
   ],
   "session_origins": {
-    "ses_20515bf64ffeIr6P84PM66d3Pv": "direct"
+    "ses_1f4681a2dffecnrFcuyumBqmFU": "direct"
   },
-  "plan_name": "dialog-search-text-view-fix",
+  "plan_name": "ptv-v0.5-windows-support",
   "agent": "atlas",
+  "worktree_path": null,
   "task_sessions": {
     "todo:1": {
       "task_key": "todo:1",
       "task_label": "1",
-      "task_title": "**Capture and codify real Claude JSONL fixtures**",
-      "session_id": "ses_1fe7301e2ffeBVwU6d2kF9431M",
+      "task_title": "find_python() 自动探测 + 错误消息修正",
+      "session_id": "ses_1f43e6429ffeRb7Q6cPESQAqkl",
       "agent": "Sisyphus-Junior",
-      "category": "deep",
-      "updated_at": "2026-05-07T08:38:32.875Z"
-    },
-    "todo:3": {
-      "task_key": "todo:3",
-      "task_label": "3",
-      "task_title": "**Parser cleanup and Rust tests**",
-      "session_id": "ses_1fe62bb4dffer8I8dgBrnQ3T8t",
-      "agent": "Sisyphus-Junior",
-      "category": "deep",
-      "updated_at": "2026-05-07T08:49:31.785Z"
-    },
-    "todo:5": {
-      "task_key": "todo:5",
-      "task_label": "5",
-      "task_title": "**Replace bubble transcript view with text reader**",
-      "session_id": "ses_1fe51296fffeoDTBAzkFk5QaUk",
-      "agent": "Sisyphus-Junior",
-      "category": "visual-engineering",
-      "updated_at": "2026-05-07T09:07:40.242Z"
-    },
-    "todo:10": {
-      "task_key": "todo:10",
-      "task_label": "10",
-      "task_title": "**Regression tests for static memory and candidate memory**",
-      "session_id": "ses_1fe3d04abffewGtbccpywF2zwR",
-      "agent": "explore",
-      "updated_at": "2026-05-07T09:30:25.746Z"
-    },
-    "final-wave:f1": {
-      "task_key": "final-wave:f1",
-      "task_label": "F1",
-      "task_title": "**Plan Compliance Audit** — `oracle`",
-      "session_id": "ses_1fda7122effeh9f9ZCnHiOb3eu",
-      "agent": "oracle",
-      "updated_at": "2026-05-07T12:14:29.930Z"
+      "category": "quick",
+      "updated_at": "2026-05-09T08:07:02.880Z"
     }
   }
 }

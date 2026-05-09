@@ -1,0 +1,13 @@
+Task 1: find_python() 探测成功测试
+=====================================
+命令: cargo test -p ptv -- test_find_python_success test_find_python_fallback_order --nocapture
+日期: 2026-05-09
+结果: 2 passed, 0 failed
+
+实际探测到的 Python 命令: python3
+系统平台: macOS (aarch64)
+可用 Python: python3 (v3.14.4), python → 不存在, py → 不存在
+
+测试验证:
+  - test_find_python_success: ✅ find_python() 返回 Some("python3")
+  - test_find_python_fallback_order: ✅ 首个命令不存在时回退到 "python3"

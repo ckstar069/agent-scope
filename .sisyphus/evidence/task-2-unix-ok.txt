@@ -1,0 +1,18 @@
+Task 2 — Unix (macOS) test pass evidence
+==========================================
+Date: 2026-05-09
+Command: cargo test -p ptv -- collectors::template::session_transcript
+
+Results:
+- 22 unit tests passed
+- 1 doctest passed
+- 0 failed
+
+Key verified tests:
+  - test_encode_cwd_path_absolute ... ok
+  - test_encode_cwd_path_empty ... ok
+  - test_encode_cwd_path_single_dir ... ok
+  - test_encode_cwd_path_without_leading_slash ... ok
+  - doc-test encode_cwd_path (line 20) ... ok
+
+cargo check: clean (only pre-existing warning: compute_token_rates unused)

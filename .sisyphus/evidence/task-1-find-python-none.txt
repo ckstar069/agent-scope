@@ -1,0 +1,11 @@
+Task 1: find_python() 探测失败降级测试
+=========================================
+命令: cargo test -p ptv -- test_find_python_all_fail --nocapture
+日期: 2026-05-09
+结果: 1 passed, 0 failed
+
+测试验证:
+  - test_find_python_all_fail: ✅ 所有候选命令都不存在时返回 None
+    模拟命令: ["nonexistent_cmd_1_xyz", "nonexistent_cmd_2_xyz"]
+    预期: None
+    实际: None

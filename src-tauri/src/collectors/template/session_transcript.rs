@@ -20,9 +20,10 @@ use serde_json::Value;
 /// ```
 /// use ptv_lib::collectors::template::session_transcript::encode_cwd_path;
 /// assert_eq!(encode_cwd_path("/Users/ckstar/Repo/my_project"), "-Users-ckstar-Repo-my-project");
-/// assert_eq!(encode_cwd_path("/home/user/project"), "home-user-project");
+/// assert_eq!(encode_cwd_path("/home/user/project"), "-home-user-project");
 /// assert_eq!(encode_cwd_path("relative/path"), "relative-path");
 /// ```
+#[cfg(not(windows))]
 pub fn encode_cwd_path(cwd: &str) -> String {
     let without_leading = cwd.strip_prefix('/').unwrap_or(cwd);
     let encoded = without_leading.replace("/", "-").replace("_", "-");
@@ -680,9 +681,18 @@ fn list_jsonl_files(dir: &Path) -> Result<Vec<(PathBuf, u64)>, TranscriptError> 
 
 /// 获取项目的会话目录路径
 fn sessions_dir(project_path: &Path) -> PathBuf {
-    let encoded = encode_cwd_path(&project_path.to_string_lossy());
-    let home = dirs::home_dir().unwrap_or_default();
-    home.join(".claude").join("projects").join(encoded)
+    #[cfg(not(windows))]
+    {
+        let encoded = encode_cwd_path(&project_path.to_string_lossy());
+        let home = dirs::home_dir().unwrap_or_default();
+        home.join(".claude").join("projects").join(encoded)
+    }
+    #[cfg(windows)]
+    {
+        // Claude Code 不在 Windows 上运行，返回默认路径
+        let home = dirs::home_dir().unwrap_or_default();
+        home.join(".claude").join("projects")
+    }
 }
 
 /// 从文件路径提取 session_id（文件名去 .jsonl 扩展名）
@@ -881,6 +891,7 @@ mod tests {
     // encode_cwd_path 测试
     // -----------------------------------------------------------------------
 
+    #[cfg(not(windows))]
     #[test]
     fn test_encode_cwd_path_absolute() {
         assert_eq!(
@@ -889,16 +900,19 @@ mod tests {
         );
     }
 
+    #[cfg(not(windows))]
     #[test]
     fn test_encode_cwd_path_without_leading_slash() {
         assert_eq!(encode_cwd_path("home/user/project"), "home-user-project");
     }
 
+    #[cfg(not(windows))]
     #[test]
     fn test_encode_cwd_path_single_dir() {
         assert_eq!(encode_cwd_path("/root"), "-root");
     }
 
+    #[cfg(not(windows))]
     #[test]
     fn test_encode_cwd_path_empty() {
         assert_eq!(encode_cwd_path(""), "");

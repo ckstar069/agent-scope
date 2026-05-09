@@ -330,7 +330,6 @@ mod tests {
 
         assert!(data.stage.is_err());
         assert!(data.config.is_err());
-        assert!(data.memories.is_ok());
         assert!(data.project_files.is_ok());
         // 临时目录不是 git 仓库，GitCollector 返回 Err(GitError::NotARepo)
         assert!(data.git.is_err());

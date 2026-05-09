@@ -111,7 +111,7 @@ impl std::fmt::Display for ParameterError {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         match self {
             ParameterError::PythonNotFound => {
-                write!(f, "系统未安装 Python3，无法解析参数文件")
+                write!(f, "系统未安装 Python，无法解析参数文件")
             }
             ParameterError::FileNotFound(_) => {
                 write!(f, "项目目录下未找到 config/parameters.py，请确认这是有效的 ai_project_template 项目")
@@ -143,23 +143,50 @@ impl std::fmt::Display for ParameterError {
 impl std::error::Error for ParameterError {}
 
 // ============================================================================
+// find_python — 跨平台 Python 命令探测
+// ============================================================================
+
+/// 探测系统上可用的 Python 命令名。
+///
+/// Unix 默认尝试顺序：`python3` → `python`
+/// Windows 默认尝试顺序：`python` → `py`
+///
+/// 全部失败返回 `None`。
+pub fn find_python() -> Option<String> {
+    let candidates: &[&str] = if cfg!(target_os = "windows") {
+        &["python", "py"]
+    } else {
+        &["python3", "python"]
+    };
+    find_python_from_candidates(candidates)
+}
+
+/// 内部辅助：按给定候选列表依次探测，返回第一个能用的命令名
+fn find_python_from_candidates(candidates: &[&str]) -> Option<String> {
+    for cmd in candidates {
+        if Command::new(cmd)
+            .arg("--version")
+            .output()
+            .map(|o| o.status.success())
+            .unwrap_or(false)
+        {
+            return Some(cmd.to_string());
+        }
+    }
+    None
+}
+
+// ============================================================================
 // parse_parameters_py — 通过 shell out 到 Python 解析参数
 // ============================================================================
 
-/// 执行 `python3 <path> export json <tempfile>` 并解析输出的 JSON 为 ProjectConfig
+/// 执行 `python <path> export json <tempfile>` 并解析输出的 JSON 为 ProjectConfig
 pub fn parse_parameters_py(path: &Path) -> Result<ProjectConfig, ParameterError> {
     if !path.exists() {
         return Err(ParameterError::FileNotFound(path.to_string_lossy().to_string()));
     }
 
-    let python_version = Command::new("python3")
-        .arg("--version")
-        .output()
-        .map_err(|_| ParameterError::PythonNotFound)?;
-
-    if !python_version.status.success() {
-        return Err(ParameterError::PythonNotFound);
-    }
+    let python = find_python().ok_or(ParameterError::PythonNotFound)?;
 
     let temp_dir = std::env::temp_dir();
     let seq = TEMP_COUNTER.fetch_add(1, Ordering::Relaxed);
@@ -169,7 +196,7 @@ pub fn parse_parameters_py(path: &Path) -> Result<ProjectConfig, ParameterError>
         seq,
     ));
 
-    let output = Command::new("python3")
+    let output = Command::new(&python)
         .arg(path)
         .arg("export")
         .arg("json")
@@ -178,7 +205,7 @@ pub fn parse_parameters_py(path: &Path) -> Result<ProjectConfig, ParameterError>
         .env_remove("PYTHONPATH")
         .env_remove("PYTHONNOUSERSITE")
         .output()
-        .map_err(|e| ParameterError::ExportFailed(format!("无法执行 python3: {}", e)))?;
+        .map_err(|e| ParameterError::ExportFailed(format!("无法执行 Python: {}", e)))?;
 
     if !output.status.success() {
         let stderr = String::from_utf8_lossy(&output.stderr);
@@ -267,7 +294,7 @@ mod tests {
         let bad_script = dir.join("bad_parameters.py");
 
         let mut file = fs::File::create(&bad_script).expect("应能创建测试文件");
-        writeln!(file, "#!/usr/bin/env python3").unwrap();
+        writeln!(file, "#!python3").unwrap();
         writeln!(file, "import sys").unwrap();
         writeln!(file, "print('Intentional failure', file=sys.stderr)").unwrap();
         writeln!(file, "sys.exit(1)").unwrap();
@@ -289,7 +316,7 @@ mod tests {
         let bad_script = dir.join("syntax_parameters.py");
 
         let mut file = fs::File::create(&bad_script).expect("应能创建测试文件");
-        writeln!(file, "#!/usr/bin/env python3").unwrap();
+        writeln!(file, "#!python3").unwrap();
         writeln!(file, "if True print('bad')").unwrap();
         drop(file);
 
@@ -310,7 +337,7 @@ mod tests {
         let bad_script = dir.join("runtime_parameters.py");
 
         let mut file = fs::File::create(&bad_script).expect("应能创建测试文件");
-        writeln!(file, "#!/usr/bin/env python3").unwrap();
+        writeln!(file, "#!python3").unwrap();
         writeln!(file, "raise ValueError('boom')").unwrap();
         drop(file);
 
@@ -330,5 +357,40 @@ mod tests {
         let dir = tempfile::tempdir().unwrap();
         let result = ConfigCollector::collect(dir.path());
         assert!(matches!(result, Err(ParameterError::FileNotFound(_))));
+    }
+
+    // ========================================================================
+    // find_python 单元测试
+    // ========================================================================
+
+    #[test]
+    fn test_find_python_success() {
+        // 实际系统上至少应有一个 Python 命令可用
+        let result = find_python();
+        assert!(result.is_some(), "系统上应存在可用的 Python 命令");
+        let cmd = result.unwrap();
+        // 允许的命令名：python3 / python / py
+        assert!(
+            cmd == "python3" || cmd == "python" || cmd == "py",
+            "探测到的 Python 命令应为 python3 / python / py，得到: {}",
+            cmd
+        );
+    }
+
+    #[test]
+    fn test_find_python_fallback_order() {
+        // 模拟第一个候选不存在，第二个存在 → 应回退到第二个
+        let result = find_python_from_candidates(&["nonexistent_python_test_cmd_xyz", "python3"]);
+        assert_eq!(result, Some("python3".to_string()));
+    }
+
+    #[test]
+    fn test_find_python_all_fail() {
+        // 所有候选都不存在 → 返回 None
+        let result = find_python_from_candidates(&[
+            "nonexistent_cmd_1_xyz",
+            "nonexistent_cmd_2_xyz",
+        ]);
+        assert!(result.is_none());
     }
 }
