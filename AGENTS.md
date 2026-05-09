@@ -8,7 +8,7 @@
 - **定位**: Tauri v2 桌面应用，监控从 `ai_project_template` 创建的实际 FPGA 项目
 - **前端**: React + TypeScript + Tailwind CSS + shadcn/ui + Recharts
 - **后端**: Rust (Tauri v2)，复用 `abtop-collector` 库 crate
-- **平台**: **macOS + Linux**（Windows 不做），**Linux 优先验证**
+- **平台**: **macOS + Linux + Windows（测试中）**，**Linux 优先验证**
 - **语言**: 中文
 
 ## 技术栈
@@ -91,7 +91,8 @@ cargo check            # 检查 Rust 后端编译 (在 src-tauri/ 下执行)
 | 测试策略 | Agent QA（Playwright E2E），v0.1 无单元测试 |
 | 数据刷新 | 文件 → watchfiles，Agent → 2s 轮询 |
 | Dashboard 排序 | 按项目名称字母序 |
-| 平台 | macOS + Linux only（无 Windows） |
+| 平台 | macOS + Linux + Windows（测试中） |
+| Windows 支持 | NSIS installer, WebView2 runtime（不捆绑） |
 
 ## 开发规范
 
