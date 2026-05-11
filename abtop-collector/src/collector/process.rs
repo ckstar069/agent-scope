@@ -3,6 +3,17 @@ use std::collections::HashMap;
 use std::fs;
 use std::process::Command;
 
+/// 创建静默命令：Windows 上隐藏命令行窗口
+fn silent_cmd(program: &str) -> Command {
+    let mut cmd = Command::new(program);
+    #[cfg(windows)]
+    {
+        use std::os::windows::process::CommandExt;
+        cmd.creation_flags(0x08000000);
+    }
+    cmd
+}
+
 #[derive(Debug)]
 pub struct ProcInfo {
     pub pid: u32,
@@ -304,7 +315,7 @@ pub fn get_listening_ports() -> HashMap<u32, Vec<u16>> {
 #[cfg(target_os = "windows")]
 pub fn get_listening_ports() -> HashMap<u32, Vec<u16>> {
     let mut map: HashMap<u32, Vec<u16>> = HashMap::new();
-    let output = Command::new("netstat")
+    let output = silent_cmd("netstat")
         .args(["-ano", "-p", "TCP"])
         .output()
         .ok();
@@ -423,7 +434,7 @@ pub fn collect_git_stats(cwd: &str) -> (u32, u32) {
     if !std::path::Path::new(cwd).is_dir() {
         return (0, 0);
     }
-    let output = Command::new("git")
+    let output = silent_cmd("git")
         .args(["-C", cwd, "status", "--porcelain"])
         .output()
         .ok();
