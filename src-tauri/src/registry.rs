@@ -256,7 +256,14 @@ impl ProjectRegistry {
     /// 规范化路径：解析符号链接并返回绝对路径的字符串形式
     fn canonicalize(path: &Path) -> Result<String, RegistryError> {
         match path.canonicalize() {
-            Ok(p) => Ok(p.to_string_lossy().into_owned()),
+            Ok(p) => {
+                let mut s = p.to_string_lossy().into_owned();
+                // Windows 上 canonicalize() 会添加 \\?\ 前缀，移除它以获得可读路径
+                if s.starts_with(r"\\?\") {
+                    s.drain(..4);
+                }
+                Ok(s)
+            }
             Err(e) => Err(RegistryError::CanonicalizeFailed(
                 path.to_string_lossy().into_owned(),
                 e,
