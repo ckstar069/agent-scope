@@ -191,7 +191,7 @@ export function Settings() {
             </div>
             <div className="space-y-1">
               <CardTitle>添加监控项目</CardTitle>
-              <CardDescription>请输入 macOS/Linux 绝对路径，例如 /Users/me/Repo/tmp/project-a。</CardDescription>
+              <CardDescription>请输入绝对路径，例如 macOS/Linux: /Users/me/project-a 或 Windows: C:\Users\me\project-a。</CardDescription>
             </div>
           </div>
         </CardHeader>
@@ -204,7 +204,7 @@ export function Settings() {
               <Input
                 id="project-path"
                 value={projectPath}
-                placeholder="/Users/ckstar/Repo/tmp/example-project"
+                placeholder="/Users/me/project-a 或 C:\\Users\\me\\project-a"
                 aria-invalid={Boolean(error)}
                 disabled={isAdding}
                 onChange={(event) => {
@@ -256,7 +256,7 @@ export function Settings() {
               <Input
                 id="template-path"
                 value={templatePath}
-                placeholder="/Users/ckstar/Repo/ai_project_template"
+                placeholder="/Users/me/ai_project_template 或 C:\\Users\\me\\ai_project_template"
                 aria-invalid={Boolean(templateError)}
                 disabled={isSaving}
                 onChange={(event) => {
@@ -438,8 +438,12 @@ function validateProjectPath(path: string) {
     return "无效路径：请输入项目绝对路径。";
   }
 
-  if (!value.startsWith("/")) {
-    return "无效路径：仅支持 macOS/Linux 绝对路径，请以 / 开头。";
+  // 支持 Unix 路径 (/...) 和 Windows 路径 (C:\...)
+  const isUnixPath = value.startsWith("/");
+  const isWindowsPath = /^[A-Za-z]:\\/.test(value);
+
+  if (!isUnixPath && !isWindowsPath) {
+    return "无效路径：请输入绝对路径，Unix 以 / 开头，Windows 以盘符开头（如 C:\\）。";
   }
 
   if (value === "/") {
