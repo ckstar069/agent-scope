@@ -3,6 +3,17 @@ use std::path::Path;
 use std::process::Command;
 use std::sync::atomic::{AtomicU64, Ordering};
 
+/// 创建静默命令：Windows 上隐藏命令行窗口，其他平台正常执行
+fn silent_command(program: &str) -> Command {
+    let mut cmd = Command::new(program);
+    #[cfg(windows)]
+    {
+        use std::os::windows::process::CommandExt;
+        cmd.creation_flags(0x08000000); // CREATE_NO_WINDOW
+    }
+    cmd
+}
+
 use serde::Deserialize;
 
 /// 每个 `parse_parameters_py()` 调用分配唯一 ID，避免并行测试时的临时文件冲突
@@ -164,9 +175,9 @@ pub fn find_python() -> Option<String> {
 /// 内部辅助：按给定候选列表依次探测，返回第一个能用的命令名
 fn find_python_from_candidates(candidates: &[&str]) -> Option<String> {
     for cmd in candidates {
-        if Command::new(cmd)
-            .arg("--version")
-            .output()
+        if silent_command(cmd)
+                    .arg("--version")
+                    .output()
             .map(|o| o.status.success())
             .unwrap_or(false)
         {
@@ -196,7 +207,7 @@ pub fn parse_parameters_py(path: &Path) -> Result<ProjectConfig, ParameterError>
         seq,
     ));
 
-    let output = Command::new(&python)
+    let output = silent_command(&python)
         .arg(path)
         .arg("export")
         .arg("json")

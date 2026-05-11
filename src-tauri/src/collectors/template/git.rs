@@ -2,6 +2,17 @@ use std::fmt;
 use std::path::Path;
 use std::process::Command;
 
+/// 创建静默 git 命令：Windows 上隐藏命令行窗口
+fn git_cmd() -> Command {
+    let mut cmd = Command::new("git");
+    #[cfg(windows)]
+    {
+        use std::os::windows::process::CommandExt;
+        cmd.creation_flags(0x08000000); // CREATE_NO_WINDOW
+    }
+    cmd
+}
+
 // ============================================================================
 // GitStatus — Git 仓库状态
 // ============================================================================
@@ -72,14 +83,14 @@ impl GitCollector {
     /// - 如果 `git` 命令不可用，返回 `GitError::NotAvailable`
     pub fn collect(path: &Path) -> Result<GitStatus, GitError> {
         // 检查 git 是否可用
-        let git_check = Command::new("git").arg("--version").output();
+        let git_check = git_cmd().arg("--version").output();
         match git_check {
             Ok(output) if output.status.success() => {}
             Ok(_) | Err(_) => return Err(GitError::NotAvailable),
         }
 
         // 检查是否为 git 仓库
-        let rev_parse = Command::new("git")
+        let rev_parse = git_cmd()
             .arg("-C")
             .arg(path)
             .arg("rev-parse")
@@ -110,7 +121,7 @@ impl GitCollector {
     }
 
     fn get_current_branch(path: &Path) -> Result<String, GitError> {
-        let output = Command::new("git")
+        let output = git_cmd()
             .arg("-C")
             .arg(path)
             .arg("branch")
@@ -122,7 +133,7 @@ impl GitCollector {
             let branch = String::from_utf8_lossy(&output.stdout).trim().to_string();
             if branch.is_empty() {
                 // 分离 HEAD 状态，尝试获取简短哈希
-                let hash_output = Command::new("git")
+                let hash_output = git_cmd()
                     .arg("-C")
                     .arg(path)
                     .arg("rev-parse")
@@ -146,7 +157,7 @@ impl GitCollector {
     }
 
     fn get_status(path: &Path) -> Result<GitStatus, GitError> {
-        let output = Command::new("git")
+        let output = git_cmd()
             .arg("-C")
             .arg(path)
             .arg("status")
@@ -249,13 +260,13 @@ mod tests {
     use std::process::Command;
 
     fn init_git_repo(dir: &Path) {
-        Command::new("git")
+        git_cmd()
             .arg("init")
             .arg(dir)
             .output()
             .expect("git init should work");
 
-        Command::new("git")
+        git_cmd()
             .arg("-C")
             .arg(dir)
             .arg("config")
@@ -264,7 +275,7 @@ mod tests {
             .output()
             .unwrap();
 
-        Command::new("git")
+        git_cmd()
             .arg("-C")
             .arg(dir)
             .arg("config")
@@ -321,7 +332,7 @@ mod tests {
         writeln!(file, "initial").unwrap();
         drop(file);
 
-        Command::new("git")
+        git_cmd()
             .arg("-C")
             .arg(dir.path())
             .arg("add")
@@ -329,7 +340,7 @@ mod tests {
             .output()
             .unwrap();
 
-        Command::new("git")
+        git_cmd()
             .arg("-C")
             .arg(dir.path())
             .arg("commit")
@@ -358,7 +369,7 @@ mod tests {
         writeln!(file, "content").unwrap();
         drop(file);
 
-        Command::new("git")
+        git_cmd()
             .arg("-C")
             .arg(dir.path())
             .arg("add")
