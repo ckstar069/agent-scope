@@ -133,7 +133,21 @@ impl ProjectRegistry {
         if storage_path.exists() {
             match fs::read_to_string(&storage_path) {
                 Ok(content) => {
-                    if let Ok(data) = serde_json::from_str(&content) {
+                    if let Ok(mut data) = serde_json::from_str::<RegistryData>(&content) {
+                        // 迁移：移除 Windows 路径的 \\?\ 前缀
+                        let cleaned: HashMap<String, ProjectEntry> = data
+                            .projects
+                            .drain()
+                            .map(|(path, entry)| {
+                                let cleaned_path = if path.starts_with(r"\\?\") {
+                                    path[4..].to_string()
+                                } else {
+                                    path
+                                };
+                                (cleaned_path.clone(), ProjectEntry { path: cleaned_path, added_at: entry.added_at })
+                            })
+                            .collect();
+                        data.projects = cleaned;
                         return Self {
                             storage_path,
                             data,
