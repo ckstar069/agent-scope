@@ -2,11 +2,12 @@ import { useMemo, useState } from "react";
 
 import { Layout } from "@/components/Layout";
 import { AgentMonitor } from "@/pages/AgentMonitor";
+import { ClaudeHistory } from "@/pages/ClaudeHistory";
 import { Dashboard } from "@/pages/Dashboard";
 import { ProjectDetail } from "@/pages/ProjectDetail";
 import { Settings } from "@/pages/Settings";
 
-export type AppRoute = "dashboard" | "agents" | "settings";
+export type AppRoute = "dashboard" | "agents" | "settings" | "claude-history";
 
 function App() {
   const [activeRoute, setActiveRoute] = useState<AppRoute>("dashboard");
@@ -28,6 +29,8 @@ function App() {
     switch (activeRoute) {
       case "agents":
         return <AgentMonitor />;
+      case "claude-history":
+        return <ClaudeHistory />;
       case "settings":
         return <Settings />;
       case "dashboard":
