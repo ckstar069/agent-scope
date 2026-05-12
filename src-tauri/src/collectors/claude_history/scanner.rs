@@ -213,8 +213,8 @@ pub fn preview_claude_session(session_id: &str) -> Result<SerSessionPreview, Str
 
     let jsonl_path = jsonl_path.ok_or("会话文件不存在或已被删除")?;
 
-    // total_turns 使用文件总行数（和 turn_count 保持一致）
-    let total_turns = count_jsonl_lines(&jsonl_path)?.unwrap_or(0);
+    // total_turns 统计有意义的用户输入轮次
+    let total_turns = count_user_turns(&jsonl_path).unwrap_or(0);
 
     // 2. 解析 JSONL 提取所有消息类型
     let file = fs::File::open(&jsonl_path).map_err(|e| e.to_string())?;
@@ -334,8 +334,16 @@ fn jsonl_to_markdown(path: &std::path::Path, session_id: &str) -> Result<String,
     let file = fs::File::open(path).map_err(|e| e.to_string())?;
     let reader = BufReader::new(file);
 
-    let mut md = format!("# Claude Code Session: `{}`\n\n", session_id);
-    let mut turn_number = 0;
+    // 第一轮：收集所有有意义的消息
+    #[derive(Debug)]
+    enum MdItem {
+        Title(String),
+        User(String),      // 真实用户输入（开启新轮次）
+        Assistant(String), // 助手回复
+        Tool(String),      // 工具调用简化描述
+    }
+
+    let mut items: Vec<MdItem> = Vec::new();
 
     for line in reader.lines() {
         let line = match line { Ok(l) => l, Err(_) => continue };
@@ -351,29 +359,19 @@ fn jsonl_to_markdown(path: &std::path::Path, session_id: &str) -> Result<String,
         match msg_type {
             "custom-title" => {
                 if let Some(title) = value.get("customTitle").and_then(|v| v.as_str()) {
-                    md.push_str(&format!("\n## {}\n\n", title));
+                    items.push(MdItem::Title(title.to_string()));
                 }
             }
             "user" => {
                 if let Some(message) = value.get("message") {
-                    let _role = message.get("role").and_then(|v| v.as_str()).unwrap_or("user");
                     if let Some(content) = message.get("content") {
                         if let Some(text) = content.as_str() {
                             // 过滤系统标记
                             if !text.trim_start().starts_with('<') {
-                                turn_number += 1;
-                                md.push_str(&format!("### Turn {}\n\n", turn_number));
-                                md.push_str(&format!("**User**: {}\n\n", text));
-                            }
-                        } else if let Some(arr) = content.as_array() {
-                            for item in arr {
-                                if let Some(text) = item.get("text").and_then(|v| v.as_str()) {
-                                    turn_number += 1;
-                                    md.push_str(&format!("### Turn {}\n\n", turn_number));
-                                    md.push_str(&format!("**User**: {}\n\n", text));
-                                }
+                                items.push(MdItem::User(text.to_string()));
                             }
                         }
+                        // user 的数组 content 是 tool_result，跳过
                     }
                 }
             }
@@ -388,8 +386,8 @@ fn jsonl_to_markdown(path: &std::path::Path, session_id: &str) -> Result<String,
                                 "text" => {
                                     if let Some(text) = item.get("text").and_then(|v| v.as_str()) {
                                         has_text = true;
-                                        let label = if role == "user" { "**User**" } else { "**Assistant**" };
-                                        md.push_str(&format!("{}: {}\n\n", label, text));
+                                        let label = if role == "user" { "User" } else { "Assistant" };
+                                        items.push(MdItem::Assistant(format!("**{}**: {}\n\n", label, text)));
                                     }
                                 }
                                 _ => {}
@@ -410,7 +408,7 @@ fn jsonl_to_markdown(path: &std::path::Path, session_id: &str) -> Result<String,
                                         } else {
                                             format!("调用工具: {} ({})", name, detail)
                                         };
-                                        md.push_str(&format!("> {}\n\n", desc));
+                                        items.push(MdItem::Tool(desc));
                                     }
                                 }
                             }
@@ -420,12 +418,33 @@ fn jsonl_to_markdown(path: &std::path::Path, session_id: &str) -> Result<String,
             }
             "last-prompt" => {
                 if let Some(prompt) = value.get("lastPrompt").and_then(|v| v.as_str()) {
-                    turn_number += 1;
-                    md.push_str(&format!("### Turn {}\n\n", turn_number));
-                    md.push_str(&format!("**User**: {}\n\n", prompt));
+                    items.push(MdItem::User(prompt.to_string()));
                 }
             }
             _ => {}
+        }
+    }
+
+    // 第二轮：按轮次分组生成 Markdown
+    let mut md = format!("# Claude Code Session: `{}`\n\n", session_id);
+    let mut turn_number = 0;
+
+    for item in items {
+        match item {
+            MdItem::Title(title) => {
+                md.push_str(&format!("\n## {}\n\n", title));
+            }
+            MdItem::User(text) => {
+                turn_number += 1;
+                md.push_str(&format!("### Turn {}\n\n", turn_number));
+                md.push_str(&format!("**User**: {}\n\n", text));
+            }
+            MdItem::Assistant(text) => {
+                md.push_str(&text);
+            }
+            MdItem::Tool(desc) => {
+                md.push_str(&format!("> {}\n\n", desc));
+            }
         }
     }
 
@@ -515,7 +534,7 @@ fn scan_projects(
                 .and_then(|t| t.duration_since(std::time::SystemTime::UNIX_EPOCH).ok())
                 .map(|d| d.as_secs() * 1000);
 
-            let turn_count = count_jsonl_lines(&file_path).unwrap_or(None);
+            let turn_count = count_user_turns(&file_path).ok();
 
             let (name, status, started_at, updated_at, is_active) =
                 if let Some(active) = active_sessions.get(&session_id) {
@@ -589,15 +608,40 @@ fn extract_session_name(jsonl_path: &Path) -> Option<String> {
     None
 }
 
-fn count_jsonl_lines(path: &Path) -> Result<Option<usize>, String> {
+fn count_user_turns(path: &Path) -> Result<usize, String> {
     let file = fs::File::open(path).map_err(|e| e.to_string())?;
     let reader = BufReader::new(file);
     let mut count = 0;
     for line in reader.lines() {
-        if line.is_ok() { count += 1; }
+        let line = match line { Ok(l) => l, Err(_) => continue };
+        if line.trim().is_empty() { continue; }
+        let value: Value = match serde_json::from_str(&line) {
+            Ok(v) => v,
+            Err(_) => continue,
+        };
+        let msg_type = value.get("type").and_then(|v| v.as_str()).unwrap_or("");
+        match msg_type {
+            "user" => {
+                if let Some(message) = value.get("message") {
+                    if let Some(content) = message.get("content").and_then(|c| c.as_str()) {
+                        // 只统计不以 < 开头的真实用户输入
+                        if !content.trim_start().starts_with('<') {
+                            count += 1;
+                        }
+                    } else if message.get("content").and_then(|c| c.as_array()).is_some() {
+                        // user 的数组 content 是 tool_result，不统计为新一轮
+                    }
+                }
+            }
+            "last-prompt" => {
+                count += 1;
+            }
+            _ => {}
+        }
     }
-    Ok(Some(count))
+    Ok(count)
 }
+
 
 #[cfg(test)]
 mod tests {
