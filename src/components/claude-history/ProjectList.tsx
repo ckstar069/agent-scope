@@ -34,12 +34,17 @@ export function ProjectList({ groups, selectedPath, onSelect }: ProjectListProps
             )}
             <span className="min-w-0 flex-1 truncate">{group.project_name}</span>
             {activeCount > 0 && (
-              <span className="flex size-5 shrink-0 items-center justify-center rounded-full bg-primary text-[10px] text-primary-foreground">
-                {activeCount}
+              <span className="shrink-0 rounded bg-green-100 px-1.5 py-0.5 text-[10px] font-medium text-green-700">
+                {activeCount > 1 ? `${activeCount}个活跃` : '活跃'}
               </span>
             )}
             {group.is_orphaned && (
-              <span className="text-xs text-muted-foreground" title="项目路径已不存在">🚫</span>
+              <span
+                className="shrink-0 rounded bg-gray-100 px-1.5 py-0.5 text-[10px] font-medium text-gray-500"
+                title="项目路径已不存在"
+              >
+                失效
+              </span>
             )}
           </button>
         );
