@@ -37,6 +37,7 @@
 ```
 src-tauri/src/
 ├── collectors/
+│   ├── mod.rs              # 新增: pub mod claude_history;
 │   ├── claude_history/
 │   │   ├── mod.rs          # 模块入口，暴露 Scanner
 │   │   ├── scanner.rs      # 目录扫描 + 数据聚合 + 删除逻辑
@@ -47,6 +48,8 @@ src-tauri/src/
 ├── commands.rs             # 新增 Tauri 命令
 └── lib.rs                  # 注册新命令
 ```
+
+**模块注册**：必须在 `src-tauri/src/collectors/mod.rs` 中新增 `pub mod claude_history;`。
 
 ### 2.2 前端组件结构
 
@@ -85,6 +88,8 @@ pub struct SerClaudeSession {
     pub cwd: String,
     pub status: SerSessionStatus,
     pub started_at: Option<u64>,
+    pub updated_at: Option<u64>,
+    pub turn_count: Option<usize>,
     pub is_active: bool,
 }
 
@@ -102,6 +107,7 @@ pub struct SerProjectSessionGroup {
     pub project_name: String,
     pub sessions: Vec<SerClaudeSession>,
     pub session_count: usize,
+    pub is_orphaned: bool,
 }
 
 #[derive(Debug, Clone, Serialize)]
@@ -109,6 +115,7 @@ pub struct SerHistoryEntry {
     pub display: String,
     pub timestamp: u64,
     pub session_id: String,
+    pub project_path: String,
 }
 ```
 
@@ -141,23 +148,32 @@ list_claude_sessions()
     │
     ▼
 ┌─────────────────┐
-│ 1. 扫描 sessions/ │ ← 读取 {pid}.json → 活跃会话元数据
+│ 1. 扫描 sessions/ │ ← 读取 {pid}.json → 活跃会话元数据 (sessionId, name, cwd, status, updatedAt)
 └────────┬────────┘
          │
     ┌────▼────┐
-    │ 合并     │ ← 以 sessionId 为 key，活跃会话数据覆盖历史
+    │ 合并     │ ← 以 sessionId 为 key，活跃会话覆盖历史的 status/name/updated_at
     └────┬────┘
          │
 ┌────────▼────────┐
-│ 2. 扫描 projects/ │ ← 每个编码目录 = 一个项目
-│    └── 列出 .jsonl │ ← 每个 .jsonl = 一个会话
+│ 2. 扫描 projects/ │ ← 遍历编码目录
+│    ├── 解码目录名  │ ← 还原为原始项目路径
+│    ├── 检查路径存在│ ← 标记 is_orphaned
+│    └── 列出 .jsonl │ ← 解析每个 .jsonl 的 turn_count
 └────────┬────────┘
          │
 ┌────────▼────────┐
-│ 3. 按项目分组    │ → Vec<SerProjectSessionGroup>
+│ 3. 读取 history   │ ← 补充 history.jsonl 中该 session 的最新命令摘要
+│    (供搜索使用)   │
+└────────┬────────┘
+         │
+┌────────▼────────┐
+│ 4. 按项目分组    │ → Vec<SerProjectSessionGroup>
 │    └── 活跃会话置顶 │
 └─────────────────┘
 ```
+
+**合并策略**：活跃会话的字段全量覆盖历史数据。若活跃会话的 `name` 为 `None` 但历史数据中有 `name`，保留历史中的 `name`（Claude Code 的命名在 session 结束后不会变更）。
 
 ### 4.2 删除流程
 
@@ -174,13 +190,23 @@ delete_claude_session(session_id)
     └────┬────┘
          │
     ┌────▼────┐
-    │ 3. 删除文件  │ ← std::fs::remove_file()
+    │ 3. 再次检查活跃│ ← 删除前再次确认（缓解并发竞态）
     └────┬────┘
          │
     ┌────▼────┐
-    │ 4. 返回结果  │ ← Ok(()) 或 Err
+    │ 4. 删除文件  │ ← std::fs::remove_file()
+    └────┬────┘
+         │
+    ┌────▼────┐
+    │ 5. 清理空目录│ ← 若项目目录变为空，可选删除
+    └────┬────┘
+         │
+    ┌────▼────┐
+    │ 6. 返回结果  │ ← Ok(()) 或 Err
     └─────────┘
 ```
+
+**前端确认对话框**：删除前显示警告"此操作不可逆，删除后无法通过 /resume 恢复该会话"。
 
 ---
 
@@ -205,13 +231,27 @@ delete_claude_session(session_id)
 ```rust
 // collectors/claude_history/path_codec.rs
 
+/// 获取 Claude Code 配置目录（跨平台）
+/// macOS/Linux: ~/.claude
+/// Windows: %USERPROFILE%\.claude
+pub fn claude_config_dir() -> Option<PathBuf>;
+
+/// 将项目路径编码为 Claude Code 项目目录名
 pub fn encode_cwd_path(cwd: &str) -> String;
+
+/// 将编码目录名还原为原始项目路径
 pub fn decode_project_dir(encoded: &str) -> String;
 ```
 
 **共享策略**：
 - `session_transcript.rs` 移除内联的 `#[cfg(not(windows))] encode_cwd_path`，改为 `use crate::collectors::claude_history::path_codec::encode_cwd_path`
-- `session_transcript.rs` 的 `sessions_dir` 移除 `#[cfg(windows)]` 过时分支，统一使用 `encode_cwd_path`
+- `session_transcript.rs` 的 `sessions_dir` 移除 `#[cfg(windows)]` 过时分支，统一使用：
+  ```rust
+  let encoded = encode_cwd_path(&project_path.to_string_lossy());
+  claude_config_dir().unwrap_or_default().join("projects").join(encoded)
+  ```
+
+**已知限制**：编码存在冲突风险。例如 `/Users/name/Repo-A` 和 `/Users/name/Repo/A` 均编码为 `-Users-name-Repo-A`。由于 Claude Code 自身使用相同编码规则，冲突概率极低（需用户主动创建此类路径结构）。设计上不做冲突处理，按 Claude Code 的行为一致处理。
 
 ---
 
@@ -244,9 +284,9 @@ pub fn decode_project_dir(encoded: &str) -> String;
 |------|------|
 | 点击左侧项目 | 右侧展示该项目的会话列表 |
 | 搜索输入 | 实时过滤（session 名称 + 项目路径），debounce 200ms |
-| 删除按钮 | 确认对话框 → 删除 → 列表自动移除 |
+| 删除按钮 | 确认对话框（警告：此操作不可逆，删除后无法通过 /resume 恢复）→ 删除 → 列表自动移除 |
 | 刷新按钮 | 重新调用 `list_claude_sessions`，更新缓存 |
-| 活跃会话 | 绿色圆点标记，置顶显示，无删除按钮 |
+| 活跃会话 | 绿色圆点标记，置顶显示，无删除按钮，hover 显示"运行中" |
 
 ### 6.3 状态管理
 
@@ -268,8 +308,9 @@ interface ClaudeHistoryState {
 
 | 场景 | 后端行为 | 前端行为 |
 |------|----------|----------|
-| `~/.claude/` 不存在 | `Err("Claude Code 配置目录未找到")` | 空状态 + 提示安装 Claude Code |
-| `~/.claude/` 无读取权限 | `Err("无法读取 Claude Code 配置目录")` | 权限错误提示 |
+| `~/.claude/` 不存在（`NotFound`） | `Err("Claude Code 配置目录未找到")` | 空状态 + 提示安装 Claude Code |
+| `~/.claude/` 无读取权限（`PermissionDenied`） | `Err("无法读取 Claude Code 配置目录，请检查权限")` | 权限错误提示（与不存在区分） |
+| `~/.claude/` 被其他进程占用（Windows 文件锁定） | 重试 1 次后跳过该文件 | 正常展示，被锁定的文件数据缺失 |
 | `history.jsonl` 损坏行 | 跳过，继续扫描 | 正常展示，损坏数据自动忽略 |
 | 删除活跃会话 | `Err("无法删除正在运行的会话")` | 按钮禁用，hover 显示"运行中" |
 | 删除时文件已不存在 | `Err("会话文件不存在或已被删除")` | 自动从列表移除 |
@@ -308,12 +349,17 @@ interface ClaudeHistoryState {
 
 | 测试项 | 覆盖内容 |
 |--------|----------|
+| `claude_config_dir` | 跨平台配置目录解析（macOS/Linux/Windows） |
 | `path_codec::encode_cwd_path` | macOS/Linux/Windows 路径编码 |
 | `path_codec::decode_project_dir` | 编码目录名还原为原始路径 |
+| `path_codec::encode_conflict` | 编码冲突场景（如 `Repo-A` vs `Repo/A`） |
 | `scanner::list_sessions` | 扫描 `projects/` 正确分组 |
 | `scanner::merge_active_sessions` | 活跃会话数据覆盖历史数据 |
 | `scanner::delete_session` | 仅允许删除非活跃会话 |
+| `scanner::get_session_detail` | 按 sessionId 查找会话详情 |
+| `scanner::orphaned_detection` | 解码目录名后检查路径是否存在 |
 | JSONL 容错解析 | 损坏行跳过不中断 |
+| 大文件扫描 | 模拟大 `history.jsonl` 的流式读取性能 |
 
 ### 10.2 Playwright E2E
 
@@ -332,9 +378,12 @@ interface ClaudeHistoryState {
 |------|--------|------|----------|
 | `history.jsonl` 过大 | 中 | 高 | 流式读取，不一次性加载 |
 | Windows 路径解码歧义 | 中 | 中 | 单元测试覆盖多种路径场景 |
-| 删除活跃会话 | 低 | 高 | 仅允许删除非活跃会话 |
+| 路径编码冲突 | 低 | 中 | 已知限制（`Repo-A` vs `Repo/A`），与 Claude Code 行为一致 |
+| 删除活跃会话 | 低 | 高 | 仅允许删除非活跃会话；删除前二次检查 |
 | 隐私泄露 | 中 | 高 | 仅展示元数据，不渲染 message 内容 |
 | Claude Code 格式变更 | 低 | 中 | 忽略未知字段，损坏行跳过 |
+| `dirs::home_dir()` 返回 `None` | 低 | 高 | 优雅降级，返回配置目录未找到 |
+| 编码目录与真实路径不同步 | 中 | 低 | 扫描时解码目录名并检查路径存在性，标记 orphaned |
 
 ---
 
