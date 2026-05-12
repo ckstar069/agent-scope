@@ -538,12 +538,14 @@ fn scan_projects(
 
             let (name, status, started_at, updated_at, is_active) =
                 if let Some(active) = active_sessions.get(&session_id) {
+                    let parsed = parse_status(&active.status);
+                    let is_active = matches!(parsed, SerSessionStatus::Active);
                     (
                         active.name.clone().or_else(|| extract_session_name(&file_path)),
-                        parse_status(&active.status),
+                        parsed,
                         active.started_at,
                         active.updated_at,
-                        true,
+                        is_active,
                     )
                 } else {
                     (
