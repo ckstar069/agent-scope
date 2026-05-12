@@ -50,7 +50,8 @@ function ExportMenu({ sessionId, onExport }: { sessionId: string; onExport: (ses
           <button
             type="button"
             className="w-full px-3 py-2 text-left text-sm hover:bg-accent"
-            onClick={() => {
+            onClick={(e) => {
+              e.stopPropagation();
               onExport(sessionId, "Jsonl");
               setOpen(false);
             }}
@@ -60,7 +61,8 @@ function ExportMenu({ sessionId, onExport }: { sessionId: string; onExport: (ses
           <button
             type="button"
             className="w-full px-3 py-2 text-left text-sm hover:bg-accent"
-            onClick={() => {
+            onClick={(e) => {
+              e.stopPropagation();
               onExport(sessionId, "Markdown");
               setOpen(false);
             }}

@@ -895,8 +895,10 @@ pub fn delete_claude_session_cmd(session_id: String) -> Result<(), String> {
 pub fn export_claude_session_cmd(
     session_id: String,
     format: ExportFormat,
+    output_path: String,
 ) -> Result<String, String> {
-    export_claude_session(&session_id, format)
+    let path = std::path::Path::new(&output_path);
+    export_claude_session(&session_id, format, path)
 }
 
 #[tauri::command]

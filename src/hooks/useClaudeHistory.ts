@@ -1,5 +1,6 @@
 import { useCallback, useEffect, useState } from "react";
 import { invoke } from "@tauri-apps/api/core";
+import { save } from "@tauri-apps/plugin-dialog";
 
 export interface PreviewMessage {
   role: string;
@@ -70,23 +71,24 @@ export function useClaudeHistory() {
 
   const exportSession = useCallback(async (sessionId: string, format: "Jsonl" | "Markdown") => {
     try {
-      const content = await invoke<string>("export_claude_session_cmd", {
+      const ext = format === "Jsonl" ? "jsonl" : "md";
+      const outputPath = await save({
+        defaultPath: `${sessionId}.${ext}`,
+        filters: [
+          {
+            name: format === "Jsonl" ? "JSONL" : "Markdown",
+            extensions: [ext],
+          },
+        ],
+      });
+      if (!outputPath) {
+        return; // 用户取消
+      }
+      await invoke("export_claude_session_cmd", {
         sessionId,
         format,
+        outputPath,
       });
-
-      // 触发浏览器下载
-      const blob = new Blob([content], {
-        type: format === "Jsonl" ? "application/jsonl" : "text/markdown",
-      });
-      const url = URL.createObjectURL(blob);
-      const a = document.createElement("a");
-      a.href = url;
-      a.download = `${sessionId}.${format === "Jsonl" ? "jsonl" : "md"}`;
-      document.body.appendChild(a);
-      a.click();
-      document.body.removeChild(a);
-      URL.revokeObjectURL(url);
     } catch (e) {
       alert(`导出失败: ${e}`);
     }

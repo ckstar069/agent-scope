@@ -144,7 +144,11 @@ pub fn delete_claude_session(session_id: &str) -> Result<(), String> {
 }
 
 /// 导出会话内容
-pub fn export_claude_session(session_id: &str, format: ExportFormat) -> Result<String, String> {
+pub fn export_claude_session(
+    session_id: &str,
+    format: ExportFormat,
+    output_path: &std::path::Path,
+) -> Result<String, String> {
     let config_dir = claude_config_dir().ok_or("无法获取用户主目录")?;
 
     // 1. 查找 .jsonl 文件
@@ -169,15 +173,18 @@ pub fn export_claude_session(session_id: &str, format: ExportFormat) -> Result<S
 
     let jsonl_path = jsonl_path.ok_or("会话文件不存在或已被删除")?;
 
-    // 2. 根据格式处理
-    match format {
+    // 2. 根据格式处理并写入目标路径
+    let content = match format {
         ExportFormat::Jsonl => {
-            fs::read_to_string(&jsonl_path).map_err(|e| e.to_string())
+            fs::read_to_string(&jsonl_path).map_err(|e| e.to_string())?
         }
         ExportFormat::Markdown => {
-            jsonl_to_markdown(&jsonl_path, session_id)
+            jsonl_to_markdown(&jsonl_path, session_id)?
         }
-    }
+    };
+
+    fs::write(output_path, content).map_err(|e| format!("写入文件失败: {}", e))?;
+    Ok("导出成功".to_string())
 }
 
 /// 预览会话内容（提取前 N 条消息）
