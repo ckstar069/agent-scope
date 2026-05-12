@@ -597,15 +597,57 @@ fn parse_status(status: &str) -> SerSessionStatus {
 fn extract_session_name(jsonl_path: &Path) -> Option<String> {
     let file = fs::File::open(jsonl_path).ok()?;
     let reader = BufReader::new(file);
-    for line in reader.lines().take(10) {
+
+    let mut custom_title: Option<String> = None;
+    let mut ai_title: Option<String> = None;
+    let mut first_user_prompt: Option<String> = None;
+
+    for line in reader.lines() {
         let line = line.ok()?;
-        if let Ok(value) = serde_json::from_str::<Value>(&line) {
-            if let Some(name) = value.get("name").and_then(|v| v.as_str()) {
-                return Some(name.to_string());
+        if line.trim().is_empty() { continue; }
+        let value: Value = serde_json::from_str(&line).ok()?;
+
+        let msg_type = value.get("type").and_then(|v| v.as_str()).unwrap_or("");
+
+        // 1. 自定义标题（最高优先级）
+        if custom_title.is_none() {
+            if let Some(title) = value.get("customTitle").and_then(|v| v.as_str()) {
+                custom_title = Some(title.to_string());
+                break; // 找到自定义标题，直接返回
             }
         }
+
+        // 2. AI 生成的标题
+        if ai_title.is_none() && msg_type == "ai-title" {
+            if let Some(title) = value.get("aiTitle").and_then(|v| v.as_str()) {
+                ai_title = Some(title.to_string());
+            }
+        }
+
+        // 3. 第一条真实用户消息（最低优先级）
+        if first_user_prompt.is_none() && msg_type == "user" {
+            if let Some(message) = value.get("message") {
+                if let Some(content) = message.get("content").and_then(|c| c.as_str()) {
+                    if !content.trim_start().starts_with('<') {
+                        // 截断过长的消息作为标题
+                        let preview = if content.chars().count() > 40 {
+                            format!("{}...", &content[..content.char_indices().nth(37).map(|(i,_)| i).unwrap_or(37)])
+                        } else {
+                            content.to_string()
+                        };
+                        first_user_prompt = Some(preview);
+                    }
+                }
+            }
+        }
+
+        // 如果已经找到 ai-title 和 first-user-prompt，可以提前结束
+        if ai_title.is_some() && first_user_prompt.is_some() {
+            break;
+        }
     }
-    None
+
+    custom_title.or(ai_title).or(first_user_prompt)
 }
 
 fn count_user_turns(path: &Path) -> Result<usize, String> {
