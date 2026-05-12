@@ -100,7 +100,6 @@ export function useClaudeHistory() {
     try {
       const preview = await invoke<SessionPreview>("preview_claude_session_cmd", {
         sessionId,
-        limit: 6,
       });
       setPreviewCache((prev) => ({ ...prev, [sessionId]: preview }));
       return preview;

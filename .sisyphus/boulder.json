@@ -19,6 +19,24 @@
       "agent": "Sisyphus-Junior",
       "category": "quick",
       "updated_at": "2026-05-09T08:07:02.880Z"
+    },
+    "todo:3": {
+      "task_key": "todo:3",
+      "task_label": "3",
+      "task_title": "批量测试路径修复",
+      "session_id": "ses_1f432d64bffexZrGavK8DuGdYo",
+      "agent": "Sisyphus-Junior",
+      "category": "quick",
+      "updated_at": "2026-05-09T08:16:47.355Z"
+    },
+    "todo:5": {
+      "task_key": "todo:5",
+      "task_label": "5",
+      "task_title": "NSIS 构建配置",
+      "session_id": "ses_1f4290153ffetNc1IiaIcj1pB7",
+      "agent": "Sisyphus-Junior",
+      "category": "quick",
+      "updated_at": "2026-05-09T08:25:31.275Z"
     }
   }
 }

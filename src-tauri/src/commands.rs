@@ -900,9 +900,6 @@ pub fn export_claude_session_cmd(
 }
 
 #[tauri::command]
-pub fn preview_claude_session_cmd(
-    session_id: String,
-    limit: usize,
-) -> Result<SerSessionPreview, String> {
-    preview_claude_session(&session_id, limit)
+pub fn preview_claude_session_cmd(session_id: String) -> Result<SerSessionPreview, String> {
+    preview_claude_session(&session_id)
 }

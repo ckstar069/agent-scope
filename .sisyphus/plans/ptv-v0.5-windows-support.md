@@ -296,7 +296,7 @@ Wave FINAL（所有任务完成后 — 4 个并行审查，等待用户确认）
   - Files：`src-tauri/src/collectors/template/session_transcript.rs`
 
 ---
-- [ ] 3. 批量测试路径修复
+- [x] 3. 批量测试路径修复
 
   **要做什么**：
   - 扫描以下文件中所有硬编码的 Unix 路径模式（`/tmp/`、`/Users/`、`/home/`），共约 29 处：
@@ -367,7 +367,7 @@ Wave FINAL（所有任务完成后 — 4 个并行审查，等待用户确认）
 
 ---
 
-- [ ] 4. Rust 单元测试（find_python + 跨平台验证）
+- [x] 4. Rust 单元测试（find_python + 跨平台验证）
 
   **要做什么**：
   - 在 `config.rs` 测试模块中新增 `find_python()` 的单元测试：成功探测、失败降级
@@ -409,7 +409,7 @@ Wave FINAL（所有任务完成后 — 4 个并行审查，等待用户确认）
   - Files：`src-tauri/src/collectors/template/config.rs`, `src-tauri/src/collectors/template/session_transcript.rs`
 
 ---
-- [ ] 5. NSIS 构建配置
+- [x] 5. NSIS 构建配置
 
   **要做什么**：
   - 在 `tauri.conf.json` 的 `bundle` 节中新增 `windows` 配置块：
@@ -467,7 +467,7 @@ Wave FINAL（所有任务完成后 — 4 个并行审查，等待用户确认）
 
 ---
 
-- [ ] 6. 跨平台编译验证 + 回归测试
+- [x] 6. 跨平台编译验证 + 回归测试
 
   **要做什么**：
   - 运行 `cargo test -p ptv` 确保全部通过（macOS 回归检查）
@@ -521,7 +521,7 @@ Wave FINAL（所有任务完成后 — 4 个并行审查，等待用户确认）
 
 ---
 
-- [ ] 7. README.md + AGENTS.md 文档更新
+- [x] 7. README.md + AGENTS.md 文档更新
 
   **要做什么**：
   - 更新 `README.md`：
@@ -581,19 +581,19 @@ Wave FINAL（所有任务完成后 — 4 个并行审查，等待用户确认）
 > 4 个审查 agent 并行运行。全部必须 APPROVE。向用户展示合并结果并获取明确"okay"后才能标记完成。
 > **F1-F4 完成前不主动标记。被拒绝或用户反馈 → 修复 → 重新运行 → 再次展示 → 等待确认。**
 
-- [ ] F1. **计划合规审计** — `oracle`
+- [x] F1. **计划合规审计** — `oracle`
   通读计划。对每个"必须包含"：验证实现存在（读文件、运行命令）。对每个"必须不包含"：搜索代码库中的禁止模式 — 发现即拒绝并指明 file:line。检查 `.sisyphus/evidence/` 中的 evidence 文件是否存在。对比交付物与计划。
   输出：`必须包含 [N/N] | 必须不包含 [N/N] | 任务 [N/N] | 判定: APPROVE/REJECT`
 
-- [ ] F2. **代码质量审查** — `unspecified-high`
+- [x] F2. **代码质量审查** — `unspecified-high`
   运行 `cargo test` + `cargo check` + `npm run build`。审查所有变更文件：`as any`/`@ts-ignore`、空 catch、console.log、注释掉的代码、未使用的导入。检查 AI slop：过度注释、过度抽象、通用命名（data/result/item/temp）。
   输出：`构建 [PASS/FAIL] | 测试 [N pass/N fail] | 文件 [N clean/N issues] | 判定`
 
-- [ ] F3. **手动 QA** — `unspecified-high`（+ `playwright` skill）
+- [x] F3. **手动 QA** — `unspecified-high`（+ `playwright` skill）
   从干净状态开始。执行每个任务的每个 QA 场景 — 严格按步骤执行，捕获 evidence。测试跨任务集成（各功能协同工作，而非孤立）。测试边缘情况：空状态、无效输入、跨平台路径。
   输出：`场景 [N/N pass] | 集成 [N/N] | 边缘情况 [N tested] | 判定`
 
-- [ ] F4. **范围保真度检查** — `deep`
+- [x] F4. **范围保真度检查** — `deep`
   对每个任务：阅读"要做什么"，阅读实际 diff（git log/diff）。验证 1:1 — 规范中的所有内容都已实现（无缺失），没有超出规范的内容（无蔓延）。检查"必须不包含"合规性。检测跨任务污染：任务 N 触及任务 M 的文件。标记未计入的变更。
   输出：`任务 [N/N compliant] | 污染 [CLEAN/N issues] | 未计入 [CLEAN/N files] | 判定`
 

@@ -79,9 +79,9 @@ function PreviewPanel({ preview }: { preview: SessionPreview }) {
       <p className="mb-2 text-xs text-muted-foreground">
         预览（共 {preview.total_turns} 轮对话）
       </p>
-      <div className="flex flex-col gap-2">
+      <div className="flex max-h-[400px] flex-col gap-4 overflow-y-auto pr-1">
         {preview.messages.map((msg, idx) => (
-          <div key={idx} className="text-sm">
+          <div key={idx} className="rounded-sm p-2 text-sm hover:bg-muted/50">
             <span
               className={cn(
                 "font-medium",

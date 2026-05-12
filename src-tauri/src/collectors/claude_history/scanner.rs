@@ -181,7 +181,7 @@ pub fn export_claude_session(session_id: &str, format: ExportFormat) -> Result<S
 }
 
 /// 预览会话内容（提取前 N 条消息）
-pub fn preview_claude_session(session_id: &str, limit: usize) -> Result<SerSessionPreview, String> {
+pub fn preview_claude_session(session_id: &str) -> Result<SerSessionPreview, String> {
     let config_dir = claude_config_dir().ok_or("无法获取用户主目录")?;
 
     // 1. 查找 .jsonl 文件
@@ -227,13 +227,11 @@ pub fn preview_claude_session(session_id: &str, limit: usize) -> Result<SerSessi
             "last-prompt" => {
                 if let Some(prompt) = value.get("lastPrompt").and_then(|v| v.as_str()) {
                     total_turns += 1;
-                    if messages.len() < limit {
-                        messages.push(SerPreviewMessage {
-                            role: "user".to_string(),
-                            content: prompt.to_string(),
-                            timestamp: None,
-                        });
-                    }
+                    messages.push(SerPreviewMessage {
+                        role: "user".to_string(),
+                        content: prompt.to_string(),
+                        timestamp: None,
+                    });
                 }
             }
             "text" => {
@@ -242,23 +240,17 @@ pub fn preview_claude_session(session_id: &str, limit: usize) -> Result<SerSessi
                     if let Some(content) = message.get("content").and_then(|c| c.as_array()) {
                         for item in content {
                             if let Some(text) = item.get("text").and_then(|v| v.as_str()) {
-                                if messages.len() < limit {
-                                    messages.push(SerPreviewMessage {
-                                        role: role.to_string(),
-                                        content: text.to_string(),
-                                        timestamp: None,
-                                    });
-                                }
+                                messages.push(SerPreviewMessage {
+                                    role: role.to_string(),
+                                    content: text.to_string(),
+                                    timestamp: None,
+                                });
                             }
                         }
                     }
                 }
             }
             _ => {}
-        }
-
-        if messages.len() >= limit {
-            break;
         }
     }
 
