@@ -226,6 +226,77 @@ pub fn preview_claude_session(session_id: &str) -> Result<SerSessionPreview, Str
         let msg_type = value.get("type").and_then(|v| v.as_str()).unwrap_or("");
 
         match msg_type {
+            "user" => {
+                if let Some(message) = value.get("message") {
+                    let role = message.get("role").and_then(|v| v.as_str()).unwrap_or("user");
+                    if let Some(content) = message.get("content") {
+                        // content 可能是字符串或数组
+                        if let Some(text) = content.as_str() {
+                            messages.push(SerPreviewMessage {
+                                role: role.to_string(),
+                                content: text.to_string(),
+                                timestamp: None,
+                            });
+                        } else if let Some(arr) = content.as_array() {
+                            for item in arr {
+                                if let Some(text) = item.get("text").and_then(|v| v.as_str()) {
+                                    messages.push(SerPreviewMessage {
+                                        role: role.to_string(),
+                                        content: text.to_string(),
+                                        timestamp: None,
+                                    });
+                                } else if let Some(content_str) = item.get("content").and_then(|v| v.as_str()) {
+                                    messages.push(SerPreviewMessage {
+                                        role: role.to_string(),
+                                        content: content_str.to_string(),
+                                        timestamp: None,
+                                    });
+                                }
+                            }
+                        }
+                    }
+                }
+            }
+            "assistant" => {
+                if let Some(message) = value.get("message") {
+                    let role = message.get("role").and_then(|v| v.as_str()).unwrap_or("assistant");
+                    if let Some(content) = message.get("content").and_then(|c| c.as_array()) {
+                        for item in content {
+                            let item_type = item.get("type").and_then(|v| v.as_str()).unwrap_or("");
+                            match item_type {
+                                "text" => {
+                                    if let Some(text) = item.get("text").and_then(|v| v.as_str()) {
+                                        messages.push(SerPreviewMessage {
+                                            role: role.to_string(),
+                                            content: text.to_string(),
+                                            timestamp: None,
+                                        });
+                                    }
+                                }
+                                "tool_use" => {
+                                    if let Some(name) = item.get("name").and_then(|v| v.as_str()) {
+                                        messages.push(SerPreviewMessage {
+                                            role: "tool".to_string(),
+                                            content: format!("调用工具: {}", name),
+                                            timestamp: None,
+                                        });
+                                    }
+                                }
+                                "thinking" => {
+                                    if let Some(thinking) = item.get("thinking").and_then(|v| v.as_str()) {
+                                        messages.push(SerPreviewMessage {
+                                            role: "thinking".to_string(),
+                                            content: thinking.to_string(),
+                                            timestamp: None,
+                                        });
+                                    }
+                                }
+                                _ => {}
+                            }
+                        }
+                    }
+                }
+            }
             "last-prompt" => {
                 if let Some(prompt) = value.get("lastPrompt").and_then(|v| v.as_str()) {
                     messages.push(SerPreviewMessage {
@@ -233,55 +304,6 @@ pub fn preview_claude_session(session_id: &str) -> Result<SerSessionPreview, Str
                         content: prompt.to_string(),
                         timestamp: None,
                     });
-                }
-            }
-            "text" => {
-                if let Some(message) = value.get("message") {
-                    let role = message.get("role").and_then(|v| v.as_str()).unwrap_or("assistant");
-                    if let Some(content) = message.get("content").and_then(|c| c.as_array()) {
-                        for item in content {
-                            if let Some(text) = item.get("text").and_then(|v| v.as_str()) {
-                                messages.push(SerPreviewMessage {
-                                    role: role.to_string(),
-                                    content: text.to_string(),
-                                    timestamp: None,
-                                });
-                            }
-                        }
-                    }
-                }
-            }
-            "tool_use" => {
-                if let Some(message) = value.get("message") {
-                    if let Some(content) = message.get("content").and_then(|c| c.as_array()) {
-                        for item in content {
-                            let name = item.get("name").and_then(|v| v.as_str()).unwrap_or("");
-                            if !name.is_empty() {
-                                messages.push(SerPreviewMessage {
-                                    role: "tool".to_string(),
-                                    content: format!("调用工具: {}", name),
-                                    timestamp: None,
-                                });
-                            }
-                        }
-                    }
-                }
-            }
-            "tool_result" => {
-                if let Some(message) = value.get("message") {
-                    if let Some(content) = message.get("content").and_then(|c| c.as_array()) {
-                        for item in content {
-                            let is_error = item.get("is_error").and_then(|v| v.as_bool()).unwrap_or(false);
-                            if let Some(text) = item.get("content").and_then(|v| v.as_str()) {
-                                let status = if is_error { "错误" } else { "成功" };
-                                messages.push(SerPreviewMessage {
-                                    role: "tool".to_string(),
-                                    content: format!("工具结果 ({}): {}", status, text),
-                                    timestamp: None,
-                                });
-                            }
-                        }
-                    }
                 }
             }
             _ => {}

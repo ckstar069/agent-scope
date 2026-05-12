@@ -78,12 +78,14 @@ function PreviewPanel({ preview }: { preview: SessionPreview }) {
     user: "用户",
     assistant: "助手",
     tool: "工具",
+    thinking: "思考",
   };
 
   const roleClass: Record<string, string> = {
     user: "text-blue-600",
     assistant: "text-green-600",
     tool: "text-amber-600",
+    thinking: "text-purple-600",
   };
 
   return (
