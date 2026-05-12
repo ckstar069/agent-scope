@@ -239,11 +239,14 @@ pub fn preview_claude_session(session_id: &str) -> Result<SerSessionPreview, Str
                     if let Some(content) = message.get("content") {
                         // content 可能是字符串或数组
                         if let Some(text) = content.as_str() {
-                            messages.push(SerPreviewMessage {
-                                role: role.to_string(),
-                                content: text.to_string(),
-                                timestamp: None,
-                            });
+                            // 过滤系统标记（以 < 开头的伪消息）
+                            if !text.trim_start().starts_with('<') {
+                                messages.push(SerPreviewMessage {
+                                    role: role.to_string(),
+                                    content: text.to_string(),
+                                    timestamp: None,
+                                });
+                            }
                         } else if let Some(arr) = content.as_array() {
                             for item in arr {
                                 // 只提取 text 类型的内容，跳过 tool_result 等
@@ -263,11 +266,13 @@ pub fn preview_claude_session(session_id: &str) -> Result<SerSessionPreview, Str
                 if let Some(message) = value.get("message") {
                     let role = message.get("role").and_then(|v| v.as_str()).unwrap_or("assistant");
                     if let Some(content) = message.get("content").and_then(|c| c.as_array()) {
+                        let mut has_text = false;
                         for item in content {
                             let item_type = item.get("type").and_then(|v| v.as_str()).unwrap_or("");
                             match item_type {
                                 "text" => {
                                     if let Some(text) = item.get("text").and_then(|v| v.as_str()) {
+                                        has_text = true;
                                         messages.push(SerPreviewMessage {
                                             role: role.to_string(),
                                             content: text.to_string(),
@@ -276,6 +281,30 @@ pub fn preview_claude_session(session_id: &str) -> Result<SerSessionPreview, Str
                                     }
                                 }
                                 _ => {}
+                            }
+                        }
+                        // 如果没有 text 但有 tool_use，生成简化描述
+                        if !has_text {
+                            for item in content {
+                                let item_type = item.get("type").and_then(|v| v.as_str()).unwrap_or("");
+                                if item_type == "tool_use" {
+                                    if let Some(name) = item.get("name").and_then(|v| v.as_str()) {
+                                        let detail = item.get("input")
+                                            .and_then(|i| i.get("command").or_else(|| i.get("query")))
+                                            .and_then(|v| v.as_str())
+                                            .unwrap_or("");
+                                        let desc = if detail.is_empty() {
+                                            format!("调用工具: {}", name)
+                                        } else {
+                                            format!("调用工具: {} ({})", name, detail)
+                                        };
+                                        messages.push(SerPreviewMessage {
+                                            role: "tool".to_string(),
+                                            content: desc,
+                                            timestamp: None,
+                                        });
+                                    }
+                                }
                             }
                         }
                     }
@@ -330,9 +359,12 @@ fn jsonl_to_markdown(path: &std::path::Path, session_id: &str) -> Result<String,
                     let _role = message.get("role").and_then(|v| v.as_str()).unwrap_or("user");
                     if let Some(content) = message.get("content") {
                         if let Some(text) = content.as_str() {
-                            turn_number += 1;
-                            md.push_str(&format!("### Turn {}\n\n", turn_number));
-                            md.push_str(&format!("**User**: {}\n\n", text));
+                            // 过滤系统标记
+                            if !text.trim_start().starts_with('<') {
+                                turn_number += 1;
+                                md.push_str(&format!("### Turn {}\n\n", turn_number));
+                                md.push_str(&format!("**User**: {}\n\n", text));
+                            }
                         } else if let Some(arr) = content.as_array() {
                             for item in arr {
                                 if let Some(text) = item.get("text").and_then(|v| v.as_str()) {
@@ -349,16 +381,38 @@ fn jsonl_to_markdown(path: &std::path::Path, session_id: &str) -> Result<String,
                 if let Some(message) = value.get("message") {
                     let role = message.get("role").and_then(|v| v.as_str()).unwrap_or("assistant");
                     if let Some(content) = message.get("content").and_then(|c| c.as_array()) {
+                        let mut has_text = false;
                         for item in content {
                             let item_type = item.get("type").and_then(|v| v.as_str()).unwrap_or("");
                             match item_type {
                                 "text" => {
                                     if let Some(text) = item.get("text").and_then(|v| v.as_str()) {
+                                        has_text = true;
                                         let label = if role == "user" { "**User**" } else { "**Assistant**" };
                                         md.push_str(&format!("{}: {}\n\n", label, text));
                                     }
                                 }
                                 _ => {}
+                            }
+                        }
+                        // 无 text 但有 tool_use 时生成简化描述
+                        if !has_text {
+                            for item in content {
+                                let item_type = item.get("type").and_then(|v| v.as_str()).unwrap_or("");
+                                if item_type == "tool_use" {
+                                    if let Some(name) = item.get("name").and_then(|v| v.as_str()) {
+                                        let detail = item.get("input")
+                                            .and_then(|i| i.get("command").or_else(|| i.get("query")))
+                                            .and_then(|v| v.as_str())
+                                            .unwrap_or("");
+                                        let desc = if detail.is_empty() {
+                                            format!("调用工具: {}", name)
+                                        } else {
+                                            format!("调用工具: {} ({})", name, detail)
+                                        };
+                                        md.push_str(&format!("> {}\n\n", desc));
+                                    }
+                                }
                             }
                         }
                     }
