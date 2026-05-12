@@ -348,57 +348,76 @@ fn jsonl_to_markdown(path: &std::path::Path, session_id: &str) -> Result<String,
                     md.push_str(&format!("\n## {}\n\n", title));
                 }
             }
+            "user" => {
+                if let Some(message) = value.get("message") {
+                    let _role = message.get("role").and_then(|v| v.as_str()).unwrap_or("user");
+                    if let Some(content) = message.get("content") {
+                        if let Some(text) = content.as_str() {
+                            turn_number += 1;
+                            md.push_str(&format!("### Turn {}\n\n", turn_number));
+                            md.push_str(&format!("**User**: {}\n\n", text));
+                        } else if let Some(arr) = content.as_array() {
+                            for item in arr {
+                                if let Some(text) = item.get("text").and_then(|v| v.as_str()) {
+                                    turn_number += 1;
+                                    md.push_str(&format!("### Turn {}\n\n", turn_number));
+                                    md.push_str(&format!("**User**: {}\n\n", text));
+                                } else if let Some(content_str) = item.get("content").and_then(|v| v.as_str()) {
+                                    turn_number += 1;
+                                    md.push_str(&format!("### Turn {}\n\n", turn_number));
+                                    md.push_str(&format!("**User**: {}\n\n", content_str));
+                                }
+                            }
+                        }
+                    }
+                }
+            }
+            "assistant" => {
+                if let Some(message) = value.get("message") {
+                    let role = message.get("role").and_then(|v| v.as_str()).unwrap_or("assistant");
+                    if let Some(content) = message.get("content").and_then(|c| c.as_array()) {
+                        for item in content {
+                            let item_type = item.get("type").and_then(|v| v.as_str()).unwrap_or("");
+                            match item_type {
+                                "text" => {
+                                    if let Some(text) = item.get("text").and_then(|v| v.as_str()) {
+                                        let label = if role == "user" { "**User**" } else { "**Assistant**" };
+                                        md.push_str(&format!("{}: {}\n\n", label, text));
+                                    }
+                                }
+                                "thinking" => {
+                                    if let Some(thinking) = item.get("thinking").and_then(|v| v.as_str()) {
+                                        md.push_str(&format!("> \u{1f4ad} Thinking: *{}*\n\n", thinking.replace('\n', " ")));
+                                    }
+                                }
+                                "tool_use" => {
+                                    if let Some(name) = item.get("name").and_then(|v| v.as_str()) {
+                                        md.push_str(&format!("> \u{1f527} Tool: `{}`\n\n", name));
+                                    }
+                                }
+                                "tool_result" => {
+                                    let is_error = item.get("is_error").and_then(|v| v.as_bool()).unwrap_or(false);
+                                    if let Some(text) = item.get("content").and_then(|v| v.as_str()) {
+                                        let status = if is_error { "error" } else { "ok" };
+                                        let preview = if text.len() > 200 {
+                                            format!("{}... (truncated)", &text[..200])
+                                        } else {
+                                            text.to_string()
+                                        };
+                                        md.push_str(&format!("> Tool result ({}): `{}`\n\n", status, preview.replace('\n', " ")));
+                                    }
+                                }
+                                _ => {}
+                            }
+                        }
+                    }
+                }
+            }
             "last-prompt" => {
                 if let Some(prompt) = value.get("lastPrompt").and_then(|v| v.as_str()) {
                     turn_number += 1;
                     md.push_str(&format!("### Turn {}\n\n", turn_number));
                     md.push_str(&format!("**User**: {}\n\n", prompt));
-                }
-            }
-            "text" => {
-                if let Some(message) = value.get("message") {
-                    let role = message.get("role").and_then(|v| v.as_str()).unwrap_or("assistant");
-                    if let Some(content) = message.get("content").and_then(|c| c.as_array()) {
-                        for item in content {
-                            if let Some(text) = item.get("text").and_then(|v| v.as_str()) {
-                                let label = match role {
-                                    "user" => "**User**",
-                                    _ => "**Assistant**",
-                                };
-                                md.push_str(&format!("{}: {}\n\n", label, text));
-                            }
-                        }
-                    }
-                }
-            }
-            "tool_use" => {
-                if let Some(message) = value.get("message") {
-                    if let Some(content) = message.get("content").and_then(|c| c.as_array()) {
-                        for item in content {
-                            let name = item.get("name").and_then(|v| v.as_str()).unwrap_or("");
-                            if !name.is_empty() {
-                                md.push_str(&format!("> \u{1f527} Tool: `{}`\n\n", name));
-                            }
-                        }
-                    }
-                }
-            }
-            "tool_result" => {
-                if let Some(message) = value.get("message") {
-                    if let Some(content) = message.get("content").and_then(|c| c.as_array()) {
-                        for item in content {
-                            let is_error = item.get("is_error").and_then(|v| v.as_bool()).unwrap_or(false);
-                            if let Some(text) = item.get("content").and_then(|v| v.as_str()) {
-                                let status = if is_error { "error" } else { "ok" };
-                                let preview = if text.len() > 200 {
-                                    format!("{}... (truncated)", &text[..200])
-                                } else {
-                                    text.to_string()
-                                };
-                                md.push_str(&format!("> Tool result ({}): `{}`\n\n", status, preview.replace('\n', " ")));
-                            }
-                        }
-                    }
                 }
             }
             _ => {}
