@@ -7,32 +7,7 @@ use std::time::SystemTime;
 
 use serde_json::Value;
 
-// ============================================================================
-// encode_cwd_path — 路径编码
-// ============================================================================
-
-/// 将项目路径编码为 Claude Code 项目目录名格式
-///
-/// 规则：去除首 `/`，将剩余 `/` 替换为 `-`
-///
-/// # 示例
-///
-/// ```
-/// use ptv_lib::collectors::template::session_transcript::encode_cwd_path;
-/// assert_eq!(encode_cwd_path("/Users/ckstar/Repo/my_project"), "-Users-ckstar-Repo-my-project");
-/// assert_eq!(encode_cwd_path("/home/user/project"), "-home-user-project");
-/// assert_eq!(encode_cwd_path("relative/path"), "relative-path");
-/// ```
-#[cfg(not(windows))]
-pub fn encode_cwd_path(cwd: &str) -> String {
-    let without_leading = cwd.strip_prefix('/').unwrap_or(cwd);
-    let encoded = without_leading.replace("/", "-").replace("_", "-");
-    if cwd.starts_with('/') {
-        format!("-{}", encoded)
-    } else {
-        encoded
-    }
-}
+use crate::collectors::claude_history::path_codec::{claude_config_dir, encode_cwd_path};
 
 // ============================================================================
 // TranscriptError — 错误类型
@@ -681,18 +656,11 @@ fn list_jsonl_files(dir: &Path) -> Result<Vec<(PathBuf, u64)>, TranscriptError> 
 
 /// 获取项目的会话目录路径
 fn sessions_dir(project_path: &Path) -> PathBuf {
-    #[cfg(not(windows))]
-    {
-        let encoded = encode_cwd_path(&project_path.to_string_lossy());
-        let home = dirs::home_dir().unwrap_or_default();
-        home.join(".claude").join("projects").join(encoded)
-    }
-    #[cfg(windows)]
-    {
-        // Claude Code 不在 Windows 上运行，返回默认路径
-        let home = dirs::home_dir().unwrap_or_default();
-        home.join(".claude").join("projects")
-    }
+    let encoded = encode_cwd_path(&project_path.to_string_lossy());
+    claude_config_dir()
+        .unwrap_or_default()
+        .join("projects")
+        .join(encoded)
 }
 
 /// 从文件路径提取 session_id（文件名去 .jsonl 扩展名）
@@ -890,33 +858,6 @@ mod tests {
     // -----------------------------------------------------------------------
     // encode_cwd_path 测试
     // -----------------------------------------------------------------------
-
-    #[cfg(not(windows))]
-    #[test]
-    fn test_encode_cwd_path_absolute() {
-        assert_eq!(
-            encode_cwd_path("/Users/ckstar/Repo/my_project"),
-            "-Users-ckstar-Repo-my-project"
-        );
-    }
-
-    #[cfg(not(windows))]
-    #[test]
-    fn test_encode_cwd_path_without_leading_slash() {
-        assert_eq!(encode_cwd_path("home/user/project"), "home-user-project");
-    }
-
-    #[cfg(not(windows))]
-    #[test]
-    fn test_encode_cwd_path_single_dir() {
-        assert_eq!(encode_cwd_path("/root"), "-root");
-    }
-
-    #[cfg(not(windows))]
-    #[test]
-    fn test_encode_cwd_path_empty() {
-        assert_eq!(encode_cwd_path(""), "");
-    }
 
     // -----------------------------------------------------------------------
     // 两种 content 格式解析测试（string + blocks）
@@ -1342,8 +1283,9 @@ mod tests {
     fn test_sessions_dir_windows() {
         let project_path = Path::new("C:\\Users\\test\\project");
         let result = sessions_dir(project_path);
+        let encoded = encode_cwd_path("C:\\Users\\test\\project");
         let home = dirs::home_dir().unwrap_or_default();
-        let expected = home.join(".claude").join("projects");
+        let expected = home.join(".claude").join("projects").join(encoded);
         assert_eq!(result, expected);
     }
 }
