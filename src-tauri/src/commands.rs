@@ -8,8 +8,8 @@ use tauri::{AppHandle, Emitter, Manager, State};
 
 use crate::collectors::agent::AgentCollector;
 use crate::collectors::claude_history::{
-    models::{SerClaudeSession, SerHistoryEntry, SerProjectSessionGroup},
-    scanner::{delete_claude_session, get_session_detail, list_claude_sessions, search_claude_history},
+    models::{ExportFormat, SerClaudeSession, SerHistoryEntry, SerProjectSessionGroup},
+    scanner::{delete_claude_session, export_claude_session, get_session_detail, list_claude_sessions, search_claude_history},
 };
 use crate::collectors::template::{
     load_template_path, save_template_path, ProjectFile, ProjectFilesCollector, SessionSummary,
@@ -889,4 +889,12 @@ pub fn search_claude_history_cmd(query: String) -> Result<Vec<SerHistoryEntry>, 
 #[tauri::command]
 pub fn delete_claude_session_cmd(session_id: String) -> Result<(), String> {
     delete_claude_session(&session_id)
+}
+
+#[tauri::command]
+pub fn export_claude_session_cmd(
+    session_id: String,
+    format: ExportFormat,
+) -> Result<String, String> {
+    export_claude_session(&session_id, format)
 }

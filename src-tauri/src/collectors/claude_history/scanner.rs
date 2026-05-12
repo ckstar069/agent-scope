@@ -5,7 +5,7 @@ use std::path::Path;
 
 use serde_json::Value;
 
-use super::models::{SerClaudeSession, SerHistoryEntry, SerProjectSessionGroup, SerSessionStatus};
+use super::models::{ExportFormat, SerClaudeSession, SerHistoryEntry, SerProjectSessionGroup, SerSessionStatus};
 use super::path_codec::{claude_config_dir, decode_project_dir, encode_cwd_path};
 
 /// 扫描所有 Claude Code 会话并按项目分组
@@ -141,6 +141,127 @@ pub fn delete_claude_session(session_id: &str) -> Result<(), String> {
     }
 
     Err("会话文件不存在或已被删除".to_string())
+}
+
+/// 导出会话内容
+pub fn export_claude_session(session_id: &str, format: ExportFormat) -> Result<String, String> {
+    let config_dir = claude_config_dir().ok_or("无法获取用户主目录")?;
+
+    // 1. 查找 .jsonl 文件
+    let projects_dir = config_dir.join("projects");
+    if !projects_dir.is_dir() {
+        return Err("会话文件不存在或已被删除".to_string());
+    }
+
+    let mut jsonl_path: Option<std::path::PathBuf> = None;
+
+    for entry in fs::read_dir(&projects_dir).map_err(|e| e.to_string())? {
+        let entry = entry.map_err(|e| e.to_string())?;
+        let path = entry.path();
+        if !path.is_dir() { continue; }
+
+        let candidate = path.join(format!("{}.jsonl", session_id));
+        if candidate.exists() {
+            jsonl_path = Some(candidate);
+            break;
+        }
+    }
+
+    let jsonl_path = jsonl_path.ok_or("会话文件不存在或已被删除")?;
+
+    // 2. 根据格式处理
+    match format {
+        ExportFormat::Jsonl => {
+            fs::read_to_string(&jsonl_path).map_err(|e| e.to_string())
+        }
+        ExportFormat::Markdown => {
+            jsonl_to_markdown(&jsonl_path, session_id)
+        }
+    }
+}
+
+fn jsonl_to_markdown(path: &std::path::Path, session_id: &str) -> Result<String, String> {
+    let file = fs::File::open(path).map_err(|e| e.to_string())?;
+    let reader = BufReader::new(file);
+
+    let mut md = format!("# Claude Code Session: `{}`\n\n", session_id);
+    let mut turn_number = 0;
+
+    for line in reader.lines() {
+        let line = match line { Ok(l) => l, Err(_) => continue };
+        if line.trim().is_empty() { continue; }
+
+        let value: Value = match serde_json::from_str(&line) {
+            Ok(v) => v,
+            Err(_) => continue,
+        };
+
+        let msg_type = value.get("type").and_then(|v| v.as_str()).unwrap_or("");
+
+        match msg_type {
+            "custom-title" => {
+                if let Some(title) = value.get("customTitle").and_then(|v| v.as_str()) {
+                    md.push_str(&format!("\n## {}\n\n", title));
+                }
+            }
+            "last-prompt" => {
+                if let Some(prompt) = value.get("lastPrompt").and_then(|v| v.as_str()) {
+                    turn_number += 1;
+                    md.push_str(&format!("### Turn {}\n\n", turn_number));
+                    md.push_str(&format!("**User**: {}\n\n", prompt));
+                }
+            }
+            "text" => {
+                if let Some(message) = value.get("message") {
+                    let role = message.get("role").and_then(|v| v.as_str()).unwrap_or("assistant");
+                    if let Some(content) = message.get("content").and_then(|c| c.as_array()) {
+                        for item in content {
+                            if let Some(text) = item.get("text").and_then(|v| v.as_str()) {
+                                let label = match role {
+                                    "user" => "**User**",
+                                    _ => "**Assistant**",
+                                };
+                                md.push_str(&format!("{}: {}\n\n", label, text));
+                            }
+                        }
+                    }
+                }
+            }
+            "tool_use" => {
+                if let Some(message) = value.get("message") {
+                    if let Some(content) = message.get("content").and_then(|c| c.as_array()) {
+                        for item in content {
+                            let name = item.get("name").and_then(|v| v.as_str()).unwrap_or("");
+                            if !name.is_empty() {
+                                md.push_str(&format!("> \u{1f527} Tool: `{}`\n\n", name));
+                            }
+                        }
+                    }
+                }
+            }
+            "tool_result" => {
+                if let Some(message) = value.get("message") {
+                    if let Some(content) = message.get("content").and_then(|c| c.as_array()) {
+                        for item in content {
+                            let is_error = item.get("is_error").and_then(|v| v.as_bool()).unwrap_or(false);
+                            if let Some(text) = item.get("content").and_then(|v| v.as_str()) {
+                                let status = if is_error { "error" } else { "ok" };
+                                let preview = if text.len() > 200 {
+                                    format!("{}... (truncated)", &text[..200])
+                                } else {
+                                    text.to_string()
+                                };
+                                md.push_str(&format!("> Tool result ({}): `{}`\n\n", status, preview.replace('\n', " ")));
+                            }
+                        }
+                    }
+                }
+            }
+            _ => {}
+        }
+    }
+
+    Ok(md)
 }
 
 // ============================================================================

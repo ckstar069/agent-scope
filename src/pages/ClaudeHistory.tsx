@@ -19,6 +19,7 @@ export function ClaudeHistory() {
     error,
     fetchSessions,
     deleteSession,
+    exportSession,
   } = useClaudeHistory();
 
   return (
@@ -79,6 +80,7 @@ export function ClaudeHistory() {
                 <SessionTimeline
                   sessions={selectedGroup.sessions}
                   onDelete={deleteSession}
+                  onExport={exportSession}
                 />
               ) : (
                 <p className="text-sm text-muted-foreground">请从左侧选择一个项目</p>

@@ -1,4 +1,4 @@
-use serde::Serialize;
+use serde::{Deserialize, Serialize};
 
 #[derive(Debug, Clone, Serialize)]
 pub struct SerClaudeSession {
@@ -35,4 +35,10 @@ pub struct SerHistoryEntry {
     pub timestamp: u64,
     pub session_id: String,
     pub project_path: String,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub enum ExportFormat {
+    Jsonl,
+    Markdown,
 }

@@ -55,6 +55,30 @@ export function useClaudeHistory() {
     }
   }, [fetchSessions]);
 
+  const exportSession = useCallback(async (sessionId: string, format: "Jsonl" | "Markdown") => {
+    try {
+      const content = await invoke<string>("export_claude_session_cmd", {
+        sessionId,
+        format,
+      });
+
+      // 触发浏览器下载
+      const blob = new Blob([content], {
+        type: format === "Jsonl" ? "application/jsonl" : "text/markdown",
+      });
+      const url = URL.createObjectURL(blob);
+      const a = document.createElement("a");
+      a.href = url;
+      a.download = `${sessionId}.${format === "Jsonl" ? "jsonl" : "md"}`;
+      document.body.appendChild(a);
+      a.click();
+      document.body.removeChild(a);
+      URL.revokeObjectURL(url);
+    } catch (e) {
+      alert(`导出失败: ${e}`);
+    }
+  }, []);
+
   useEffect(() => {
     fetchSessions();
   }, [fetchSessions]);
@@ -86,5 +110,6 @@ export function useClaudeHistory() {
     error,
     fetchSessions,
     deleteSession,
+    exportSession,
   };
 }
