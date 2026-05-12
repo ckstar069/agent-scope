@@ -246,16 +246,11 @@ pub fn preview_claude_session(session_id: &str) -> Result<SerSessionPreview, Str
                             });
                         } else if let Some(arr) = content.as_array() {
                             for item in arr {
+                                // 只提取 text 类型的内容，跳过 tool_result 等
                                 if let Some(text) = item.get("text").and_then(|v| v.as_str()) {
                                     messages.push(SerPreviewMessage {
                                         role: role.to_string(),
                                         content: text.to_string(),
-                                        timestamp: None,
-                                    });
-                                } else if let Some(content_str) = item.get("content").and_then(|v| v.as_str()) {
-                                    messages.push(SerPreviewMessage {
-                                        role: role.to_string(),
-                                        content: content_str.to_string(),
                                         timestamp: None,
                                     });
                                 }
@@ -276,24 +271,6 @@ pub fn preview_claude_session(session_id: &str) -> Result<SerSessionPreview, Str
                                         messages.push(SerPreviewMessage {
                                             role: role.to_string(),
                                             content: text.to_string(),
-                                            timestamp: None,
-                                        });
-                                    }
-                                }
-                                "tool_use" => {
-                                    if let Some(name) = item.get("name").and_then(|v| v.as_str()) {
-                                        messages.push(SerPreviewMessage {
-                                            role: "tool".to_string(),
-                                            content: format!("调用工具: {}", name),
-                                            timestamp: None,
-                                        });
-                                    }
-                                }
-                                "thinking" => {
-                                    if let Some(thinking) = item.get("thinking").and_then(|v| v.as_str()) {
-                                        messages.push(SerPreviewMessage {
-                                            role: "thinking".to_string(),
-                                            content: thinking.to_string(),
                                             timestamp: None,
                                         });
                                     }
@@ -362,10 +339,6 @@ fn jsonl_to_markdown(path: &std::path::Path, session_id: &str) -> Result<String,
                                     turn_number += 1;
                                     md.push_str(&format!("### Turn {}\n\n", turn_number));
                                     md.push_str(&format!("**User**: {}\n\n", text));
-                                } else if let Some(content_str) = item.get("content").and_then(|v| v.as_str()) {
-                                    turn_number += 1;
-                                    md.push_str(&format!("### Turn {}\n\n", turn_number));
-                                    md.push_str(&format!("**User**: {}\n\n", content_str));
                                 }
                             }
                         }
@@ -383,28 +356,6 @@ fn jsonl_to_markdown(path: &std::path::Path, session_id: &str) -> Result<String,
                                     if let Some(text) = item.get("text").and_then(|v| v.as_str()) {
                                         let label = if role == "user" { "**User**" } else { "**Assistant**" };
                                         md.push_str(&format!("{}: {}\n\n", label, text));
-                                    }
-                                }
-                                "thinking" => {
-                                    if let Some(thinking) = item.get("thinking").and_then(|v| v.as_str()) {
-                                        md.push_str(&format!("> \u{1f4ad} Thinking: *{}*\n\n", thinking.replace('\n', " ")));
-                                    }
-                                }
-                                "tool_use" => {
-                                    if let Some(name) = item.get("name").and_then(|v| v.as_str()) {
-                                        md.push_str(&format!("> \u{1f527} Tool: `{}`\n\n", name));
-                                    }
-                                }
-                                "tool_result" => {
-                                    let is_error = item.get("is_error").and_then(|v| v.as_bool()).unwrap_or(false);
-                                    if let Some(text) = item.get("content").and_then(|v| v.as_str()) {
-                                        let status = if is_error { "error" } else { "ok" };
-                                        let preview = if text.len() > 200 {
-                                            format!("{}... (truncated)", &text[..200])
-                                        } else {
-                                            text.to_string()
-                                        };
-                                        md.push_str(&format!("> Tool result ({}): `{}`\n\n", status, preview.replace('\n', " ")));
                                     }
                                 }
                                 _ => {}
