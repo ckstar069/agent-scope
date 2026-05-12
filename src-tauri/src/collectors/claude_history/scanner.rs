@@ -206,11 +206,13 @@ pub fn preview_claude_session(session_id: &str) -> Result<SerSessionPreview, Str
 
     let jsonl_path = jsonl_path.ok_or("会话文件不存在或已被删除")?;
 
-    // 2. 解析 JSONL 提取消息
+    // total_turns 使用文件总行数（和 turn_count 保持一致）
+    let total_turns = count_jsonl_lines(&jsonl_path)?.unwrap_or(0);
+
+    // 2. 解析 JSONL 提取所有消息类型
     let file = fs::File::open(&jsonl_path).map_err(|e| e.to_string())?;
     let reader = BufReader::new(file);
     let mut messages: Vec<SerPreviewMessage> = Vec::new();
-    let mut total_turns = 0;
 
     for line in reader.lines() {
         let line = match line { Ok(l) => l, Err(_) => continue };
@@ -226,7 +228,6 @@ pub fn preview_claude_session(session_id: &str) -> Result<SerSessionPreview, Str
         match msg_type {
             "last-prompt" => {
                 if let Some(prompt) = value.get("lastPrompt").and_then(|v| v.as_str()) {
-                    total_turns += 1;
                     messages.push(SerPreviewMessage {
                         role: "user".to_string(),
                         content: prompt.to_string(),
@@ -243,6 +244,39 @@ pub fn preview_claude_session(session_id: &str) -> Result<SerSessionPreview, Str
                                 messages.push(SerPreviewMessage {
                                     role: role.to_string(),
                                     content: text.to_string(),
+                                    timestamp: None,
+                                });
+                            }
+                        }
+                    }
+                }
+            }
+            "tool_use" => {
+                if let Some(message) = value.get("message") {
+                    if let Some(content) = message.get("content").and_then(|c| c.as_array()) {
+                        for item in content {
+                            let name = item.get("name").and_then(|v| v.as_str()).unwrap_or("");
+                            if !name.is_empty() {
+                                messages.push(SerPreviewMessage {
+                                    role: "tool".to_string(),
+                                    content: format!("调用工具: {}", name),
+                                    timestamp: None,
+                                });
+                            }
+                        }
+                    }
+                }
+            }
+            "tool_result" => {
+                if let Some(message) = value.get("message") {
+                    if let Some(content) = message.get("content").and_then(|c| c.as_array()) {
+                        for item in content {
+                            let is_error = item.get("is_error").and_then(|v| v.as_bool()).unwrap_or(false);
+                            if let Some(text) = item.get("content").and_then(|v| v.as_str()) {
+                                let status = if is_error { "错误" } else { "成功" };
+                                messages.push(SerPreviewMessage {
+                                    role: "tool".to_string(),
+                                    content: format!("工具结果 ({}): {}", status, text),
                                     timestamp: None,
                                 });
                             }

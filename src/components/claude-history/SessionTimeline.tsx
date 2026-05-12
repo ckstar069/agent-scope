@@ -74,21 +74,33 @@ function ExportMenu({ sessionId, onExport }: { sessionId: string; onExport: (ses
 }
 
 function PreviewPanel({ preview }: { preview: SessionPreview }) {
+  const roleLabel: Record<string, string> = {
+    user: "用户",
+    assistant: "助手",
+    tool: "工具",
+  };
+
+  const roleClass: Record<string, string> = {
+    user: "text-blue-600",
+    assistant: "text-green-600",
+    tool: "text-amber-600",
+  };
+
   return (
     <div className="mt-2 rounded-md border bg-muted/30 p-3">
       <p className="mb-2 text-xs text-muted-foreground">
         预览（共 {preview.total_turns} 轮对话）
       </p>
-      <div className="flex max-h-[400px] flex-col gap-4 overflow-y-auto pr-1">
+      <div className="flex max-h-[600px] flex-col gap-4 overflow-y-auto pr-1">
         {preview.messages.map((msg, idx) => (
           <div key={idx} className="rounded-sm p-2 text-sm hover:bg-muted/50">
             <span
               className={cn(
                 "font-medium",
-                msg.role === "user" ? "text-blue-600" : "text-green-600"
+                roleClass[msg.role] || "text-muted-foreground"
               )}
             >
-              {msg.role === "user" ? "用户" : "助手"}：
+              {roleLabel[msg.role] || msg.role}：
             </span>
             <span className="text-foreground">{msg.content}</span>
           </div>
