@@ -452,4 +452,179 @@ mod tests {
         let result = search_claude_history("test");
         assert!(result.is_ok());
     }
+
+    // =========================================================================
+    // 导出功能测试
+    // =========================================================================
+
+    #[test]
+    fn test_export_nonexistent_session() {
+        let result = export_claude_session("nonexistent-session-id-12345", ExportFormat::Jsonl);
+        assert!(result.is_err());
+        let err = result.unwrap_err();
+        assert!(err.contains("不存在"));
+    }
+
+    #[test]
+    fn test_jsonl_to_markdown_empty_file() {
+        let temp_dir = std::env::temp_dir();
+        let path = temp_dir.join("test-empty.jsonl");
+        std::fs::write(&path, "").unwrap();
+
+        let result = jsonl_to_markdown(&path, "test-session");
+        assert!(result.is_ok());
+        let md = result.unwrap();
+        assert!(md.contains("# Claude Code Session: `test-session`"));
+
+        let _ = std::fs::remove_file(&path);
+    }
+
+    #[test]
+    fn test_jsonl_to_markdown_text_messages() {
+        let temp_dir = std::env::temp_dir();
+        let path = temp_dir.join("test-text.jsonl");
+
+        let lines = vec![
+            r#"{"type":"text","message":{"role":"user","content":[{"type":"text","text":"Hello"}]}}"#,
+            r#"{"type":"text","message":{"role":"assistant","content":[{"type":"text","text":"Hi there"}]}}"#,
+        ];
+        std::fs::write(&path, lines.join("\n")).unwrap();
+
+        let result = jsonl_to_markdown(&path, "text-session");
+        assert!(result.is_ok());
+        let md = result.unwrap();
+        assert!(md.contains("**User**: Hello"));
+        assert!(md.contains("**Assistant**: Hi there"));
+
+        let _ = std::fs::remove_file(&path);
+    }
+
+    #[test]
+    fn test_jsonl_to_markdown_last_prompt() {
+        let temp_dir = std::env::temp_dir();
+        let path = temp_dir.join("test-prompt.jsonl");
+
+        let line = r#"{"type":"last-prompt","lastPrompt":"请分析这段代码","sessionId":"s1"}"#;
+        std::fs::write(&path, line).unwrap();
+
+        let result = jsonl_to_markdown(&path, "prompt-session");
+        assert!(result.is_ok());
+        let md = result.unwrap();
+        assert!(md.contains("### Turn 1"));
+        assert!(md.contains("**User**: 请分析这段代码"));
+
+        let _ = std::fs::remove_file(&path);
+    }
+
+    #[test]
+    fn test_jsonl_to_markdown_custom_title() {
+        let temp_dir = std::env::temp_dir();
+        let path = temp_dir.join("test-title.jsonl");
+
+        let line = r#"{"type":"custom-title","customTitle":"架构设计阶段","sessionId":"s1"}"#;
+        std::fs::write(&path, line).unwrap();
+
+        let result = jsonl_to_markdown(&path, "title-session");
+        assert!(result.is_ok());
+        let md = result.unwrap();
+        assert!(md.contains("## 架构设计阶段"));
+
+        let _ = std::fs::remove_file(&path);
+    }
+
+    #[test]
+    fn test_jsonl_to_markdown_tool_use() {
+        let temp_dir = std::env::temp_dir();
+        let path = temp_dir.join("test-tool.jsonl");
+
+        let line = r#"{"type":"tool_use","message":{"role":"assistant","content":[{"type":"tool_use","name":"Read","input":{"file_path":"/tmp/test.txt"}}]}}"#;
+        std::fs::write(&path, line).unwrap();
+
+        let result = jsonl_to_markdown(&path, "tool-session");
+        assert!(result.is_ok());
+        let md = result.unwrap();
+        assert!(md.contains("🔧 Tool: `Read`"));
+
+        let _ = std::fs::remove_file(&path);
+    }
+
+    #[test]
+    fn test_jsonl_to_markdown_tool_result() {
+        let temp_dir = std::env::temp_dir();
+        let path = temp_dir.join("test-result.jsonl");
+
+        let line = r#"{"type":"tool_result","message":{"role":"user","content":[{"type":"tool_result","content":"File content here","is_error":false,"tool_use_id":"t1"}]}}"#;
+        std::fs::write(&path, line).unwrap();
+
+        let result = jsonl_to_markdown(&path, "result-session");
+        assert!(result.is_ok());
+        let md = result.unwrap();
+        assert!(md.contains("Tool result (ok)"));
+        assert!(md.contains("File content here"));
+
+        let _ = std::fs::remove_file(&path);
+    }
+
+    #[test]
+    fn test_jsonl_to_markdown_tool_result_error() {
+        let temp_dir = std::env::temp_dir();
+        let path = temp_dir.join("test-result-err.jsonl");
+
+        let line = r#"{"type":"tool_result","message":{"role":"user","content":[{"type":"tool_result","content":"Error occurred","is_error":true,"tool_use_id":"t1"}]}}"#;
+        std::fs::write(&path, line).unwrap();
+
+        let result = jsonl_to_markdown(&path, "result-err-session");
+        assert!(result.is_ok());
+        let md = result.unwrap();
+        assert!(md.contains("Tool result (error)"));
+
+        let _ = std::fs::remove_file(&path);
+    }
+
+    #[test]
+    fn test_jsonl_to_markdown_mixed_content() {
+        let temp_dir = std::env::temp_dir();
+        let path = temp_dir.join("test-mixed.jsonl");
+
+        let lines = vec![
+            r#"{"type":"custom-title","customTitle":"设计评审","sessionId":"s1"}"#,
+            r#"{"type":"last-prompt","lastPrompt":"请评审这个设计","sessionId":"s1"}"#,
+            r#"{"type":"text","message":{"role":"assistant","content":[{"type":"text","text":"设计整体合理"}]}}"#,
+            r#"{"type":"tool_use","message":{"role":"assistant","content":[{"type":"tool_use","name":"Read","input":{}}]}}"#,
+        ];
+        std::fs::write(&path, lines.join("\n")).unwrap();
+
+        let result = jsonl_to_markdown(&path, "mixed-session");
+        assert!(result.is_ok());
+        let md = result.unwrap();
+
+        assert!(md.contains("# Claude Code Session: `mixed-session`"));
+        assert!(md.contains("## 设计评审"));
+        assert!(md.contains("### Turn 1"));
+        assert!(md.contains("**User**: 请评审这个设计"));
+        assert!(md.contains("**Assistant**: 设计整体合理"));
+        assert!(md.contains("🔧 Tool: `Read`"));
+
+        let _ = std::fs::remove_file(&path);
+    }
+
+    #[test]
+    fn test_jsonl_to_markdown_truncates_long_tool_result() {
+        let temp_dir = std::env::temp_dir();
+        let path = temp_dir.join("test-truncate.jsonl");
+
+        let long_content = "a".repeat(500);
+        let line = format!(
+            r#"{{"type":"tool_result","message":{{"role":"user","content":[{{"type":"tool_result","content":"{}","is_error":false,"tool_use_id":"t1"}}]}}}}"#,
+            long_content
+        );
+        std::fs::write(&path, line).unwrap();
+
+        let result = jsonl_to_markdown(&path, "truncate-session");
+        assert!(result.is_ok());
+        let md = result.unwrap();
+        assert!(md.contains("truncated"));
+
+        let _ = std::fs::remove_file(&path);
+    }
 }
