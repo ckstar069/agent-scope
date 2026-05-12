@@ -113,7 +113,21 @@ export function useClaudeHistory() {
 
   useEffect(() => {
     fetchSessions();
-  }, [fetchSessions]);
+    const interval = setInterval(() => {
+      // 自动轮询时不显示 loading，避免闪烁
+      invoke<ProjectSessionGroup[]>("list_claude_sessions_cmd")
+        .then((groups) => {
+          setProjectGroups(groups);
+          if (groups.length > 0 && !selectedProject) {
+            setSelectedProject(groups[0].project_path);
+          }
+        })
+        .catch(() => {
+          // 静默忽略轮询错误，避免打扰用户
+        });
+    }, 5000);
+    return () => clearInterval(interval);
+  }, [fetchSessions, selectedProject]);
 
   const filteredGroups = projectGroups.filter((group) => {
     const query = searchQuery.toLowerCase();
