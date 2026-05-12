@@ -7,6 +7,10 @@ use std::thread;
 use tauri::{AppHandle, Emitter, Manager, State};
 
 use crate::collectors::agent::AgentCollector;
+use crate::collectors::claude_history::{
+    models::{SerClaudeSession, SerHistoryEntry, SerProjectSessionGroup},
+    scanner::{delete_claude_session, get_session_detail, list_claude_sessions, search_claude_history},
+};
 use crate::collectors::template::{
     load_template_path, save_template_path, ProjectFile, ProjectFilesCollector, SessionSummary,
     SessionTranscript, SessionTranscriptCollector, SessionTurn, SourceLayout, TemplateData,
@@ -859,4 +863,30 @@ pub fn init_app_state(
     }
 
     app.manage(state);
+}
+
+// ============================================================================
+// Claude Code 会话管理命令
+// ============================================================================
+
+#[tauri::command]
+pub fn list_claude_sessions_cmd() -> Result<Vec<SerProjectSessionGroup>, String> {
+    list_claude_sessions()
+}
+
+#[tauri::command]
+pub fn get_claude_session_detail_cmd(
+    session_id: String,
+) -> Result<Option<SerClaudeSession>, String> {
+    get_session_detail(&session_id)
+}
+
+#[tauri::command]
+pub fn search_claude_history_cmd(query: String) -> Result<Vec<SerHistoryEntry>, String> {
+    search_claude_history(&query)
+}
+
+#[tauri::command]
+pub fn delete_claude_session_cmd(session_id: String) -> Result<(), String> {
+    delete_claude_session(&session_id)
 }
