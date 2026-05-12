@@ -14,6 +14,22 @@ fn silent_command(program: &str) -> Command {
     cmd
 }
 
+fn python_command(program: &str) -> Command {
+    #[cfg(windows)]
+    {
+        let mut cmd = Command::new("cmd");
+        cmd.arg("/c")
+            .arg(format!("chcp 65001 >nul 2>&1 && {}", program));
+        use std::os::windows::process::CommandExt;
+        cmd.creation_flags(0x08000000);
+        cmd
+    }
+    #[cfg(not(windows))]
+    {
+        Command::new(program)
+    }
+}
+
 use serde::Deserialize;
 
 /// 每个 `parse_parameters_py()` 调用分配唯一 ID，避免并行测试时的临时文件冲突
@@ -160,16 +176,55 @@ impl std::error::Error for ParameterError {}
 /// 探测系统上可用的 Python 命令名。
 ///
 /// Unix 默认尝试顺序：`python3` → `python`
-/// Windows 默认尝试顺序：`python` → `py`
+/// Windows 默认尝试顺序：`python` → `py` → 常见安装路径
 ///
 /// 全部失败返回 `None`。
 pub fn find_python() -> Option<String> {
-    let candidates: &[&str] = if cfg!(target_os = "windows") {
+    // 首先尝试 PATH 中的命令
+    let path_candidates: &[&str] = if cfg!(target_os = "windows") {
         &["python", "py"]
     } else {
         &["python3", "python"]
     };
-    find_python_from_candidates(candidates)
+    
+    if let Some(cmd) = find_python_from_candidates(path_candidates) {
+        return Some(cmd);
+    }
+    
+    // Windows 上如果 PATH 中找不到，尝试常见安装路径
+    #[cfg(target_os = "windows")]
+    {
+        let local_app_data = std::env::var("LOCALAPPDATA").unwrap_or_default();
+        let program_files = std::env::var("ProgramFiles").unwrap_or_default();
+        
+        let common_paths = [
+            format!("{}\\Programs\\Python\\Python311\\python.exe", local_app_data),
+            format!("{}\\Programs\\Python\\Python312\\python.exe", local_app_data),
+            format!("{}\\Programs\\Python\\Python313\\python.exe", local_app_data),
+            format!("{}\\Python311\\python.exe", program_files),
+            format!("{}\\Python312\\python.exe", program_files),
+            format!("{}\\Python313\\python.exe", program_files),
+            "C:\\Python311\\python.exe".to_string(),
+            "C:\\Python312\\python.exe".to_string(),
+            "C:\\Python313\\python.exe".to_string(),
+        ];
+        
+        for path in &common_paths {
+            if std::path::Path::new(path).exists() {
+                // 验证这个 python.exe 真的能运行
+                if silent_command(path)
+                    .arg("--version")
+                    .output()
+                    .map(|o| o.status.success())
+                    .unwrap_or(false)
+                {
+                    return Some(path.to_string());
+                }
+            }
+        }
+    }
+    
+    None
 }
 
 /// 内部辅助：按给定候选列表依次探测，返回第一个能用的命令名
@@ -207,7 +262,7 @@ pub fn parse_parameters_py(path: &Path) -> Result<ProjectConfig, ParameterError>
         seq,
     ));
 
-    let output = silent_command(&python)
+    let output = python_command(&python)
         .arg(path)
         .arg("export")
         .arg("json")
@@ -215,6 +270,8 @@ pub fn parse_parameters_py(path: &Path) -> Result<ProjectConfig, ParameterError>
         .env_remove("PYTHONHOME")
         .env_remove("PYTHONPATH")
         .env_remove("PYTHONNOUSERSITE")
+        .env("PYTHONIOENCODING", "utf-8")
+        .env("PYTHONUTF8", "1")
         .output()
         .map_err(|e| ParameterError::ExportFailed(format!("无法执行 Python: {}", e)))?;
 

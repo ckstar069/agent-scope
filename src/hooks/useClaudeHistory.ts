@@ -1,6 +1,18 @@
 import { useCallback, useEffect, useState } from "react";
 import { invoke } from "@tauri-apps/api/core";
 
+export interface PreviewMessage {
+  role: string;
+  content: string;
+  timestamp: number | null;
+}
+
+export interface SessionPreview {
+  session_id: string;
+  messages: PreviewMessage[];
+  total_turns: number;
+}
+
 export interface ClaudeSession {
   session_id: string;
   name: string | null;
@@ -26,6 +38,7 @@ export function useClaudeHistory() {
   const [searchQuery, setSearchQuery] = useState("");
   const [isLoading, setIsLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const [previewCache, setPreviewCache] = useState<Record<string, SessionPreview>>({});
 
   const fetchSessions = useCallback(async () => {
     setIsLoading(true);
@@ -79,6 +92,24 @@ export function useClaudeHistory() {
     }
   }, []);
 
+  const previewSession = useCallback(async (sessionId: string) => {
+    // 如果已缓存，直接返回
+    if (previewCache[sessionId]) {
+      return previewCache[sessionId];
+    }
+    try {
+      const preview = await invoke<SessionPreview>("preview_claude_session_cmd", {
+        sessionId,
+        limit: 6,
+      });
+      setPreviewCache((prev) => ({ ...prev, [sessionId]: preview }));
+      return preview;
+    } catch (e) {
+      alert(`预览加载失败: ${e}`);
+      return null;
+    }
+  }, [previewCache]);
+
   useEffect(() => {
     fetchSessions();
   }, [fetchSessions]);
@@ -111,5 +142,7 @@ export function useClaudeHistory() {
     fetchSessions,
     deleteSession,
     exportSession,
+    previewSession,
+    previewCache,
   };
 }

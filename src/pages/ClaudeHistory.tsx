@@ -20,12 +20,14 @@ export function ClaudeHistory() {
     fetchSessions,
     deleteSession,
     exportSession,
+    previewSession,
+    previewCache,
   } = useClaudeHistory();
 
   return (
     <div className="flex h-full flex-col gap-4">
       <div className="flex items-center gap-4">
-        <h1 className="text-xl font-semibold">会话历史</h1>
+        <h1 className="text-xl font-semibold">会话管理</h1>
         <div className="flex-1">
           <SearchBar value={searchQuery} onChange={setSearchQuery} />
         </div>
@@ -81,6 +83,8 @@ export function ClaudeHistory() {
                   sessions={selectedGroup.sessions}
                   onDelete={deleteSession}
                   onExport={exportSession}
+                  onPreview={previewSession}
+                  previewCache={previewCache}
                 />
               ) : (
                 <p className="text-sm text-muted-foreground">请从左侧选择一个项目</p>

@@ -5,7 +5,7 @@ use std::path::Path;
 
 use serde_json::Value;
 
-use super::models::{ExportFormat, SerClaudeSession, SerHistoryEntry, SerProjectSessionGroup, SerSessionStatus};
+use super::models::{ExportFormat, SerClaudeSession, SerHistoryEntry, SerPreviewMessage, SerProjectSessionGroup, SerSessionPreview, SerSessionStatus};
 use super::path_codec::{claude_config_dir, decode_project_dir, encode_cwd_path};
 
 /// 扫描所有 Claude Code 会话并按项目分组
@@ -178,6 +178,95 @@ pub fn export_claude_session(session_id: &str, format: ExportFormat) -> Result<S
             jsonl_to_markdown(&jsonl_path, session_id)
         }
     }
+}
+
+/// 预览会话内容（提取前 N 条消息）
+pub fn preview_claude_session(session_id: &str, limit: usize) -> Result<SerSessionPreview, String> {
+    let config_dir = claude_config_dir().ok_or("无法获取用户主目录")?;
+
+    // 1. 查找 .jsonl 文件
+    let projects_dir = config_dir.join("projects");
+    if !projects_dir.is_dir() {
+        return Err("会话文件不存在或已被删除".to_string());
+    }
+
+    let mut jsonl_path: Option<std::path::PathBuf> = None;
+
+    for entry in fs::read_dir(&projects_dir).map_err(|e| e.to_string())? {
+        let entry = entry.map_err(|e| e.to_string())?;
+        let path = entry.path();
+        if !path.is_dir() { continue; }
+
+        let candidate = path.join(format!("{}.jsonl", session_id));
+        if candidate.exists() {
+            jsonl_path = Some(candidate);
+            break;
+        }
+    }
+
+    let jsonl_path = jsonl_path.ok_or("会话文件不存在或已被删除")?;
+
+    // 2. 解析 JSONL 提取消息
+    let file = fs::File::open(&jsonl_path).map_err(|e| e.to_string())?;
+    let reader = BufReader::new(file);
+    let mut messages: Vec<SerPreviewMessage> = Vec::new();
+    let mut total_turns = 0;
+
+    for line in reader.lines() {
+        let line = match line { Ok(l) => l, Err(_) => continue };
+        if line.trim().is_empty() { continue; }
+
+        let value: Value = match serde_json::from_str(&line) {
+            Ok(v) => v,
+            Err(_) => continue,
+        };
+
+        let msg_type = value.get("type").and_then(|v| v.as_str()).unwrap_or("");
+
+        match msg_type {
+            "last-prompt" => {
+                if let Some(prompt) = value.get("lastPrompt").and_then(|v| v.as_str()) {
+                    total_turns += 1;
+                    if messages.len() < limit {
+                        messages.push(SerPreviewMessage {
+                            role: "user".to_string(),
+                            content: prompt.to_string(),
+                            timestamp: None,
+                        });
+                    }
+                }
+            }
+            "text" => {
+                if let Some(message) = value.get("message") {
+                    let role = message.get("role").and_then(|v| v.as_str()).unwrap_or("assistant");
+                    if let Some(content) = message.get("content").and_then(|c| c.as_array()) {
+                        for item in content {
+                            if let Some(text) = item.get("text").and_then(|v| v.as_str()) {
+                                if messages.len() < limit {
+                                    messages.push(SerPreviewMessage {
+                                        role: role.to_string(),
+                                        content: text.to_string(),
+                                        timestamp: None,
+                                    });
+                                }
+                            }
+                        }
+                    }
+                }
+            }
+            _ => {}
+        }
+
+        if messages.len() >= limit {
+            break;
+        }
+    }
+
+    Ok(SerSessionPreview {
+        session_id: session_id.to_string(),
+        messages,
+        total_turns,
+    })
 }
 
 fn jsonl_to_markdown(path: &std::path::Path, session_id: &str) -> Result<String, String> {

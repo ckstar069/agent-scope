@@ -42,3 +42,17 @@ pub enum ExportFormat {
     Jsonl,
     Markdown,
 }
+
+#[derive(Debug, Clone, Serialize)]
+pub struct SerPreviewMessage {
+    pub role: String,
+    pub content: String,
+    pub timestamp: Option<u64>,
+}
+
+#[derive(Debug, Clone, Serialize)]
+pub struct SerSessionPreview {
+    pub session_id: String,
+    pub messages: Vec<SerPreviewMessage>,
+    pub total_turns: usize,
+}

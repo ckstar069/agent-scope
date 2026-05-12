@@ -39,7 +39,7 @@ export function ProjectList({ groups, selectedPath, onSelect }: ProjectListProps
               </span>
             )}
             {group.is_orphaned && (
-              <span className="text-xs text-muted-foreground">🚫</span>
+              <span className="text-xs text-muted-foreground" title="项目路径已不存在">🚫</span>
             )}
           </button>
         );

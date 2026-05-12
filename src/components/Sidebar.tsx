@@ -18,7 +18,7 @@ const navigationItems: Array<{
 }> = [
   { icon: LayoutDashboard, label: "仪表盘", route: "dashboard" },
   { icon: Bot, label: "代理监控", route: "agents" },
-  { icon: History, label: "会话历史", route: "claude-history" },
+  { icon: History, label: "会话管理", route: "claude-history" },
   { icon: Settings, label: "设置", route: "settings" },
 ];
 
