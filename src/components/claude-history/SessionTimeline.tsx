@@ -165,7 +165,17 @@ export function SessionTimeline({ sessions, onDelete, onExport, onPreview, previ
                     <span className="ml-2 text-green-600">运行中</span>
                   )}
                   {!session.is_active && session.turn_count !== null && (
-                    <span className="ml-2">{session.turn_count} 轮对话</span>
+                    <span className="ml-2">
+                      {session.turn_count} 轮对话
+                      {session.status === "Idle" && (
+                        <span
+                          className="ml-1 text-blue-600"
+                          title="此会话可在 Claude Code 中使用 /resume 恢复"
+                        >
+                          · 闲置
+                        </span>
+                      )}
+                    </span>
                   )}
                 </p>
                 <p className="mt-1 truncate text-xs text-muted-foreground">
