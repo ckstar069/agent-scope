@@ -28,6 +28,30 @@ pub fn run() {
         .plugin(tauri_plugin_fs::init())
         .setup(|app| {
             let data_dir = ProjectRegistry::default_data_dir();
+
+            // 数据迁移：从旧目录 ptv 迁移到新目录 agent-scope
+            let old_data_dir = dirs::data_local_dir()
+                .unwrap_or_else(|| std::path::PathBuf::from("."))
+                .join("ptv");
+            if old_data_dir.exists() && !data_dir.exists() {
+                if let Err(e) = std::fs::create_dir_all(&data_dir) {
+                    eprintln!("[migrate] 无法创建新数据目录: {}", e);
+                } else {
+                    let files_to_migrate = ["projects.json", "settings.json"];
+                    for file in &files_to_migrate {
+                        let old_file = old_data_dir.join(file);
+                        let new_file = data_dir.join(file);
+                        if old_file.exists() && !new_file.exists() {
+                            if let Err(e) = std::fs::copy(&old_file, &new_file) {
+                                eprintln!("[migrate] 无法复制 {}: {}", file, e);
+                            } else {
+                                println!("[migrate] 成功迁移 {}", file);
+                            }
+                        }
+                    }
+                }
+            }
+
             let storage_path = data_dir.join("projects.json");
             let registry = ProjectRegistry::load_or_default(storage_path);
 

@@ -252,7 +252,7 @@ impl AgentCollector {
         let token_history_samples = self.token_history_samples.clone();
 
         thread::Builder::new()
-            .name("ptv-agent-collector".into())
+            .name("agent-scope-agent-collector".into())
             .spawn(move || {
                 let mut collector = MultiCollector::with_hidden(&[]);
                 let poll_interval = Duration::from_secs(2);

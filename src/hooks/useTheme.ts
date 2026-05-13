@@ -5,7 +5,7 @@ import { useState, useEffect } from "react";
  */
 export type Theme = "light" | "dark" | "system";
 
-const STORAGE_KEY = "ptv-theme";
+const STORAGE_KEY = "agent-scope-theme";
 
 /**
  * 从 localStorage 读取初始主题，若无则返回 system

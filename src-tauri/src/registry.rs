@@ -97,7 +97,7 @@ struct RegistryData {
 /// # 示例
 ///
 /// ```ignore
-/// use ptv::registry::ProjectRegistry;
+/// use agent_scope_lib::registry::ProjectRegistry;
 /// use std::path::PathBuf;
 ///
 /// let storage = PathBuf::from("/tmp/projects.json");
@@ -171,15 +171,15 @@ impl ProjectRegistry {
         Self::new(storage_path)
     }
 
-    /// 返回默认数据目录：`{data_local_dir}/ptv`
+    /// 返回默认数据目录：`{data_local_dir}/agent-scope`
     ///
     /// 使用 `dirs` crate 获取平台对应的数据目录：
-    /// - macOS: `~/Library/Application Support/ptv`
-    /// - Linux: `~/.local/share/ptv`
+    /// - macOS: `~/Library/Application Support/agent-scope`
+    /// - Linux: `~/.local/share/agent-scope`
     pub fn default_data_dir() -> PathBuf {
         dirs::data_local_dir()
             .unwrap_or_else(|| PathBuf::from("."))
-            .join("ptv")
+            .join("agent-scope")
     }
 
     // ---------------------------------------------------------------
@@ -328,7 +328,7 @@ mod tests {
     /// 创建临时测试目录，返回 (base_dir, json_path)
     fn test_env() -> (PathBuf, PathBuf) {
         let id = COUNTER.fetch_add(1, Ordering::SeqCst);
-        let dir = std::env::temp_dir().join(format!("ptv-registry-test-{}", id));
+        let dir = std::env::temp_dir().join(format!("agent-scope-registry-test-{}", id));
         let _ = fs::create_dir_all(&dir);
         let json_path = dir.join("projects.json");
         (dir, json_path)
@@ -398,7 +398,7 @@ mod tests {
     fn test_add_nonexistent_path_fails() {
         let (_, json_path) = test_env();
         let mut registry = ProjectRegistry::new(json_path);
-        let non_existent = std::env::temp_dir().join("__ptv_nonexistent_test_xyz__");
+        let non_existent = std::env::temp_dir().join("__agent_scope_nonexistent_test_xyz__");
 
         let result = registry.add(&non_existent);
         assert!(
@@ -595,16 +595,16 @@ mod tests {
     // 辅助功能测试
     // ---------------------------------------------------------------
 
-    /// 测试：默认数据目录以 "ptv" 结尾
+    /// 测试：默认数据目录以 "agent-scope" 结尾
     #[test]
     fn test_default_data_dir() {
         let dir = ProjectRegistry::default_data_dir();
-        assert!(dir.ends_with("ptv"), "默认数据目录应以 ptv 结尾");
+        assert!(dir.ends_with("agent-scope"), "默认数据目录应以 agent-scope 结尾");
         // 应包含平台对应的数据目录前缀
         let name = dir.to_string_lossy();
         assert!(
-            name.contains("ptv"),
-            "默认数据目录路径应包含 ptv"
+            name.contains("agent-scope"),
+            "默认数据目录路径应包含 agent-scope"
         );
     }
 

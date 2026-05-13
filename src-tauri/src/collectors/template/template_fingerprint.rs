@@ -191,9 +191,9 @@ struct Settings {
     template_path: Option<String>,
 }
 
-/// 构建 settings.json 的完整路径：`{data_dir}/ptv/settings.json`
+/// 构建 settings.json 的完整路径：`{data_dir}/agent-scope/settings.json`
 fn settings_path(data_dir: &Path) -> PathBuf {
-    data_dir.join("ptv").join("settings.json")
+    data_dir.join("agent-scope").join("settings.json")
 }
 
 /// 从 settings.json 加载模板路径
@@ -360,7 +360,7 @@ mod tests {
 
     #[test]
     fn test_build_nonexistent_path() {
-        let fp = TemplateFingerprint::build(&std::env::temp_dir().join("nonexistent-ptv-test-path"));
+        let fp = TemplateFingerprint::build(&std::env::temp_dir().join("nonexistent-agent-scope-test-path"));
         assert!(fp.is_ok());
         assert!(fp.unwrap().paths.is_empty());
     }
@@ -389,7 +389,7 @@ mod tests {
         let data_dir = dir.path();
 
         // 写入无效 JSON
-        let settings_file = data_dir.join("ptv").join("settings.json");
+        let settings_file = data_dir.join("agent-scope").join("settings.json");
         fs::create_dir_all(settings_file.parent().unwrap()).unwrap();
         fs::write(&settings_file, "not valid json").unwrap();
 

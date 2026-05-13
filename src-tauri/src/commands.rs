@@ -592,7 +592,7 @@ pub fn start_watching(
 
     let project_path = canonical_path.clone();
     thread::Builder::new()
-        .name(format!("ptv-watcher-{}", project_path))
+        .name(format!("agent-scope-watcher-{}", project_path))
         .spawn(move || {
             while let Ok(event) = rx.recv() {
                 let payload = TemplateDataPayload::from_data(project_path.clone(), event.data);

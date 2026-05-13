@@ -63,7 +63,7 @@ impl WatchEvent {
 /// # 示例
 ///
 /// ```ignore
-/// use ptv::watcher::FileWatcher;
+/// use agent_scope_lib::watcher::FileWatcher;
 /// use std::time::Duration;
 /// use std::path::PathBuf;
 ///
@@ -167,7 +167,7 @@ impl FileWatcher {
         let interval = self.poll_interval;
 
         let handle = thread::Builder::new()
-            .name("ptv-file-watcher".into())
+            .name("agent-scope-file-watcher".into())
             .spawn(move || {
                 // 构建初始 mtime 快照
                 let mut snapshot = MtimeSnapshot::new();
@@ -447,7 +447,7 @@ mod tests {
 
         pub fn create() -> (PathBuf, TempDir) {
             let id = COUNTER.fetch_add(1, Ordering::SeqCst);
-            let path = std::env::temp_dir().join(format!("ptv-watcher-test-{}", id));
+            let path = std::env::temp_dir().join(format!("agent-scope-watcher-test-{}", id));
             let _ = std::fs::create_dir_all(&path);
             let dir = TempDir { path: path.clone() };
             (path, dir)

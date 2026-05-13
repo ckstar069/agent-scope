@@ -1,6 +1,6 @@
-# PTV — 项目模板可视化器
+# AgentScope
 
-PTV（Project Template Visualizer）是一款跨平台的桌面监控应用，用于实时追踪和管理基于 `ai_project_template` 创建的 FPGA 项目。提供项目仪表盘、Stage 时间线、参数快照、Git 状态、Memory 文件浏览和 Agent 监控等功能。
+AgentScope 是一款跨平台的桌面监控应用，用于实时追踪和管理 AI Agent 会话及项目状态。提供项目仪表盘、Stage 时间线、参数快照、Git 状态、Memory 文件浏览和 Agent 监控等功能。
 
 ## 功能特性
 
@@ -81,7 +81,7 @@ cargo check
 ## 项目结构
 
 ```
-ai_project_template_visualization/
+agent-scope/
 ├── src/                          # React 前端源码
 │   ├── App.tsx                   # 根组件 + 路由
 │   ├── pages/                    # 页面组件
@@ -114,7 +114,7 @@ ai_project_template_visualization/
 
 ### 项目注册
 
-在「设置」中添加 FPGA 项目的绝对路径（如 `/Users/me/Repo/my-fpga-project`），PTV 会自动读取项目中的：
+在「设置」中添加项目路径（如 `/Users/me/Repo/my-project`），AgentScope 会自动读取项目中的：
 
 - `.stage` 文件 — 当前开发阶段
 - `config/parameters.py` — 项目参数
@@ -144,7 +144,7 @@ ai_project_template_visualization/
 |:-----|:-----|:-----|
 | `ai_project_template` | `/Users/ckstar/Repo/ai_project_template` | 模板项目，被监控的目标 |
 | `abtop` | `/Users/ckstar/Repo/abtop` | Rust TUI 监控器，collector 代码复用源 |
-| `ptv`（本项目） | 当前目录 | 跨项目监控桌面应用 |
+| `AgentScope`（本项目） | 当前目录 | AI Agent 监控桌面应用 |
 
 ## License
 

@@ -1,11 +1,11 @@
-# ptv (Project Template Visualizer)
+# AgentScope
 
-基于 `ai_project_template` 创建的 FPGA 项目的跨项目监控桌面应用。
+AI Agent 会话及项目状态监控桌面应用。
 
 ## 项目概述
 
-- **名称**: ptv
-- **定位**: Tauri v2 桌面应用，监控从 `ai_project_template` 创建的实际 FPGA 项目
+- **名称**: AgentScope
+- **定位**: Tauri v2 桌面应用，监控 AI Agent 会话及项目状态
 - **前端**: React + TypeScript + Tailwind CSS + shadcn/ui + Recharts
 - **后端**: Rust (Tauri v2)，复用 `abtop-collector` 库 crate
 - **平台**: **macOS + Linux + Windows（测试中）**，**Linux 优先验证**
@@ -79,7 +79,7 @@ cargo check            # 检查 Rust 后端编译 (在 src-tauri/ 下执行)
 |:-----|:-----|:-----|
 | `ai_project_template` | `/Users/ckstar/Repo/ai_project_template` | 模板项目，被监控的目标 |
 | `abtop` | `/Users/ckstar/Repo/abtop` | Rust TUI 监控器，collector 代码复用源 |
-| `ptv`（本项目） | 当前目录 | 跨项目监控桌面应用 |
+| `AgentScope`（本项目） | 当前目录 | AI Agent 监控桌面应用 |
 
 ## 关键决策
 

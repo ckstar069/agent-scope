@@ -4,7 +4,7 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 
 ## Project Overview
 
-PTV (Project Template Visualizer) is a cross-platform Tauri v2 desktop app that monitors FPGA projects created from `ai_project_template`. It provides a dashboard for tracking project stages, Git status, agent activity, memory files, and session transcripts across multiple projects.
+AgentScope is a cross-platform Tauri v2 desktop app that monitors AI Agent sessions and project status. It provides a dashboard for tracking project stages, Git status, agent activity, memory files, and session transcripts across multiple projects. Previously known as PTV (Project Template Visualizer).
 
 **Tech stack**: Tauri v2 (Rust backend + WebView frontend), React 19 + TypeScript, Tailwind CSS v4 + shadcn/ui (base-nova style), Recharts, Playwright E2E tests.
 
@@ -58,7 +58,7 @@ npm run test:report
 
 - **`lib.rs`**: Tauri app builder. Sets up plugins, loads `ProjectRegistry`, starts `AgentCollector` background thread, registers all commands.
 - **`commands.rs`**: All Tauri commands exposed to frontend (`add_project`, `get_project_data`, `start_watching`, etc.). Defines `AppState` struct holding registry, watchers, agent collector, and template fingerprint cache.
-- **`registry.rs`**: `ProjectRegistry` — manages registered projects, persists to `{data_local_dir}/ptv/projects.json`. Uses path canonicalization for deduplication. Automatically strips Windows `\\?\` prefix on load.
+- **`registry.rs`**: `ProjectRegistry` — manages registered projects, persists to `{data_local_dir}/agent-scope/projects.json`. Uses path canonicalization for deduplication. Automatically strips Windows `\\?\` prefix on load.
 - **`collectors/template/`**: Data collection for template projects:
   - `stage.rs` — reads `.current_stage` file
   - `config.rs` — parses `config/parameters.py` via python3 subprocess. **Windows-specific**: uses `python_command()` wrapper (`cmd /c chcp 65001`) to set UTF-8 console encoding; passes `PYTHONIOENCODING=utf-8` and `PYTHONUTF8=1` env vars to prevent `UnicodeEncodeError` on Chinese Windows.

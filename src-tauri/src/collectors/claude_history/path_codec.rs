@@ -13,7 +13,7 @@ pub fn claude_config_dir() -> Option<PathBuf> {
 /// # 示例
 ///
 /// ```
-/// use ptv_lib::collectors::claude_history::path_codec::encode_cwd_path;
+/// use agent_scope_lib::collectors::claude_history::path_codec::encode_cwd_path;
 /// assert_eq!(encode_cwd_path("/Users/ckstar/Repo/my_project"), "-Users-ckstar-Repo-my-project");
 /// assert_eq!(encode_cwd_path("/home/user/project"), "-home-user-project");
 /// assert_eq!(encode_cwd_path("relative/path"), "relative-path");

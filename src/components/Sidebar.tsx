@@ -36,8 +36,8 @@ export function Sidebar({ activeRoute, isExpanded, onRouteChange, onToggle }: Si
         </div>
         {isExpanded && (
           <div className="min-w-0">
-            <p className="truncate text-sm font-semibold">ptv</p>
-            <p className="truncate text-xs text-muted-foreground">Project Visualizer</p>
+            <p className="truncate text-sm font-semibold">AgentScope</p>
+            <p className="truncate text-xs text-muted-foreground">Agent Monitor</p>
           </div>
         )}
       </div>

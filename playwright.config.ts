@@ -1,7 +1,7 @@
 import { defineConfig, devices } from "@playwright/test";
 
 /**
- * ptv E2E 测试配置
+ * AgentScope E2E 测试配置
  * 
  * 使用 Vite dev server 启动前端（非 Tauri），测试纯前端 UI 逻辑。
  * Tauri invoke/listen 在浏览器环境会失败，测试覆盖各面板的错误/空状态渲染。

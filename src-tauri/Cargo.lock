@@ -23,6 +23,22 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "320119579fcad9c21884f5c4861d16174d0e06250625266f50fe6898340abefa"
 
 [[package]]
+name = "agent-scope"
+version = "0.2.0"
+dependencies = [
+ "abtop-collector",
+ "dirs 5.0.1",
+ "serde",
+ "serde_json",
+ "tauri",
+ "tauri-build",
+ "tauri-plugin-dialog",
+ "tauri-plugin-fs",
+ "tauri-plugin-opener",
+ "tempfile",
+]
+
+[[package]]
 name = "aho-corasick"
 version = "1.1.4"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -2824,22 +2840,6 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "29492a7b48a00ab80202528e235d2f80a04ccff3747540b4ec6881f2f2bc42d1"
 dependencies = [
  "libc",
-]
-
-[[package]]
-name = "ptv"
-version = "0.2.0"
-dependencies = [
- "abtop-collector",
- "dirs 5.0.1",
- "serde",
- "serde_json",
- "tauri",
- "tauri-build",
- "tauri-plugin-dialog",
- "tauri-plugin-fs",
- "tauri-plugin-opener",
- "tempfile",
 ]
 
 [[package]]

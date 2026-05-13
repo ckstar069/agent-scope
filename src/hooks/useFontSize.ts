@@ -2,7 +2,7 @@ import { useCallback, useEffect, useState } from "react";
 
 export type FontSize = "compact" | "normal" | "large" | "xlarge";
 
-const STORAGE_KEY = "ptv:font-size";
+const STORAGE_KEY = "agent-scope:font-size";
 const DEFAULT_FONT_SIZE: FontSize = "normal";
 const VALID_SIZES: FontSize[] = ["compact", "normal", "large", "xlarge"];
 

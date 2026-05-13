@@ -174,7 +174,7 @@ export function Settings() {
           <p className="text-sm font-medium text-muted-foreground">Settings</p>
           <h1 className="text-3xl font-semibold tracking-tight">设置</h1>
           <p className="max-w-2xl text-sm text-muted-foreground">
-            管理 ptv 正在监控的 FPGA 项目目录。添加后，Dashboard 和 Agent 监控会自动读取这些注册路径。
+            管理 AgentScope 正在监控的项目目录。添加后，Dashboard 和 Agent 监控会自动读取这些注册路径。
           </p>
         </div>
         <div className="rounded-xl border border-border bg-muted/40 px-4 py-3 text-sm text-muted-foreground">
@@ -397,7 +397,7 @@ export function Settings() {
           <DialogHeader>
             <DialogTitle>移除监控项目？</DialogTitle>
             <DialogDescription>
-              该操作只会从 ptv 注册表移除项目，不会删除磁盘上的项目目录。
+              该操作只会从 AgentScope 注册表移除项目，不会删除磁盘上的项目目录。
             </DialogDescription>
           </DialogHeader>
           {pendingRemoval && (
