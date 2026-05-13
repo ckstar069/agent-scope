@@ -6,7 +6,7 @@ use std::path::Path;
 use serde_json::Value;
 
 use super::models::{ExportFormat, SerClaudeSession, SerHistoryEntry, SerPreviewMessage, SerProjectSessionGroup, SerSessionPreview, SerSessionStatus};
-use super::path_codec::{claude_config_dir, decode_project_dir, encode_cwd_path};
+use super::path_codec::{claude_config_dir, decode_project_dir};
 
 /// 扫描所有 Claude Code 会话并按项目分组
 pub fn list_claude_sessions() -> Result<Vec<SerProjectSessionGroup>, String> {
@@ -516,11 +516,12 @@ fn scan_projects(
 
         let dir_name = encoded_dir.file_name().and_then(|n| n.to_str()).unwrap_or("").to_string();
         let project_path = decode_project_dir(&dir_name);
-        let project_name = Path::new(&project_path)
+        let _project_name = Path::new(&project_path)
             .file_name().and_then(|n| n.to_str()).unwrap_or("").to_string();
-        let is_orphaned = !Path::new(&project_path).exists();
+        let _is_orphaned = !Path::new(&project_path).exists();
 
         let mut sessions = Vec::new();
+        let mut real_project_path: Option<String> = None;
 
         for file_entry in fs::read_dir(&encoded_dir).map_err(|e| e.to_string())? {
             let file_entry = file_entry.map_err(|e| e.to_string())?;
@@ -540,6 +541,10 @@ fn scan_projects(
                 if let Some(active) = active_sessions.get(&session_id) {
                     let parsed = parse_status(&active.status);
                     let is_active = matches!(parsed, SerSessionStatus::Active);
+                    // 使用活跃会话文件中的真实 cwd，避免目录名编解码导致的 _/ 混淆
+                    if real_project_path.is_none() {
+                        real_project_path = Some(active.cwd.clone());
+                    }
                     (
                         active.name.clone().or_else(|| extract_session_name(&file_path)),
                         parsed,
@@ -570,12 +575,18 @@ fn scan_projects(
         }
 
         if !sessions.is_empty() {
+            // 优先使用活跃会话中的真实路径，编解码无法还原下划线
+            let final_path = real_project_path.unwrap_or(project_path);
+            let final_name = Path::new(&final_path)
+                .file_name().and_then(|n| n.to_str()).unwrap_or("").to_string();
+            let final_orphaned = !Path::new(&final_path).exists();
+
             groups.push(SerProjectSessionGroup {
-                project_path,
-                project_name,
+                project_path: final_path,
+                project_name: final_name,
                 sessions,
                 session_count: 0,
-                is_orphaned,
+                is_orphaned: final_orphaned,
             });
         }
     }
@@ -741,9 +752,10 @@ mod tests {
         let temp_dir = std::env::temp_dir();
         let path = temp_dir.join("test-text.jsonl");
 
+        // 当前清洗逻辑只保留 user/assistant 的 text 内容
         let lines = vec![
-            r#"{"type":"text","message":{"role":"user","content":[{"type":"text","text":"Hello"}]}}"#,
-            r#"{"type":"text","message":{"role":"assistant","content":[{"type":"text","text":"Hi there"}]}}"#,
+            r#"{"type":"user","message":{"role":"user","content":"Hello"}}"#,
+            r#"{"type":"assistant","message":{"role":"assistant","content":[{"type":"text","text":"Hi there"}]}}"#,
         ];
         std::fs::write(&path, lines.join("\n")).unwrap();
 
@@ -794,46 +806,14 @@ mod tests {
         let temp_dir = std::env::temp_dir();
         let path = temp_dir.join("test-tool.jsonl");
 
-        let line = r#"{"type":"tool_use","message":{"role":"assistant","content":[{"type":"tool_use","name":"Read","input":{"file_path":"/tmp/test.txt"}}]}}"#;
+        // assistant 消息无 text 时，tool_use 生成简化描述
+        let line = r#"{"type":"assistant","message":{"role":"assistant","content":[{"type":"tool_use","name":"Read","input":{"file_path":"/tmp/test.txt"}}]}}"#;
         std::fs::write(&path, line).unwrap();
 
         let result = jsonl_to_markdown(&path, "tool-session");
         assert!(result.is_ok());
         let md = result.unwrap();
-        assert!(md.contains("🔧 Tool: `Read`"));
-
-        let _ = std::fs::remove_file(&path);
-    }
-
-    #[test]
-    fn test_jsonl_to_markdown_tool_result() {
-        let temp_dir = std::env::temp_dir();
-        let path = temp_dir.join("test-result.jsonl");
-
-        let line = r#"{"type":"tool_result","message":{"role":"user","content":[{"type":"tool_result","content":"File content here","is_error":false,"tool_use_id":"t1"}]}}"#;
-        std::fs::write(&path, line).unwrap();
-
-        let result = jsonl_to_markdown(&path, "result-session");
-        assert!(result.is_ok());
-        let md = result.unwrap();
-        assert!(md.contains("Tool result (ok)"));
-        assert!(md.contains("File content here"));
-
-        let _ = std::fs::remove_file(&path);
-    }
-
-    #[test]
-    fn test_jsonl_to_markdown_tool_result_error() {
-        let temp_dir = std::env::temp_dir();
-        let path = temp_dir.join("test-result-err.jsonl");
-
-        let line = r#"{"type":"tool_result","message":{"role":"user","content":[{"type":"tool_result","content":"Error occurred","is_error":true,"tool_use_id":"t1"}]}}"#;
-        std::fs::write(&path, line).unwrap();
-
-        let result = jsonl_to_markdown(&path, "result-err-session");
-        assert!(result.is_ok());
-        let md = result.unwrap();
-        assert!(md.contains("Tool result (error)"));
+        assert!(md.contains("调用工具: Read"));
 
         let _ = std::fs::remove_file(&path);
     }
@@ -846,8 +826,8 @@ mod tests {
         let lines = vec![
             r#"{"type":"custom-title","customTitle":"设计评审","sessionId":"s1"}"#,
             r#"{"type":"last-prompt","lastPrompt":"请评审这个设计","sessionId":"s1"}"#,
-            r#"{"type":"text","message":{"role":"assistant","content":[{"type":"text","text":"设计整体合理"}]}}"#,
-            r#"{"type":"tool_use","message":{"role":"assistant","content":[{"type":"tool_use","name":"Read","input":{}}]}}"#,
+            r#"{"type":"assistant","message":{"role":"assistant","content":[{"type":"text","text":"设计整体合理"}]}}"#,
+            r#"{"type":"assistant","message":{"role":"assistant","content":[{"type":"tool_use","name":"Read","input":{}}]}}"#,
         ];
         std::fs::write(&path, lines.join("\n")).unwrap();
 
@@ -860,27 +840,7 @@ mod tests {
         assert!(md.contains("### Turn 1"));
         assert!(md.contains("**User**: 请评审这个设计"));
         assert!(md.contains("**Assistant**: 设计整体合理"));
-        assert!(md.contains("🔧 Tool: `Read`"));
-
-        let _ = std::fs::remove_file(&path);
-    }
-
-    #[test]
-    fn test_jsonl_to_markdown_truncates_long_tool_result() {
-        let temp_dir = std::env::temp_dir();
-        let path = temp_dir.join("test-truncate.jsonl");
-
-        let long_content = "a".repeat(500);
-        let line = format!(
-            r#"{{"type":"tool_result","message":{{"role":"user","content":[{{"type":"tool_result","content":"{}","is_error":false,"tool_use_id":"t1"}}]}}}}"#,
-            long_content
-        );
-        std::fs::write(&path, line).unwrap();
-
-        let result = jsonl_to_markdown(&path, "truncate-session");
-        assert!(result.is_ok());
-        let md = result.unwrap();
-        assert!(md.contains("truncated"));
+        assert!(md.contains("调用工具: Read"));
 
         let _ = std::fs::remove_file(&path);
     }

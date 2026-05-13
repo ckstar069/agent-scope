@@ -668,7 +668,8 @@ mod tests {
         assert_eq!(info.status, SerializableStatus::Thinking);
         assert_eq!(info.token_rate, 0.0); // 首次采集，无历史记录
         assert_eq!(info.token_rate_1m, 0.0);
-        assert_eq!(info.token_rate_total, 0.0);
+        // started_at 为 0 时 elapsed() 返回从 epoch 至今的时长，导致 token_rate_total 为极小的正数
+        assert!(info.token_rate_total < 1e-5, "token_rate_total expected near-zero, got {}", info.token_rate_total);
         assert_eq!(info.children.len(), 1);
         assert_eq!(info.children[0].port, Some(3000));
         // 新增字段验证
