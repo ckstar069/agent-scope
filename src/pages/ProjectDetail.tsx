@@ -397,15 +397,16 @@ export function ProjectDetail({ projectPath = "", onSelectProject, onBack }: Pro
             </div>
           </div>
 
-              <Panel title="参数快照" icon={SlidersHorizontal} subtitle="config/parameters.py 解析结果" accent="green">
+          <Panel title="参数快照" icon={SlidersHorizontal} subtitle="config/parameters.py 解析结果" accent="green">
             <ConfigSnapshot config={config} configError={data?.config_error ?? null} />
-          </Panel>
-
-          <Panel title="项目记忆" icon={BookOpen} subtitle="CLAUDE.md、规则、笔记、设计文档" accent="purple">
-            <ProjectMemoryPanel projectPath={projectPath} />
           </Panel>
         </>
       )}
+
+      {/* 项目记忆面板独立渲染：即使 Stage/Git/参数加载失败，仍可浏览记忆文件 */}
+      <Panel title="项目记忆" icon={BookOpen} subtitle="CLAUDE.md、规则、笔记、设计文档" accent="purple">
+        <ProjectMemoryPanel projectPath={projectPath} />
+      </Panel>
     </section>
   );
 }

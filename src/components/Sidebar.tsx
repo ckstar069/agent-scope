@@ -2,6 +2,7 @@ import { Bot, History, LayoutDashboard, PanelLeftClose, PanelLeftOpen, Settings 
 
 import type { AppRoute } from "@/App";
 import { Button } from "@/components/ui/button";
+import { ThemeToggle } from "@/components/ThemeToggle";
 import { cn } from "@/lib/utils";
 
 interface SidebarProps {
@@ -69,16 +70,19 @@ export function Sidebar({ activeRoute, isExpanded, onRouteChange, onToggle }: Si
       </nav>
 
       <div className="border-t border-sidebar-border p-3">
-        <Button
-          type="button"
-          variant="outline"
-          className={cn("w-full justify-start", !isExpanded && "justify-center px-0")}
-          aria-label={isExpanded ? "收起侧边栏" : "展开侧边栏"}
-          onClick={onToggle}
-        >
-          {isExpanded ? <PanelLeftClose className="size-4" /> : <PanelLeftOpen className="size-4" />}
-          {isExpanded && <span>收起</span>}
-        </Button>
+        <div className={cn("flex items-center gap-2", !isExpanded && "justify-center")}>
+          <ThemeToggle />
+          <Button
+            type="button"
+            variant="outline"
+            className={cn("flex-1 justify-start", !isExpanded && "justify-center px-0")}
+            aria-label={isExpanded ? "收起侧边栏" : "展开侧边栏"}
+            onClick={onToggle}
+          >
+            {isExpanded ? <PanelLeftClose className="size-4" /> : <PanelLeftOpen className="size-4" />}
+            {isExpanded && <span>收起</span>}
+          </Button>
+        </div>
       </div>
     </aside>
   );

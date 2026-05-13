@@ -111,7 +111,7 @@ test.describe("AgentMonitor", () => {
 
 async function openAgentMonitor(page: Page) {
   await page.goto("/");
-  await page.locator('nav[aria-label="主导航"]').getByRole("button", { name: "Agents" }).click();
+  await page.locator('nav[aria-label="主导航"]').getByRole("button", { name: "代理监控" }).click();
 }
 
 async function mockAgentUpdateEvent(page: Page) {

@@ -10,8 +10,8 @@ import { test, expect } from "@playwright/test";
 test.describe("Settings", () => {
   test.beforeEach(async ({ page }) => {
     await page.goto("/");
-    // 导航到 Settings
-    await page.locator('nav[aria-label="主导航"]').getByRole("button", { name: "Settings" }).click();
+    // 导航到设置
+    await page.locator('nav[aria-label="主导航"]').getByRole("button", { name: "设置" }).click();
     await expect(page.getByRole("heading", { name: "设置" })).toBeVisible();
   });
 
@@ -33,7 +33,7 @@ test.describe("Settings", () => {
     await input.fill("relative/path");
     await page.getByRole("button", { name: "添加项目" }).click();
 
-    await expect(page.getByText("仅支持 macOS/Linux 绝对路径，请以 / 开头。")).toBeVisible();
+    await expect(page.getByText("无效路径：请输入绝对路径，Unix 以 / 开头，Windows 以盘符开头（如 C:\\）")).toBeVisible();
   });
 
   test("根目录路径提交显示校验错误", async ({ page }) => {

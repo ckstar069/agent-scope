@@ -1,4 +1,4 @@
-import { useMemo, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 
 import { Layout } from "@/components/Layout";
 import { AgentMonitor } from "@/pages/AgentMonitor";
@@ -9,9 +9,21 @@ import { Settings } from "@/pages/Settings";
 
 export type AppRoute = "dashboard" | "agents" | "settings" | "claude-history";
 
+const STORAGE_KEY = "agent-scope:current-project";
+
 function App() {
   const [activeRoute, setActiveRoute] = useState<AppRoute>("dashboard");
-  const [currentProjectPath, setCurrentProjectPath] = useState("");
+  const [currentProjectPath, setCurrentProjectPath] = useState(() => {
+    return localStorage.getItem(STORAGE_KEY) || "";
+  });
+
+  useEffect(() => {
+    if (currentProjectPath) {
+      localStorage.setItem(STORAGE_KEY, currentProjectPath);
+    } else {
+      localStorage.removeItem(STORAGE_KEY);
+    }
+  }, [currentProjectPath]);
 
   function handleRouteChange(route: AppRoute) {
     setActiveRoute(route);
