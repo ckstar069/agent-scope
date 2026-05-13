@@ -28,3 +28,4 @@ dist-ssr
 
 # Tauri generated schemas
 src-tauri/gen/
+test-results/

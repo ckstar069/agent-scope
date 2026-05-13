@@ -715,7 +715,8 @@ mod tests {
 
     #[test]
     fn test_export_nonexistent_session() {
-        let result = export_claude_session("nonexistent-session-id-12345", ExportFormat::Jsonl);
+        let temp_path = std::env::temp_dir().join("test-export-nonexistent.jsonl");
+        let result = export_claude_session("nonexistent-session-id-12345", ExportFormat::Jsonl, &temp_path);
         assert!(result.is_err());
         let err = result.unwrap_err();
         assert!(err.contains("不存在"));
