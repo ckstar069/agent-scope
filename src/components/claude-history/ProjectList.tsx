@@ -32,7 +32,16 @@ export function ProjectList({ groups, selectedPath, onSelect }: ProjectListProps
             ) : (
               <Folder className="size-4 shrink-0 text-muted-foreground" />
             )}
-            <span className="min-w-0 flex-1 truncate">{group.project_name}</span>
+            <div className="min-w-0 flex-1">
+              <span className="block truncate">{group.project_name}</span>
+              <span
+                className="block truncate text-[10px] text-muted-foreground"
+                style={{ direction: "rtl", textAlign: "left" }}
+                title={group.project_path}
+              >
+                {group.project_path}
+              </span>
+            </div>
             {activeCount > 0 && (
               <span className="shrink-0 rounded bg-green-100 px-1.5 py-0.5 text-[10px] font-medium text-green-700">
                 {activeCount > 1 ? `${activeCount}个活跃` : '活跃'}
