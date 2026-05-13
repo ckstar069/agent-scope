@@ -1,73 +1,225 @@
-# AgentScope 项目扩展方向
+# AgentScope 项目状态与扩展路线
 
-AgentScope 的定位已从单一模板项目监控扩展为**通用 AI Agent 生态监控平台**。
+> 本文档汇总项目当前状态、技术债务、重构计划和功能扩展方向，作为团队迭代的核心参考。
+> 最后更新：2026-05-13
 
 ---
 
-## 已完成的扩展
+## 一、项目定位
 
-| 阶段 | 内容 |
+AgentScope（原名 PTV）是一款跨平台 Tauri v2 桌面应用，用于实时监控和管理 AI Agent 会话及项目状态。
+
+| 里程碑 | 状态 |
 |:---|:---|
-| 原始定位 | 监控 `ai_project_template` 生成的 FPGA 项目（Stage、Git、参数） |
-| 第一次扩展 | 加入 Claude Code 会话管理，实时追踪活跃会话、Token 速率、上下文窗口 |
-| 品牌升级 | 从 PTV → AgentScope，摆脱"模板项目"局限，面向更广泛的 AI Agent 场景 |
+| FPGA 模板项目监控（Stage、Git、参数） | ✅ 已完成 |
+| Claude Code 会话管理（实时追踪、Token 速率、上下文窗口） | ✅ 已完成 |
+| 品牌升级（PTV → AgentScope） | ✅ 已完成 |
+| 重构为通用 AI Agent 生态监控平台 | 🔄 当前阶段 |
 
 ---
 
-## 已规划的下阶段扩展
+## 二、当前状态速览
 
-### 1. 多 Agent 支持
+### 2.1 功能现状
 
-当前 AgentScope 主要对接 Claude Code。后续将扩展支持更多主流 AI Agent CLI 工具：
-- **Codex CLI**（OpenAI 官方编码 Agent）
-- **Aider**（支持多模型切换的编码助手）
-- **Cursor Agent Mode**（Cursor 编辑器的 Agent 功能）
-- **其他自定义 Agent**
+| 模块 | 状态 | 说明 |
+|------|------|------|
+| 项目仪表盘 | ✅ 稳定 | Stage、Git 状态、Agent 活跃度卡片展示 |
+| 项目详情 | ✅ 稳定 | 时间线、参数快照、Memory 浏览、Git 状态 |
+| Agent 监控 | ✅ 稳定 | 实时会话追踪、Token 速率、工具调用 |
+| Claude 历史 | ✅ 稳定 | 会话搜索、导出（Markdown/JSON）、预览 |
+| 记忆标记 | ✅ 稳定 | 对话标记 → 沉淀为 `.sisyphus/notepads/project-memory/decisions.md` |
+| 设置 | ✅ 稳定 | 项目注册、模板路径配置 |
 
-每个 Agent 的会话状态、活跃任务、工具调用等信息将统一纳入监控面板，用户可在单一界面查看不同 Agent 的运行状况。
+### 2.2 代码规模
 
-### 2. Token 使用量统计
+| 部分 | 规模 | 技术栈 |
+|------|------|--------|
+| 前端 | ~14,600 行 | React 19 + TypeScript + Tailwind CSS v4 + shadcn/ui |
+| 后端 | ~3,000+ 行 | Rust (Tauri v2) |
+| abtop-collector | ~1,500+ 行 | 本地 Rust crate，支持 Claude / Codex / MCP 多源采集 |
 
-核心需求：帮助用户量化 AI Agent 的使用成本。
+### 2.3 测试状态
 
-具体功能：
-- **时段统计**：按日/周/月汇总 Token 总消耗量，生成用量趋势图表
-- **多 Agent 汇总**：分别统计 Claude、Codex、Aider 等不同 Agent 的 Token 消耗占比
-- **项目维度**：按注册项目拆分 Token 用量，识别哪些项目"最费 Token"
-- **成本估算**：基于各模型定价（Claude Sonnet、GPT-4o 等），将 Token 数换算为估算费用
-- **导出报表**：支持导出 CSV/JSON 用量报告，便于团队成本核算
+| 测试类型 | 结果 | 问题 |
+|----------|------|------|
+| Rust 单元测试 | 116 通过 / 7 失败 | `claude_history/scanner.rs` 6 个失败（JSONL 导出格式断言不同步）；`collectors/agent/mod.rs` 1 个失败（浮点数精度） |
+| E2E 测试 | 大量失败 | UI 已改为中文，但测试仍期望英文按钮名（如 "Dashboard" 实际为"仪表盘"），测试与 UI 严重失步 |
 
-数据来源：abtop-collector 已采集的 `total_input_tokens`、`total_output_tokens`、`total_cache_read` 等字段。
+### 2.4 遗留问题
 
-### 3. 会话历史深度分析
-
-在现有实时会话监控基础上，增加历史数据的回溯与分析能力：
-- **会话检索**：按关键词、时间范围、Agent 类型筛选历史会话
-- **会话对比**：对比同一项目不同时期的会话，分析迭代效率变化
-- **热点文件识别**：统计 Agent 频繁读写的文件，发现项目中的"高频关注区域"
-- **工具调用分析**：汇总 Agent 使用各类工具（Read、Bash、Edit 等）的频率和耗时，识别工具使用模式
-
-### 4. Dashboard 项目总览增强
-
-当前 Dashboard 以项目卡片形式展示基础信息，后续将扩展为更丰富的项目健康度视图：
-- **项目活跃度评分**：综合 Agent 会话频率、Git 提交频率、Stage 进展速度等指标
-- **异常告警**：项目长时间无 Agent 活动、Git 存在未解决冲突、Stage 停滞等状态的可视化提醒
-- **跨项目对比**：并排对比多个项目的 Stage 进展、Agent 活跃度、Token 消耗
+| 问题 | 位置 | 严重程度 |
+|------|------|----------|
+| 文档仍用旧名"PTV" | `docs/distribution.md` 全文 | 中 |
+| Sisyphus 配置指向旧路径 | `.sisyphus/boulder.json` | 低 |
+| E2E 测试与 UI 不同步 | `e2e/navigation.spec.ts` 等 | **高** |
+| Rust 单元测试失败 | `scanner.rs`, `agent/mod.rs` | **高** |
 
 ---
 
-## 潜在探索方向
+## 三、迭代路线
+
+### Phase 1：立即处理（1 周内）
+
+目标：恢复测试可靠性，清理遗留债务。
+
+- [ ] 修复 Rust 单元测试（7 个）
+  - `scanner.rs`：同步 JSONL 清洗/导出逻辑与测试断言
+  - `agent/mod.rs`：浮点数比较改用近似相等
+- [ ] 同步 E2E 测试 — 全面审计 `e2e/` 目录，更新选择器匹配当前中文 UI
+- [ ] 清理遗留名称 — 更新 `docs/distribution.md` 中"PTV"为"AgentScope"
+- [ ] 修复 `.sisyphus/boulder.json` 中的旧路径引用
+
+---
+
+### Phase 2：重构（2–3 周）
+
+目标：为后续多 Agent 支持、Token 统计等扩展建立清晰的架构基础。
+
+#### 2.1 界面设计风格重构
+
+当前问题：
+- 样式散落在 `index.css`、组件内联、shadcn/ui 默认主题中，缺乏统一的设计系统
+- 主题切换（浅色/深色）依赖局部实现，新增页面容易遗漏
+- Tailwind v4 的新特性（如 `@theme`）未被充分利用
+
+重构方向：
+- 建立统一的 **Design Token 系统**（颜色、间距、圆角、阴影、字体层级）
+- 将主题配置收敛到单一入口（`src/theme/`），所有组件消费 token 而非硬编码值
+- 定义页面布局规范（侧边栏宽度、内容区最大宽度、响应式断点）
+- 规范化组件层次：基础组件（`ui/`）→ 业务组件（`components/`）→ 页面（`pages/`）
+
+#### 2.2 前端功能归类重构
+
+当前问题：
+- `src/components/` 和 `src/pages/` 按文件类型组织，而非按业务领域
+- Claude 历史相关组件（`ProjectList.tsx`, `SessionTimeline.tsx`, `SearchBar.tsx`）散落在 `components/claude-history/`，但 hooks、类型定义未同步隔离
+- 新增功能（如 Codex 支持）时难以找到应放置的位置
+
+目标结构：
+
+```
+src/
+├── features/
+│   ├── dashboard/          # 仪表盘（项目卡片、总览）
+│   │   ├── components/
+│   │   ├── hooks/
+│   │   ├── types.ts
+│   │   └── index.ts
+│   ├── project-detail/     # 项目详情（Stage、Git、Memory、参数）
+│   │   ├── components/
+│   │   ├── hooks/
+│   │   ├── types.ts
+│   │   └── index.ts
+│   ├── agent-monitor/      # Agent 实时监控
+│   │   ├── components/
+│   │   ├── hooks/
+│   │   ├── types.ts
+│   │   └── index.ts
+│   ├── claude-history/     # Claude 会话历史
+│   │   ├── components/
+│   │   ├── hooks/
+│   │   ├── types.ts
+│   │   └── index.ts
+│   └── settings/           # 设置（项目注册、模板路径）
+│       ├── components/
+│       ├── hooks/
+│       ├── types.ts
+│       └── index.ts
+├── components/ui/          # shadcn/ui 基础组件（保持不变）
+├── theme/                  # 设计令牌、主题配置
+├── lib/                    # 通用工具（utils、api 封装）
+├── App.tsx                 # 路由入口
+└── main.tsx                # 应用入口
+```
+
+重构原则：
+- **按功能垂直切片**：每个 feature 目录包含该功能所需的组件、hooks、类型，外部通过 `index.ts` 暴露接口
+- **禁止跨 feature 直接引用**：如需共享，提取到 `src/lib/` 或建立明确的共享模块
+- **类型内聚**：每个 feature 的 `types.ts` 定义该领域的数据结构，避免在组件中重复定义
+
+#### 2.3 后端模块化解耦重构
+
+当前问题：
+- `commands.rs` 是 God File（600+ 行），所有 Tauri 命令集中在一处
+- `collectors/` 虽有目录划分，但 `template/` 和 `agent/` 的数据流未完全隔离
+- `claude_history` 采集逻辑与 `agent` 采集逻辑有潜在重叠，但未抽象出通用接口
+- 新增采集器（如 Codex）时需要修改多处文件
+
+目标结构：
+
+```
+src-tauri/src/
+├── main.rs                 # 入口
+├── lib.rs                  # Tauri Builder、插件注册、状态初始化
+├── app_state.rs            # AppState 定义（替代 commands 中的内联定义）
+├── routes/                 # 按领域拆分的 Tauri 命令
+│   ├── mod.rs              # 路由注册汇总
+│   ├── project.rs          # 项目注册、列表、数据获取
+│   ├── agent.rs            # Agent 监控（启动/停止、事件推送）
+│   ├── claude_history.rs   # 会话历史（搜索、导出、预览）
+│   ├── memory.rs           # 记忆标记（读写 decisions.md）
+│   └── settings.rs         # 设置（模板路径等）
+├── services/               # 业务逻辑层（命令的实现）
+│   ├── project_service.rs
+│   ├── agent_service.rs
+│   ├── history_service.rs
+│   └── memory_service.rs
+├── collectors/             # 数据采集器（保持现有目录结构，提炼通用接口）
+│   ├── mod.rs              # Collector trait 定义
+│   ├── template/           # 模板项目采集（Stage、Git、Config、Files）
+│   ├── agent/              # Agent 实时监控（abtop-collector 封装）
+│   └── claude_history/     # 历史会话扫描
+├── models/                 # 共享数据结构（替代 commands.rs 中的 Ser* 结构）
+│   ├── mod.rs
+│   ├── project.rs
+│   ├── agent.rs
+│   └── history.rs
+├── registry.rs             # ProjectRegistry（已有，保持独立）
+└── watcher.rs              # FileWatcher（已有，保持独立）
+```
+
+重构原则：
+- **分层架构**：`routes/`（HTTP/Tauri 接口）→ `services/`（业务逻辑）→ `collectors/`（数据采集）→ `models/`（数据结构）
+- **Collector Trait**：定义通用采集接口 `trait Collector { fn collect(&self) -> Result<Data, Error>; }`，所有采集器实现该接口
+- **命令即路由**：`routes/*.rs` 只做参数解析和调用 service，不包含业务逻辑
+- **状态集中**：`AppState` 独立为 `app_state.rs`，各 service 通过依赖注入获取所需状态
+
+---
+
+### Phase 3：短期迭代（1–2 月）
+
+目标：按 roadmap 推进核心功能扩展。
+
+| 优先级 | 方向 | 依赖 | 价值 |
+|--------|------|------|------|
+| P1 | **Token 用量统计** | 依赖 abtop-collector 已有数据（`total_input_tokens` 等），只需前端图表 + 聚合逻辑 | 高 |
+| P2 | **多 Agent 支持** | abtop-collector 已有 Codex/MCP 采集器；依赖 Phase 2 的 Collector Trait 和前端 feature 结构 | 高 |
+| P3 | **Dashboard 增强** | 活跃度评分、异常告警、跨项目对比；依赖 Token 统计和 Agent 数据 | 中 |
+| P4 | **会话历史深度分析** | 热点文件识别、工具调用频率；依赖 Phase 2 的 history_service 模块化 | 中 |
+
+---
+
+## 四、潜在探索方向（长期）
 
 | 方向 | 场景描述 |
 |:---|:---|
-| **Agent 协作监控** | 同一项目中同时运行多个 Agent（如 Claude 做架构设计 + Codex 做编码实现）时的资源协调与冲突可视化 |
-| **团队 Agent 面板** | 多开发者场景下，汇总整个团队的 Agent 使用情况，识别团队整体瓶颈或效率热点 |
-| **远程 Agent 监控** | 通过 SSH 或 API 监控远程服务器（如云开发环境、CI 流水线中的 Agent）运行状态 |
-| **Agent 行为审计** | 完整记录 Agent 的文件操作序列（读取→修改→执行），生成可回溯的变更审计日志 |
-| **智能提醒/干预** | 当检测到 Agent 陷入循环（反复修改同一文件）、上下文即将溢出、或长时间无进展时，主动推送提醒 |
-| **模型效率对比** | 同一任务分别用不同模型（Claude Sonnet vs GPT-4o）执行时，对比 Token 效率、耗时、完成质量 |
-| **Agent 会话回放** | 将会话过程以时间轴形式回放，支持快进/回退，便于复盘 Agent 的决策路径 |
-| **自定义监控指标** | 允许用户定义自己的监控指标（如特定文件变更次数、测试通过率变化等），接入 AgentScope 面板 |
-| **Agent 能力排行榜** | 基于历史数据，对不同 Agent/模型在各类任务上的表现进行排名，为用户选择 Agent 提供参考 |
-| **项目知识图谱** | 从 Agent 会话中提取关键概念和文件关系，自动生成项目知识结构图 |
-| **会话质量评估** | 分析会话的"健康度"——如重复尝试次数、错误率、用户干预频率等，给出优化建议 |
+| Agent 协作监控 | 同一项目中多 Agent（Claude + Codex）资源协调与冲突可视化 |
+| 团队 Agent 面板 | 多开发者场景下汇总团队 Agent 使用效率 |
+| 远程 Agent 监控 | 通过 SSH/API 监控云环境 / CI 流水线中的 Agent |
+| Agent 行为审计 | 完整记录文件操作序列，生成可回溯的变更审计日志 |
+| 智能提醒/干预 | Agent 陷入循环、上下文溢出、长时间无进展时主动推送 |
+| 模型效率对比 | 同一任务用不同模型（Claude vs GPT-4o）对比 Token 效率、耗时、质量 |
+| Agent 会话回放 | 时间轴形式回放会话过程，支持快进/回退 |
+| 自定义监控指标 | 用户自定义指标（特定文件变更次数、测试通过率变化）接入面板 |
+| 项目知识图谱 | 从会话中提取关键概念和文件关系，自动生成知识结构图 |
+
+---
+
+## 五、相关文档
+
+| 文档 | 路径 | 说明 |
+|:-----|:-----|:-----|
+| 开发指南 | `CLAUDE.md` | Tauri 命令、架构、数据流、测试环境 |
+| 软件分发 | `docs/distribution.md` | Linux/macOS/Windows 分发形式（⚠️ 仍含旧名"PTV"） |
+| 本文件 | `docs/roadmap.md` | 项目状态与扩展路线（本文档） |
