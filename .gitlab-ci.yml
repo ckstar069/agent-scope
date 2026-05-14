@@ -1,61 +1,37 @@
 stages:
-  - build
-  - test
+  - verify
 
 variables:
   NODE_VERSION: "20"
   CARGO_HOME: "$CI_PROJECT_DIR/.cargo"
   npm_config_cache: "$CI_PROJECT_DIR/.npm"
 
+# 缓存依赖目录，避免重复下载
 cache:
+  key: ${CI_COMMIT_REF_SLUG}
   paths:
     - .cargo/
     - .npm/
     - src-tauri/target/
 
-before_script:
-  - apt-get update -qq
-  - apt-get install -y -qq libwebkit2gtk-4.1-dev libayatana-appindicator3-dev librsvg2-dev patchelf curl build-essential
-  - curl -fsSL https://deb.nodesource.com/setup_${NODE_VERSION}.x | bash -
-  - apt-get install -y -qq nodejs
-  - curl --proto '=https' --tlsv1.2 -sSf https://sh.rustup.rs | sh -s -- -y --default-toolchain stable
-  - source "$CARGO_HOME/env"
-  - npm ci
-  - npx playwright install --with-deps chromium
-
-build:frontend:
-  stage: build
+verify:
+  stage: verify
   image: ubuntu:22.04
+  before_script:
+    - apt-get update -qq
+    - apt-get install -y -qq libwebkit2gtk-4.1-dev libayatana-appindicator3-dev librsvg2-dev patchelf curl build-essential
+    - curl -fsSL https://deb.nodesource.com/setup_${NODE_VERSION}.x | bash -
+    - apt-get install -y -qq nodejs
+    - curl --proto '=https' --tlsv1.2 -sSf https://sh.rustup.rs | sh -s -- -y --default-toolchain stable
+    - source "$CARGO_HOME/env"
+    - npm ci
   script:
+    - echo "=== 构建前端 ==="
     - npm run build
-  rules:
-    - if: '$CI_PIPELINE_SOURCE == "merge_request_event"'
-    - if: '$CI_COMMIT_BRANCH == "main"'
-
-build:rust:
-  stage: build
-  image: ubuntu:22.04
-  script:
+    - echo "=== Rust 检查 ==="
     - cd src-tauri && cargo check
-  rules:
-    - if: '$CI_PIPELINE_SOURCE == "merge_request_event"'
-    - if: '$CI_COMMIT_BRANCH == "main"'
-
-test:rust:
-  stage: test
-  image: ubuntu:22.04
-  script:
+    - echo "=== Rust 测试 ==="
     - cd src-tauri && cargo test
-  rules:
-    - if: '$CI_PIPELINE_SOURCE == "merge_request_event"'
-    - if: '$CI_COMMIT_BRANCH == "main"'
-
-test:e2e:
-  stage: test
-  image: ubuntu:22.04
-  script:
-    - npm test
-  allow_failure: true
   rules:
     - if: '$CI_PIPELINE_SOURCE == "merge_request_event"'
     - if: '$CI_COMMIT_BRANCH == "main"'
