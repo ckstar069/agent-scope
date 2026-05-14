@@ -29,9 +29,9 @@ verify:
     - echo "=== 构建前端 ==="
     - npm run build
     - echo "=== Rust 检查 ==="
-    - cd src-tauri && cargo check
+    - cd "$CI_PROJECT_DIR/src-tauri" && cargo check
     - echo "=== Rust 测试 ==="
-    - cd src-tauri && cargo test
+    - cd "$CI_PROJECT_DIR/src-tauri" && cargo test
   rules:
     - if: '$CI_PIPELINE_SOURCE == "merge_request_event"'
     - if: '$CI_COMMIT_BRANCH == "main"'
