@@ -6,27 +6,22 @@ variables:
   CARGO_HOME: "$CI_PROJECT_DIR/.cargo"
   npm_config_cache: "$CI_PROJECT_DIR/.npm"
 
-# 缓存依赖目录，避免重复下载
-# 注意：runner 需配置 local cache adapter 才能正常工作
-cache:
-  key: ${CI_COMMIT_REF_SLUG}
-  paths:
-    - .cargo/
-    - .npm/
-    - src-tauri/target/
-    - node_modules/.cache/ms-playwright/
-
 verify:
   stage: verify
   image: ubuntu:22.04
   before_script:
+    - echo "=== 安装系统依赖 ==="
     - apt-get update -qq
     - apt-get install -y -qq libwebkit2gtk-4.1-dev libayatana-appindicator3-dev librsvg2-dev patchelf curl build-essential git
+    - echo "=== 安装 Node.js ==="
     - curl -fsSL https://deb.nodesource.com/setup_${NODE_VERSION}.x | bash -
     - apt-get install -y -qq nodejs
+    - echo "=== 安装 Rust ==="
     - curl --proto '=https' --tlsv1.2 -sSf https://sh.rustup.rs | sh -s -- -y --default-toolchain stable
     - source "$CARGO_HOME/env"
+    - echo "=== 安装前端依赖 ==="
     - npm ci
+    - echo "=== 安装 Playwright 浏览器 ==="
     - npx playwright install chromium
   script:
     - echo "=== 构建前端 ==="
