@@ -38,7 +38,7 @@ verify:
     - echo "=== 安装前端依赖 ==="
     - npm ci
     - echo "=== 安装 Playwright 浏览器 ==="
-    - npx playwright install chromium
+    - npx playwright install --with-deps chromium
   script:
     - echo "=== 构建前端 ==="
     - npm run build

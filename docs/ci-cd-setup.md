@@ -40,7 +40,7 @@ AgentScope 使用自托管 GitLab 作为 CI/CD 平台，通过 GitLab Runner 执
 4. 安装 `cargo-binstall`
 5. 安装 `cargo-audit`
 6. `npm ci`（前端依赖）
-7. `npx playwright install chromium`
+7. `npx playwright install --with-deps chromium`
 8. `npm run build`（前端构建）
 9. `cargo fmt --check`（格式化检查）
 10. `cargo clippy -- -D warnings`（静态分析）
@@ -130,6 +130,29 @@ error: consider using `sort_by_key`
 
 ---
 
+### 问题 4: Playwright Chromium 缺少系统运行库
+
+**现象**: Pipeline #51（Job 220）已通过 `cargo clippy -- -D warnings`、`cargo check`、`cargo test`，但在 `npm test` 阶段大量 E2E 失败。
+
+**错误日志**:
+```
+Error: browserType.launch: Target page, context or browser has been closed
+chrome-headless-shell: error while loading shared libraries: libnspr4.so: cannot open shared object file: No such file or directory
+```
+
+**根因**: `.gitlab-ci.yml` 使用 `npx playwright install chromium`，只安装 Chromium 浏览器文件，不安装浏览器运行所需的 Linux 系统依赖。Ubuntu 22.04 基础镜像中缺少 `libnspr4` 等动态库，导致 Chromium 启动即退出。
+
+**修复**: 使用 Playwright 官方依赖安装模式：
+
+```diff
+- npx playwright install chromium
++ npx playwright install --with-deps chromium
+```
+
+**状态**: ✅ 已修复配置，待重新触发 Pipeline 验证。
+
+---
+
 ## 4. 当前现状
 
 ### 4.1 流水线状态
@@ -138,8 +161,9 @@ error: consider using `sort_by_key`
 |-------|------|------|
 | Pipeline #48 | ❌ 失败 | `cargo-binstall` 路径错误（已修复） |
 | Pipeline #49 | ❌ 失败 | Clippy 4 个 lint 错误（本地已修复，待重新触发验证） |
+| Pipeline #51 | ❌ 失败 | Clippy 已通过，E2E 阶段 Chromium 缺少 `libnspr4.so`（已修复配置，待重新触发验证） |
 
-**当前阻塞点**: 4 个 Clippy 警告已在本地修复，下一步需要重新触发 GitLab Pipeline，确认 CI 环境通过。
+**当前阻塞点**: Playwright Chromium 系统依赖已补齐，下一步需要重新触发 GitLab Pipeline，确认 CI 环境通过。
 
 ### 4.2 环境版本差异
 
@@ -153,9 +177,10 @@ error: consider using `sort_by_key`
 ### 4.3 待办事项
 
 1. [x] 修复 4 个 Clippy 警告（`scanner.rs:113`、`session_transcript.rs:478/574/661`）
-2. [ ] 重新触发 Pipeline 验证
-3. [ ] 考虑在 CI 中锁定 Rust 版本（如 `rustup default 1.95.0`）
-4. [ ] 考虑统一本地和 CI 的 Rust 版本
+2. [x] 修复 Playwright Chromium 系统依赖安装方式（`--with-deps`）
+3. [ ] 重新触发 Pipeline 验证
+4. [ ] 考虑在 CI 中锁定 Rust 版本（如 `rustup default 1.95.0`）
+5. [ ] 考虑统一本地和 CI 的 Rust 版本
 
 ---
 
