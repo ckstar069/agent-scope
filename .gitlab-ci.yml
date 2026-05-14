@@ -32,7 +32,7 @@ verify:
     - curl --proto '=https' --tlsv1.2 -sSf https://sh.rustup.rs | sh -s -- -y --default-toolchain stable
     - source "$CARGO_HOME/env"
     - echo "=== 安装 cargo-binstall ==="
-    - curl -L --proto '=https' --tlsv1.2 -sSf https://github.com/cargo-bins/cargo-binstall/releases/download/v1.19.1/cargo-binstall-x86_64-unknown-linux-gnu.tgz | tar -xz -C ~/.cargo/bin/
+    - curl -L --proto '=https' --tlsv1.2 -sSf https://github.com/cargo-bins/cargo-binstall/releases/download/v1.19.1/cargo-binstall-x86_64-unknown-linux-gnu.tgz | tar -xz -C "$CARGO_HOME/bin/"
     - echo "=== 安装 cargo-audit ==="
     - cargo binstall cargo-audit --locked --no-confirm
     - echo "=== 安装前端依赖 ==="
