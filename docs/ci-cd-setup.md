@@ -54,9 +54,104 @@ AgentScope 使用自托管 GitLab 作为 CI/CD 平台，通过 GitLab Runner 执
 
 ---
 
-## 3. 遇到的所有问题
+## 3. 遇到的问题与修复
 
-### 问题 1: cargo-binstall 安装路径与 `CARGO_HOME` 不一致
+### 问题 1: Git 相关单元测试缺少 `git`
+
+**现象**: Pipeline #36 的 `test:rust` job 失败，5 个 Git collector 单元测试失败。
+
+**错误日志**:
+```
+git init should work: Os { code: 2, kind: NotFound, message: "No such file or directory" }
+test result: FAILED. 115 passed; 5 failed
+```
+
+**根因**: 测试用例会在临时目录中调用 `git init`，但 CI 镜像内未安装 `git`。
+
+**修复**: 系统依赖安装阶段加入 `git`。
+
+**状态**: ✅ 已修复，后续 `cargo test` 为 `120 passed; 0 failed`。
+
+---
+
+### 问题 2: NodeSource / rustup 下载受网络波动影响
+
+**现象**: Pipeline #37 / #43 在安装 Rust 时失败，Pipeline #41 在安装 NodeSource 时超时。
+
+**错误日志**:
+```
+curl: (92) HTTP/2 stream 0 was not closed cleanly: PROTOCOL_ERROR
+error: command failed: downloader https://static.rust-lang.org/rustup/dist/...
+
+curl: (28) Failed to connect to deb.nodesource.com port 443 after 132511 ms
+```
+
+**根因**: `ubuntu:22.04` 裸镜像每次执行都从公网安装 Node.js、Rust 和工具链，CI 对外网链路波动敏感。
+
+**修复现状**: 目前通过重试和缓存降低影响，但仍不是根治。
+
+**建议**: 制作内部 CI 基础镜像，预置 Node.js 20、Rust stable、Tauri Linux 系统依赖、Playwright 系统依赖、`cargo-binstall`、`cargo-audit`。这是缩短流水线时间和降低网络失败率的最大收益点。
+
+**状态**: ⚠️ 已识别，待工程化优化。
+
+---
+
+### 问题 3: apt 安装阶段被系统终止
+
+**现象**: Pipeline #38 在 `apt-get install` 阶段以 exit code 137 退出。
+
+**错误日志**:
+```
+ERROR: Job failed: exit code 137
+```
+
+**根因**: 137 通常表示进程收到 `SIGKILL`，结合日志停在大量系统包安装阶段，优先判断为 Runner 资源压力或容器被外部终止。
+
+**修复现状**: 后续流水线已跨过该阶段；属于基础设施稳定性问题，不是代码问题。
+
+**建议**: 若再次出现，优先查看 Runner 主机同一时间段的内存、Docker 和 GitLab Runner journal。
+
+**状态**: ⚠️ 偶发基础设施问题，暂不改代码。
+
+---
+
+### 问题 4: CI 脚本工作目录错误
+
+**现象**: Pipeline #39 在 Rust 检查阶段失败。
+
+**错误日志**:
+```
+/usr/bin/bash: line 187: cd: src-tauri: No such file or directory
+```
+
+**根因**: CI 脚本在前序命令改变工作目录后继续使用相对路径 `src-tauri`，导致路径解析错误。
+
+**修复**: 后续配置统一使用 `cd "$CI_PROJECT_DIR/src-tauri"`。
+
+**状态**: ✅ 已修复。
+
+---
+
+### 问题 5: Runner system failure / job 被终止
+
+**现象**: Pipeline #44 / #45 / MR Pipeline #35 出现 `runner_system_failure`。
+
+**错误日志**:
+```
+ERROR: Job failed (system failure): aborted: terminated
+```
+
+**根因**: GitLab Runner 进程或容器执行环境层面的中断。Pipeline #44 在 E2E 执行中被终止，Pipeline #45 在 cache restore 阶段被终止，MR Pipeline #35 在 prepare executor 阶段被终止。
+
+**修复现状**: 后续同一 Runner 可成功执行 #46/#47/#52，说明不是稳定复现的项目配置错误。
+
+**建议**: 保留为 Runner 运维观察项；若频繁出现，检查 Runner 主机 Docker、内存、磁盘、GitLab Runner 服务重启记录。
+
+**状态**: ⚠️ 偶发基础设施问题，暂不改代码。
+
+---
+
+### 问题 6: cargo-binstall 安装路径与 `CARGO_HOME` 不一致
 
 **现象**: Pipeline #48（Job 217）在 `cargo-binstall` 安装步骤失败。
 
@@ -79,7 +174,7 @@ tar: Error is not recoverable: exiting now
 
 ---
 
-### 问题 2: Clippy 版本差异导致 CI 失败
+### 问题 7: Clippy 版本差异导致 CI 失败
 
 **现象**: Pipeline #49（Job 218）在 `cargo clippy -- -D warnings` 步骤失败，但本地通过。
 
@@ -104,16 +199,16 @@ error: consider using `sort_by_key`
 
 **修复**:
 
-- `scanner.rs:113`：降序时间排序改为 `sort_by_key(|entry| Reverse(entry.timestamp))`
-- `session_transcript.rs:478`：移除 `days as i64` 冗余转换
-- `session_transcript.rs:574`：合并 `custom-title` 分支中的嵌套判断
-- `session_transcript.rs:661`：降序 mtime 排序改为 `sort_by_key(|(_, mtime)| Reverse(*mtime))`
+- `src-tauri/src/collectors/claude_history/scanner.rs`：降序时间排序改为 `sort_by_key(|entry| Reverse(entry.timestamp))`
+- `src-tauri/src/collectors/template/session_transcript.rs`：移除 `days as i64` 冗余转换
+- `src-tauri/src/collectors/template/session_transcript.rs`：合并 `custom-title` 分支中的嵌套判断
+- `src-tauri/src/collectors/template/session_transcript.rs`：降序 mtime 排序改为 `sort_by_key(|(_, mtime)| Reverse(*mtime))`
 
-**状态**: ✅ 已在本地验证通过。2026-05-14 执行 `cargo fmt --check`、`cargo clippy -- -D warnings`、`cargo test` 均通过；仍需重新触发 GitLab Pipeline 验证 CI 环境。
+**状态**: ✅ 已修复。Pipeline #51 已验证 Clippy 通过。
 
 ---
 
-### 问题 3: cargo-binstall URL 使用了 `latest/download/`
+### 问题 8: cargo-binstall URL 使用了 `latest/download/`
 
 **现象**: 存在潜在的版本不稳定风险。
 
@@ -130,7 +225,7 @@ error: consider using `sort_by_key`
 
 ---
 
-### 问题 4: Playwright Chromium 缺少系统运行库
+### 问题 9: Playwright Chromium 缺少系统运行库
 
 **现象**: Pipeline #51（Job 220）已通过 `cargo clippy -- -D warnings`、`cargo check`、`cargo test`，但在 `npm test` 阶段大量 E2E 失败。
 
@@ -149,38 +244,106 @@ chrome-headless-shell: error while loading shared libraries: libnspr4.so: cannot
 + npx playwright install --with-deps chromium
 ```
 
-**状态**: ✅ 已修复配置，待重新触发 Pipeline 验证。
+**状态**: ✅ 已修复。Pipeline #52 已验证通过。
 
 ---
 
-## 4. 当前现状
+### 问题 10: E2E 测试在成功流水线中仍有 flaky
 
-### 4.1 流水线状态
+**现象**: Pipeline #52 成功，但 `npm test` 输出 `1 flaky`，首个 `AgentMonitor` 用例第一次 `page.goto("/")` 超时，retry 后通过。
+
+**错误日志**:
+```
+Test timeout of 30000ms exceeded while running "beforeEach" hook.
+Error: page.goto: Test timeout of 30000ms exceeded.
+navigating to "http://localhost:1420/", waiting until "load"
+1 flaky
+42 passed (1.9m)
+```
+
+**根因**: CI 中 Playwright 使用 `npm run dev` 启动 Vite dev server。dev server 在冷启动、依赖扫描或资源抖动时可能导致首个页面加载超过 30 秒。
+
+**修复**: CI 已先执行 `npm run build`，因此 Playwright 在 CI 中改用 `vite preview` 服务已构建产物；本地仍使用 `npm run dev`。
+
+**状态**: ✅ 已调整。本地执行 `npm run build && CI=1 npm test` 验证为 `43 passed (13.3s)`，待下一次 Pipeline 验证 flaky 是否消失。
+
+---
+
+## 4. Pipeline #52 耗时分析
+
+Pipeline #52（Job 221）成功，GitLab API 记录 job duration 为 `779.982949s`，约 13 分钟。
+
+### 4.1 阶段耗时
+
+| 阶段 | 开始 | 结束 | 耗时 | 说明 |
+|------|------|------|------|------|
+| prepare / get sources | 07:50:43 | 07:50:52 | ~9s | 正常 |
+| restore cache | 07:50:52 | 07:52:52 | ~120s | 明显偏长 |
+| before_script + script | 07:52:52 | 08:02:56 | ~604s | 主要执行时间 |
+| archive cache | 08:02:56 | 08:03:38 | ~42s | 缓存打包偏长 |
+| upload artifacts / cleanup | 08:03:38 | 08:03:43 | ~5s | 正常 |
+
+### 4.2 关键命令耗时
+
+| 命令 | 耗时 | 说明 |
+|------|------|------|
+| `apt-get update` + Tauri 系统依赖 | ~61s | 每次容器冷安装 |
+| NodeSource setup + `apt-get install nodejs` | ~31s | 每次从公网配置源并安装 |
+| `rustup` 安装 stable Rust | ~140s | 最大单项耗时之一 |
+| `cargo-binstall` + `cargo-audit` 安装 | ~11s | 可通过预置工具减少 |
+| `npm ci` | ~10s | npm cache 生效，耗时可接受 |
+| `npx playwright install --with-deps chromium` | ~52s | 安装/校验浏览器和系统依赖 |
+| `npm run build` | ~111s | 前端构建耗时明显 |
+| `cargo clippy` | ~9s | 已受前序依赖缓存影响 |
+| `cargo check` | ~5s | 与 clippy 有一定重复，可考虑移除 |
+| `cargo test` | ~43s | 单元测试本身约 3s，主要是测试编译 |
+| `cargo audit` + `npm audit` | ~13s | 非阻塞 |
+| `npm test` | ~113s | 43 个 E2E，含一次 flaky retry |
+
+### 4.3 结论
+
+耗时长的核心原因不是某个测试特别慢，而是 `ubuntu:22.04` 裸镜像每次冷启动后动态安装完整工具链和桌面/WebView/浏览器依赖，同时 GitLab cache restore/archive 也较重。短期可减少 flaky 和少量重复检查；中期应使用内部基础镜像解决大头。
+
+---
+
+## 5. 当前现状
+
+### 5.1 流水线状态
 
 | 流水线 | 状态 | 说明 |
 |-------|------|------|
+| Pipeline #36 | ❌ 失败 | Rust Git 测试缺少 `git`（已修复） |
+| Pipeline #37 | ❌ 失败 | rustup 下载 HTTP/2 错误（外网波动） |
+| Pipeline #38 | ❌ 失败 | apt 阶段 exit 137（Runner/容器被杀） |
+| Pipeline #39 | ❌ 失败 | `cd src-tauri` 路径错误（已修复） |
+| Pipeline #41 | ❌ 失败 | NodeSource 连接超时（外网波动） |
+| Pipeline #43 | ❌ 失败 | rustup 下载 HTTP/2 错误（外网波动） |
+| Pipeline #44/#45 | ❌ 失败 | Runner system failure（基础设施中断） |
 | Pipeline #48 | ❌ 失败 | `cargo-binstall` 路径错误（已修复） |
-| Pipeline #49 | ❌ 失败 | Clippy 4 个 lint 错误（本地已修复，待重新触发验证） |
-| Pipeline #51 | ❌ 失败 | Clippy 已通过，E2E 阶段 Chromium 缺少 `libnspr4.so`（已修复配置，待重新触发验证） |
+| Pipeline #49/#50 | ❌ 失败 | Clippy 4 个 lint 错误（已修复） |
+| Pipeline #51 | ❌ 失败 | Chromium 缺少 `libnspr4.so`（已修复） |
+| Pipeline #52 | ✅ 成功 | 全流程通过；存在一次 E2E flaky retry，已调整 Playwright CI server，并已本地验证 CI 模式 E2E 无 flaky |
 
-**当前阻塞点**: Playwright Chromium 系统依赖已补齐，下一步需要重新触发 GitLab Pipeline，确认 CI 环境通过。
+**当前阻塞点**: 无硬阻塞。下一步重点是验证 Playwright flaky 是否消失，并决定是否制作内部 CI 基础镜像。
 
-### 4.2 环境版本差异
+### 5.2 环境版本差异
 
 | 环境 | Rust 版本 | Clippy 行为 |
 |-----|----------|------------|
 | 本地开发环境 | 1.93.0 | 修复后 `cargo clippy -- -D warnings` 通过 |
-| CI (Docker) | 1.95.0 (2026-04-14) | 触发 4 个新 lint 规则 |
+| CI (Docker) | 1.95.0 (2026-04-14) | 曾触发 4 个新 lint 规则 |
 
 **建议**: 定期更新本地 Rust 工具链，或在 CI 中锁定特定 Rust 版本以避免版本漂移。
 
-### 4.3 待办事项
+### 5.3 后续优化建议
 
-1. [x] 修复 4 个 Clippy 警告（`scanner.rs:113`、`session_transcript.rs:478/574/661`）
+1. [x] 修复 4 个 Clippy 警告（`scanner.rs`、`session_transcript.rs`）
 2. [x] 修复 Playwright Chromium 系统依赖安装方式（`--with-deps`）
-3. [ ] 重新触发 Pipeline 验证
-4. [ ] 考虑在 CI 中锁定 Rust 版本（如 `rustup default 1.95.0`）
-5. [ ] 考虑统一本地和 CI 的 Rust 版本
+3. [x] Pipeline #52 验证全流程通过
+4. [x] CI 下 Playwright 改用 `vite preview`，减少 dev server 冷启动 flaky
+5. [ ] 制作内部 CI 基础镜像，预置 Node.js、Rust、Tauri Linux 依赖、Playwright 依赖和常用 cargo 工具
+6. [ ] 评估 cache 策略：当前 restore cache 约 120s、archive cache 约 42s，需要确认缓存收益是否大于压缩/解压成本
+7. [ ] 考虑移除 `cargo check`，因为 `cargo clippy -- -D warnings` 已覆盖编译检查；当前可节省约 5s
 
 ---
 

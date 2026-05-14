@@ -16,7 +16,7 @@ export default defineConfig({
   timeout: 30000,
 
   use: {
-    baseURL: "http://localhost:1420",
+    baseURL: "http://127.0.0.1:1420",
     trace: "on-first-retry",
     screenshot: "only-on-failure",
   },
@@ -29,8 +29,10 @@ export default defineConfig({
   ],
 
   webServer: {
-    command: "npm run dev",
-    url: "http://localhost:1420",
+    command: process.env.CI
+      ? "npm run preview -- --host 0.0.0.0 --port 1420"
+      : "npm run dev -- --host 0.0.0.0 --port 1420",
+    url: "http://127.0.0.1:1420",
     reuseExistingServer: !process.env.CI,
     timeout: 60000,
   },
