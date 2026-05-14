@@ -323,27 +323,29 @@ Pipeline #52（Job 221）成功，GitLab API 记录 job duration 为 `779.982949
 | Pipeline #49/#50 | ❌ 失败 | Clippy 4 个 lint 错误（已修复） |
 | Pipeline #51 | ❌ 失败 | Chromium 缺少 `libnspr4.so`（已修复） |
 | Pipeline #52 | ✅ 成功 | 全流程通过；存在一次 E2E flaky retry，已调整 Playwright CI server，并已本地验证 CI 模式 E2E 无 flaky |
+| Pipeline #53 | ✅ 成功 | 全流程通过，43 passed (12.9s)，无 flaky |
 
-**当前阻塞点**: 无硬阻塞。下一步重点是验证 Playwright flaky 是否消失，并决定是否制作内部 CI 基础镜像。
+**当前阻塞点**: 无。所有问题已修复，流水线稳定通过。
 
 ### 5.2 环境版本差异
 
 | 环境 | Rust 版本 | Clippy 行为 |
 |-----|----------|------------|
 | 本地开发环境 | 1.93.0 | 修复后 `cargo clippy -- -D warnings` 通过 |
-| CI (Docker) | 1.95.0 (2026-04-14) | 曾触发 4 个新 lint 规则 |
+| CI (Docker) | 1.95.0 (2026-04-14) | 已锁定版本，避免漂移 |
 
-**建议**: 定期更新本地 Rust 工具链，或在 CI 中锁定特定 Rust 版本以避免版本漂移。
+**版本锁定**: CI 中已固定 Rust 版本为 `1.95.0`，本地建议同步升级以避免未来版本差异。如需升级，需同时更新 `.gitlab-ci.yml` 中的版本号并验证所有检查通过。
 
 ### 5.3 后续优化建议
 
 1. [x] 修复 4 个 Clippy 警告（`scanner.rs`、`session_transcript.rs`）
 2. [x] 修复 Playwright Chromium 系统依赖安装方式（`--with-deps`）
-3. [x] Pipeline #52 验证全流程通过
+3. [x] Pipeline #52 / #53 验证全流程通过
 4. [x] CI 下 Playwright 改用 `vite preview`，减少 dev server 冷启动 flaky
-5. [ ] 制作内部 CI 基础镜像，预置 Node.js、Rust、Tauri Linux 依赖、Playwright 依赖和常用 cargo 工具
-6. [ ] 评估 cache 策略：当前 restore cache 约 120s、archive cache 约 42s，需要确认缓存收益是否大于压缩/解压成本
-7. [ ] 考虑移除 `cargo check`，因为 `cargo clippy -- -D warnings` 已覆盖编译检查；当前可节省约 5s
+5. [x] CI 中锁定 Rust 版本为 1.95.0
+6. [ ] 制作内部 CI 基础镜像，预置 Node.js、Rust、Tauri Linux 依赖、Playwright 依赖和常用 cargo 工具
+7. [ ] 评估 cache 策略：当前 restore cache 约 120s、archive cache 约 42s，需要确认缓存收益是否大于压缩/解压成本
+8. [ ] 考虑移除 `cargo check`，因为 `cargo clippy -- -D warnings` 已覆盖编译检查；当前可节省约 5s
 
 ---
 
