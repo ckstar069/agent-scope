@@ -25,6 +25,7 @@ verify:
     - curl --proto '=https' --tlsv1.2 -sSf https://sh.rustup.rs | sh -s -- -y --default-toolchain stable
     - source "$CARGO_HOME/env"
     - npm ci
+    - npx playwright install --with-deps chromium
   script:
     - echo "=== 构建前端 ==="
     - npm run build
@@ -32,6 +33,8 @@ verify:
     - cd "$CI_PROJECT_DIR/src-tauri" && cargo check
     - echo "=== Rust 测试 ==="
     - cd "$CI_PROJECT_DIR/src-tauri" && cargo test
+    - echo "=== E2E 测试 ==="
+    - npm test || echo "E2E tests exited with $? (non-blocking)"
   rules:
     - if: '$CI_PIPELINE_SOURCE == "merge_request_event"'
     - if: '$CI_COMMIT_BRANCH == "main"'
