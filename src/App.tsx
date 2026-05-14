@@ -1,11 +1,11 @@
 import { useEffect, useMemo, useState } from "react";
 
 import { Layout } from "@/components/Layout";
-import { AgentMonitor } from "@/pages/AgentMonitor";
-import { ClaudeHistory } from "@/pages/ClaudeHistory";
-import { Dashboard } from "@/pages/Dashboard";
-import { ProjectDetail } from "@/pages/ProjectDetail";
-import { Settings } from "@/pages/Settings";
+import { AgentMonitor } from "@/features/agent-monitor";
+import { ClaudeHistory } from "@/features/claude-history";
+import { Dashboard } from "@/features/dashboard";
+import { ProjectDetail } from "@/features/project-detail";
+import { Settings } from "@/features/settings";
 
 export type AppRoute = "dashboard" | "agents" | "settings" | "claude-history";
 

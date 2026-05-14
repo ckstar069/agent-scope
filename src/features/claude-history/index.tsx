@@ -2,10 +2,10 @@ import { useCallback, useEffect, useRef, useState } from "react";
 import { RefreshCw } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { ScrollArea } from "@/components/ui/scroll-area";
-import { ProjectList } from "@/components/claude-history/ProjectList";
-import { SearchBar } from "@/components/claude-history/SearchBar";
-import { SessionTimeline } from "@/components/claude-history/SessionTimeline";
-import { useClaudeHistory } from "@/hooks/useClaudeHistory";
+import { ProjectList } from "./components/ProjectList";
+import { SearchBar } from "./components/SearchBar";
+import { SessionTimeline } from "./components/SessionTimeline";
+import { useClaudeHistory } from "./hooks/useClaudeHistory";
 import { cn } from "@/lib/utils";
 
 export function ClaudeHistory() {
