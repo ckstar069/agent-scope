@@ -13,6 +13,7 @@ cache:
     - .cargo/
     - .npm/
     - src-tauri/target/
+    - node_modules/.cache/ms-playwright/
 
 verify:
   stage: verify
@@ -25,7 +26,7 @@ verify:
     - curl --proto '=https' --tlsv1.2 -sSf https://sh.rustup.rs | sh -s -- -y --default-toolchain stable
     - source "$CARGO_HOME/env"
     - npm ci
-    - npx playwright install --with-deps chromium
+    - npx playwright install chromium
   script:
     - echo "=== 构建前端 ==="
     - npm run build
