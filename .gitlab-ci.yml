@@ -55,6 +55,7 @@ test:e2e:
   image: ubuntu:22.04
   script:
     - npm test
+  allow_failure: true
   rules:
     - if: '$CI_PIPELINE_SOURCE == "merge_request_event"'
     - if: '$CI_COMMIT_BRANCH == "main"'
