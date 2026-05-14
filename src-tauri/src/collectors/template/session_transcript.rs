@@ -1,3 +1,4 @@
+use std::cmp::Reverse;
 use std::collections::HashSet;
 use std::fmt;
 use std::fs;
@@ -475,7 +476,7 @@ fn parse_timestamp_ms(ts_str: &str) -> Option<u64> {
 
     // 计算自 epoch 以来的天数（简化算法，对于大多数日期够用）
     let days = days_since_epoch(year, month, day)?;
-    let total_secs = days as i64 * 86400 + hour * 3600 + minute * 60 + second;
+    let total_secs = days * 86400 + hour * 3600 + minute * 60 + second;
 
     if total_secs < 0 {
         return None;
@@ -571,16 +572,15 @@ fn process_jsonl_entry(ctx: &mut ParseContext, val: &Value, file_seen: &mut Hash
         }
 
         "custom-title" => {
-            if ctx.custom_title.is_none() {
-                let title = val
-                    .get("title")
+            if let (true, Some(t)) = (
+                ctx.custom_title.is_none(),
+                val.get("title")
                     .and_then(|v| v.as_str())
-                    .or_else(|| val.get("content").and_then(|v| v.as_str()));
-                if let Some(t) = title {
-                    let title = clean_transcript_text(t);
-                    if !is_noisy_text(&title) {
-                        ctx.custom_title = Some(title);
-                    }
+                    .or_else(|| val.get("content").and_then(|v| v.as_str())),
+            ) {
+                let title = clean_transcript_text(t);
+                if !is_noisy_text(&title) {
+                    ctx.custom_title = Some(title);
                 }
             }
         }
@@ -658,7 +658,7 @@ fn list_jsonl_files(dir: &Path) -> Result<Vec<(PathBuf, u64)>, TranscriptError> 
     }
 
     // 按修改时间降序（最新的在前）
-    files.sort_by(|a, b| b.1.cmp(&a.1));
+    files.sort_by_key(|(_, mtime)| Reverse(*mtime));
     Ok(files)
 }
 

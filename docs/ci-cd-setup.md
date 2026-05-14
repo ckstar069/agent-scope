@@ -102,7 +102,14 @@ error: consider using `sort_by_key`
 - `clippy::unnecessary_cast`（1 处）
 - `clippy::collapsible_match`（1 处）
 
-**状态**: ⏳ 待修复（4 个 Clippy 警告）。
+**修复**:
+
+- `scanner.rs:113`：降序时间排序改为 `sort_by_key(|entry| Reverse(entry.timestamp))`
+- `session_transcript.rs:478`：移除 `days as i64` 冗余转换
+- `session_transcript.rs:574`：合并 `custom-title` 分支中的嵌套判断
+- `session_transcript.rs:661`：降序 mtime 排序改为 `sort_by_key(|(_, mtime)| Reverse(*mtime))`
+
+**状态**: ✅ 已在本地验证通过。2026-05-14 执行 `cargo fmt --check`、`cargo clippy -- -D warnings`、`cargo test` 均通过；仍需重新触发 GitLab Pipeline 验证 CI 环境。
 
 ---
 
@@ -130,22 +137,22 @@ error: consider using `sort_by_key`
 | 流水线 | 状态 | 说明 |
 |-------|------|------|
 | Pipeline #48 | ❌ 失败 | `cargo-binstall` 路径错误（已修复） |
-| Pipeline #49 | ❌ 失败 | Clippy 4 个 lint 错误（待修复） |
+| Pipeline #49 | ❌ 失败 | Clippy 4 个 lint 错误（本地已修复，待重新触发验证） |
 
-**当前阻塞点**: 4 个 Clippy 警告需要修复后流水线才能通过。
+**当前阻塞点**: 4 个 Clippy 警告已在本地修复，下一步需要重新触发 GitLab Pipeline，确认 CI 环境通过。
 
 ### 4.2 环境版本差异
 
 | 环境 | Rust 版本 | Clippy 行为 |
 |-----|----------|------------|
-| 本地开发环境 | 较旧版本 | 无相关警告 |
+| 本地开发环境 | 1.93.0 | 修复后 `cargo clippy -- -D warnings` 通过 |
 | CI (Docker) | 1.95.0 (2026-04-14) | 触发 4 个新 lint 规则 |
 
 **建议**: 定期更新本地 Rust 工具链，或在 CI 中锁定特定 Rust 版本以避免版本漂移。
 
 ### 4.3 待办事项
 
-1. [ ] 修复 4 个 Clippy 警告（`scanner.rs:113`、`session_transcript.rs:478/574/661`）
+1. [x] 修复 4 个 Clippy 警告（`scanner.rs:113`、`session_transcript.rs:478/574/661`）
 2. [ ] 重新触发 Pipeline 验证
 3. [ ] 考虑在 CI 中锁定 Rust 版本（如 `rustup default 1.95.0`）
 4. [ ] 考虑统一本地和 CI 的 Rust 版本

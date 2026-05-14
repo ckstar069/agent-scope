@@ -1,3 +1,4 @@
+use std::cmp::Reverse;
 use std::collections::HashMap;
 use std::fs;
 use std::io::{BufRead, BufReader};
@@ -110,7 +111,7 @@ pub fn search_claude_history(query: &str) -> Result<Vec<SerHistoryEntry>, String
         }
     }
 
-    results.sort_by(|a, b| b.timestamp.cmp(&a.timestamp));
+    results.sort_by_key(|entry| Reverse(entry.timestamp));
     Ok(results)
 }
 
