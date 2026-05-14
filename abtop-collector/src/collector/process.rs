@@ -5,7 +5,11 @@ use std::process::Command;
 
 /// 创建静默命令：Windows 上隐藏命令行窗口
 fn silent_cmd(program: &str) -> Command {
+    #[cfg(windows)]
     let mut cmd = Command::new(program);
+    #[cfg(not(windows))]
+    let cmd = Command::new(program);
+
     #[cfg(windows)]
     {
         use std::os::windows::process::CommandExt;

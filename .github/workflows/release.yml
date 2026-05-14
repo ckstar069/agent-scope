@@ -5,6 +5,18 @@ on:
     tags:
       - 'v*'
   workflow_dispatch:
+    inputs:
+      tag:
+        description: 'Release tag (e.g., v1.2.3)'
+        required: true
+      draft:
+        description: 'Create as draft release'
+        type: boolean
+        default: true
+
+env:
+  CARGO_NET_RETRY: 3
+  CARGO_HTTP_TIMEOUT: 120
 
 jobs:
   build:
@@ -53,7 +65,7 @@ jobs:
         if: matrix.platform == 'ubuntu-22.04'
         run: |
           sudo apt-get update
-          sudo apt-get install -y libwebkit2gtk-4.1-dev libayatana-appindicator3-dev librsvg2-dev patchelf
+          sudo apt-get install -y --no-install-recommends libwebkit2gtk-4.1-dev libayatana-appindicator3-dev librsvg2-dev patchelf
 
       - name: Install frontend dependencies
         run: npm ci
@@ -63,9 +75,37 @@ jobs:
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         with:
-          tagName: ${{ github.ref_name }}
-          releaseName: 'AgentScope ${{ github.ref_name }}'
+          tagName: ${{ github.event.inputs.tag || github.ref_name }}
+          releaseName: 'AgentScope ${{ github.event.inputs.tag || github.ref_name }}'
           releaseBody: 'See the assets to download and install this version.'
-          releaseDraft: true
+          releaseDraft: ${{ github.event.inputs.draft != false }}
           prerelease: false
           args: ${{ matrix.args }}
+
+      - name: Generate SHA-256 checksums
+        shell: bash
+        run: |
+          echo "=== 生成 SHA-256 校验和 ==="
+          mkdir -p checksums
+          BUNDLE_DIR="src-tauri/target/release/bundle"
+          if [[ "${{ matrix.platform }}" == "windows-latest" ]]; then
+            find "$BUNDLE_DIR" -maxdepth 2 -type f \( -name "*.exe" -o -name "*.msi" -o -name "*.nsis.zip" \) -print0 2>/dev/null | while IFS= read -r -d '' file; do
+              sha256sum "$file" >> "checksums/sha256-${{ matrix.platform }}-${{ matrix.target || 'x86_64' }}.txt"
+            done
+          else
+            find "$BUNDLE_DIR" -maxdepth 2 -type f \( -name "*.AppImage" -o -name "*.deb" -o -name "*.dmg" -o -name "*.tar.gz" -o -name "*.zip" \) -print0 2>/dev/null | while IFS= read -r -d '' file; do
+              sha256sum "$file" >> "checksums/sha256-${{ matrix.platform }}-${{ matrix.target || 'x86_64' }}.txt"
+            done
+          fi
+          if [[ -f "checksums/sha256-${{ matrix.platform }}-${{ matrix.target || 'x86_64' }}.txt" ]]; then
+            cat "checksums/sha256-${{ matrix.platform }}-${{ matrix.target || 'x86_64' }}.txt"
+          else
+            echo "未找到构建产物"
+          fi
+
+      - name: Upload checksum artifacts
+        uses: actions/upload-artifact@v4
+        with:
+          name: checksums-${{ matrix.platform }}-${{ matrix.target || 'x86_64' }}
+          path: checksums/
+          if-no-files-found: ignore

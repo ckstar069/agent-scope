@@ -213,18 +213,17 @@ impl ParseContext {
 fn extract_text_from_content(content: &Value) -> String {
     let raw_text = match content {
         Value::String(s) => s.clone(),
-        Value::Array(arr) => {
-            arr.iter()
-                .filter_map(|block| {
-                    if block.get("type").and_then(|t| t.as_str()) == Some("text") {
-                        block.get("text").and_then(|t| t.as_str())
-                    } else {
-                        None
-                    }
-                })
-                .collect::<Vec<_>>()
-                .join("\n")
-        }
+        Value::Array(arr) => arr
+            .iter()
+            .filter_map(|block| {
+                if block.get("type").and_then(|t| t.as_str()) == Some("text") {
+                    block.get("text").and_then(|t| t.as_str())
+                } else {
+                    None
+                }
+            })
+            .collect::<Vec<_>>()
+            .join("\n"),
         _ => String::new(),
     };
 
@@ -239,7 +238,12 @@ fn extract_text_from_content(content: &Value) -> String {
 fn clean_transcript_text(text: &str) -> String {
     let mut cleaned = text.replace("\r\n", "\n").replace('\r', "\n");
 
-    for tag in ["local-command-caveat", "command-name", "system-reminder", "work_context"] {
+    for tag in [
+        "local-command-caveat",
+        "command-name",
+        "system-reminder",
+        "work_context",
+    ] {
         cleaned = remove_tagged_block(&cleaned, tag);
     }
 
@@ -356,7 +360,9 @@ fn extract_files_from_tool_use(block: &Value) -> Vec<String> {
 
     // 常见文件操作工具及其参数键名
     let file_keys: &[&str] = match tool_name {
-        "read" | "write" | "edit" | "Bash" | "Glob" | "Grep" | "Read" => &["file_path", "path", "filePath", "command"],
+        "read" | "write" | "edit" | "Bash" | "Glob" | "Grep" | "Read" => {
+            &["file_path", "path", "filePath", "command"]
+        }
         _ => &[],
     };
 
@@ -430,10 +436,8 @@ fn parse_timestamp_ms(ts_str: &str) -> Option<u64> {
     let day: i64 = date_parts[2].parse().ok()?;
 
     // 去掉时区后缀
-    let time_clean = time_part
-        .strip_suffix('Z')
-        .unwrap_or(time_part);
-    let time_clean = if let Some(pos) = time_clean.find(|c: char| c == '+' || c == '-') {
+    let time_clean = time_part.strip_suffix('Z').unwrap_or(time_part);
+    let time_clean = if let Some(pos) = time_clean.find(['+', '-']) {
         // 注意：可能匹配到负数的数字部分，需要检查上下文
         // 对于 ISO 8601，时区偏移出现在时间部分末尾，如 "10:30:00+08:00"
         // 简单处理：从后往前找 `+` 或 `-`，但只检查倒数几个字符
@@ -451,7 +455,11 @@ fn parse_timestamp_ms(ts_str: &str) -> Option<u64> {
     let minute: i64 = time_parts[1].parse().ok()?;
 
     // 秒可能包含毫秒小数
-    let sec_str = if time_parts.len() > 2 { time_parts[2] } else { "0" };
+    let sec_str = if time_parts.len() > 2 {
+        time_parts[2]
+    } else {
+        "0"
+    };
     let (sec_str, ms_str) = if let Some(dot_pos) = sec_str.find('.') {
         (&sec_str[..dot_pos], &sec_str[dot_pos + 1..])
     } else {
@@ -477,7 +485,7 @@ fn parse_timestamp_ms(ts_str: &str) -> Option<u64> {
 
 /// 计算自 Unix epoch (1970-01-01) 以来的天数（简化算法）
 fn days_since_epoch(year: i64, month: i64, day: i64) -> Option<i64> {
-    if year < 1970 || month < 1 || month > 12 || day < 1 || day > 31 {
+    if year < 1970 || !(1..=12).contains(&month) || !(1..=31).contains(&day) {
         return None;
     }
     let mut total_days = 0i64;
@@ -488,7 +496,11 @@ fn days_since_epoch(year: i64, month: i64, day: i64) -> Option<i64> {
     // 添加当年过去月份的天数
     let month_days_normal = [31, 28, 31, 30, 31, 30, 31, 31, 30, 31, 30, 31];
     let month_days_leap = [31, 29, 31, 30, 31, 30, 31, 31, 30, 31, 30, 31];
-    let md = if is_leap_year(year) { &month_days_leap } else { &month_days_normal };
+    let md = if is_leap_year(year) {
+        &month_days_leap
+    } else {
+        &month_days_normal
+    };
     for m in 1..month {
         total_days += md[(m - 1) as usize] as i64;
     }
@@ -603,11 +615,7 @@ fn parse_jsonl_file(file_path: &Path, build_turns: bool) -> Result<ParseContext,
             Ok(v) => v,
             Err(e) => {
                 // 跳过无法解析的行
-                eprintln!(
-                    "JSONL 解析警告 {}: {} — 跳过该行",
-                    file_path.display(),
-                    e
-                );
+                eprintln!("JSONL 解析警告 {}: {} — 跳过该行", file_path.display(), e);
                 continue;
             }
         };
@@ -708,11 +716,7 @@ impl SessionTranscriptCollector {
                     });
                 }
                 Err(e) => {
-                    eprintln!(
-                        "解析会话失败 {}: {} — 跳过",
-                        file_path.display(),
-                        e
-                    );
+                    eprintln!("解析会话失败 {}: {} — 跳过", file_path.display(), e);
                 }
             }
         }
@@ -841,10 +845,7 @@ mod tests {
     /// 创建模拟的会话 JSONL 文件
     ///
     /// 返回临时目录路径（调用方需保持 `_dir` 存活以维持目录存在）。
-    fn create_mock_jsonl(
-        filename: &str,
-        lines: &[&str],
-    ) -> (PathBuf, tempfile::TempDir) {
+    fn create_mock_jsonl(filename: &str, lines: &[&str]) -> (PathBuf, tempfile::TempDir) {
         let dir = tempfile::tempdir().unwrap();
         let path = dir.path().join(filename);
         let mut file = fs::File::create(&path).unwrap();
@@ -1098,9 +1099,7 @@ mod tests {
     fn test_top_level_user_content() {
         let (path, _dir) = create_mock_jsonl(
             "ses_test.jsonl",
-            &[
-                r#"{"type":"user","content":"分析当前项目","timestamp":"2024-05-07T10:30:00.000Z"}"#,
-            ],
+            &[r#"{"type":"user","content":"分析当前项目","timestamp":"2024-05-07T10:30:00.000Z"}"#],
         );
 
         let ctx = parse_jsonl_file(&path.join("ses_test.jsonl"), true).unwrap();

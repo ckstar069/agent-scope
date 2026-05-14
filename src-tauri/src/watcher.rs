@@ -42,7 +42,9 @@ impl WatchEvent {
     /// 返回事件关联的路径引用
     pub fn path(&self) -> &Path {
         match self {
-            WatchEvent::Modified(p) | WatchEvent::Created(p) | WatchEvent::Deleted(p) => p.as_path(),
+            WatchEvent::Modified(p) | WatchEvent::Created(p) | WatchEvent::Deleted(p) => {
+                p.as_path()
+            }
         }
     }
 
@@ -128,7 +130,11 @@ impl FileWatcher {
     pub fn add(&mut self, path: PathBuf, recursive: bool) {
         // 规范化路径后再检查重复
         let canonical = normalize_path(&path);
-        if self.entries.iter().any(|e| normalize_path(&e.path) == canonical) {
+        if self
+            .entries
+            .iter()
+            .any(|e| normalize_path(&e.path) == canonical)
+        {
             return;
         }
         self.entries.push(WatchEntry { path, recursive });
@@ -137,7 +143,8 @@ impl FileWatcher {
     /// 移除一个监听路径
     pub fn remove(&mut self, path: &Path) {
         let canonical = normalize_path(path);
-        self.entries.retain(|e| normalize_path(&e.path) != canonical);
+        self.entries
+            .retain(|e| normalize_path(&e.path) != canonical);
     }
 
     /// 获取所有已注册的监听路径
@@ -288,7 +295,11 @@ impl MtimeSnapshot {
                 Err(e) => {
                     // 权限错误等，在条目中记录错误（返回但不 panic）
                     // 标记目录本身不可访问（保留旧快照以检测恢复）
-                    log_error(&format!("cannot read directory '{}': {}", path.display(), e));
+                    log_error(&format!(
+                        "cannot read directory '{}': {}",
+                        path.display(),
+                        e
+                    ));
                 }
             }
         } else {
@@ -308,7 +319,11 @@ impl MtimeSnapshot {
     }
 
     /// 收集目录下所有文件的 mtime
-    fn collect_dir_mtimes(&self, dir: &Path, recursive: bool) -> std::io::Result<HashMap<String, SystemTime>> {
+    fn collect_dir_mtimes(
+        &self,
+        dir: &Path,
+        recursive: bool,
+    ) -> std::io::Result<HashMap<String, SystemTime>> {
         let mut result = HashMap::new();
 
         if recursive {
@@ -320,7 +335,11 @@ impl MtimeSnapshot {
         Ok(result)
     }
 
-    fn collect_recursive(&self, dir: &Path, result: &mut HashMap<String, SystemTime>) -> std::io::Result<()> {
+    fn collect_recursive(
+        &self,
+        dir: &Path,
+        result: &mut HashMap<String, SystemTime>,
+    ) -> std::io::Result<()> {
         if !dir.is_dir() {
             return Ok(());
         }
@@ -349,7 +368,11 @@ impl MtimeSnapshot {
         Ok(())
     }
 
-    fn collect_direct(&self, dir: &Path, result: &mut HashMap<String, SystemTime>) -> std::io::Result<()> {
+    fn collect_direct(
+        &self,
+        dir: &Path,
+        result: &mut HashMap<String, SystemTime>,
+    ) -> std::io::Result<()> {
         if !dir.is_dir() {
             return Ok(());
         }
@@ -481,10 +504,11 @@ mod tests {
         watcher.add(file_path.clone(), false);
 
         let (tx, rx) = mpsc::channel();
-        let handles = watcher.start(move |event| {
-            let _ = tx.send(event);
-        })
-        .expect("failed to start watcher");
+        let handles = watcher
+            .start(move |event| {
+                let _ = tx.send(event);
+            })
+            .expect("failed to start watcher");
 
         // 等待监听线程启动
         thread::sleep(Duration::from_millis(100));
@@ -547,7 +571,10 @@ mod tests {
             thread::sleep(Duration::from_millis(10));
         }
 
-        assert!(received, "should detect recursive directory change within 3s");
+        assert!(
+            received,
+            "should detect recursive directory change within 3s"
+        );
 
         handles.stop_and_join().ok();
     }
@@ -580,7 +607,10 @@ mod tests {
 
         let received: Vec<WatchEvent> = rx.try_iter().collect();
         let has_subdir_event = received.iter().any(|e| e.path() == file_path);
-        assert!(!has_subdir_event, "non-recursive watch should not detect subdir changes");
+        assert!(
+            !has_subdir_event,
+            "non-recursive watch should not detect subdir changes"
+        );
 
         handles.stop_and_join().ok();
     }
@@ -700,7 +730,10 @@ mod tests {
             thread::sleep(Duration::from_millis(10));
         }
 
-        assert!(received, "should detect file creation after starting watcher");
+        assert!(
+            received,
+            "should detect file creation after starting watcher"
+        );
         handles.stop_and_join().ok();
     }
 

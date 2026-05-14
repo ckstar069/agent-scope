@@ -5,17 +5,11 @@ use std::thread;
 use tauri::{AppHandle, Emitter};
 
 use crate::app_state::AppState;
-use crate::collectors::template::{
-    SessionTranscriptCollector, WatchedCollector,
-};
+use crate::collectors::template::{SessionTranscriptCollector, WatchedCollector};
 use crate::models::project::{SerSessionSummary, SerTranscript, TemplateDataPayload};
 use crate::utils::describe_path_error;
 
-pub fn start_watching(
-    path: String,
-    app_handle: AppHandle,
-    state: &AppState,
-) -> Result<(), String> {
+pub fn start_watching(path: String, app_handle: AppHandle, state: &AppState) -> Result<(), String> {
     let path_buf = PathBuf::from(&path);
 
     if !path_buf.exists() {
@@ -33,7 +27,10 @@ pub fn start_watching(
         .to_string();
 
     {
-        let watchers = state.watchers.lock().map_err(|e| format!("锁获取失败: {}", e))?;
+        let watchers = state
+            .watchers
+            .lock()
+            .map_err(|e| format!("锁获取失败: {}", e))?;
         if watchers.contains_key(&canonical_path) {
             return Err(format!("项目已在监听中: {}", canonical_path));
         }
@@ -43,7 +40,10 @@ pub fn start_watching(
     let (rx, stop_signal) = watched.start();
 
     {
-        let mut watchers = state.watchers.lock().map_err(|e| format!("锁获取失败: {}", e))?;
+        let mut watchers = state
+            .watchers
+            .lock()
+            .map_err(|e| format!("锁获取失败: {}", e))?;
         watchers.insert(canonical_path.clone(), stop_signal);
     }
 
@@ -73,7 +73,10 @@ pub fn stop_watching(path: String, state: &AppState) -> Result<(), String> {
         .to_string_lossy()
         .to_string();
 
-    let mut watchers = state.watchers.lock().map_err(|e| format!("锁获取失败: {}", e))?;
+    let mut watchers = state
+        .watchers
+        .lock()
+        .map_err(|e| format!("锁获取失败: {}", e))?;
 
     if let Some(stop_signal) = watchers.remove(&canonical_path) {
         stop_signal.store(false, Ordering::SeqCst);
@@ -108,10 +111,7 @@ pub fn list_project_sessions(path: String) -> Result<Vec<SerSessionSummary>, Str
     }
 }
 
-pub fn search_sessions(
-    path: String,
-    query: String,
-) -> Result<Vec<SerSessionSummary>, String> {
+pub fn search_sessions(path: String, query: String) -> Result<Vec<SerSessionSummary>, String> {
     let path_buf = PathBuf::from(&path);
     if !path_buf.exists() || !path_buf.is_dir() {
         return Err(describe_path_error(&path));
@@ -123,10 +123,7 @@ pub fn search_sessions(
     }
 }
 
-pub fn get_session_transcript(
-    path: String,
-    session_id: String,
-) -> Result<SerTranscript, String> {
+pub fn get_session_transcript(path: String, session_id: String) -> Result<SerTranscript, String> {
     let path_buf = PathBuf::from(&path);
     if !path_buf.exists() || !path_buf.is_dir() {
         return Err(describe_path_error(&path));

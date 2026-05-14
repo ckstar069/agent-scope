@@ -11,18 +11,12 @@ use crate::services::project_service::{
 };
 
 #[tauri::command]
-pub fn add_project_cmd(
-    path: String,
-    state: State<'_, AppState>,
-) -> Result<ProjectEntry, String> {
+pub fn add_project_cmd(path: String, state: State<'_, AppState>) -> Result<ProjectEntry, String> {
     add_project_service(path, state)
 }
 
 #[tauri::command]
-pub fn remove_project_cmd(
-    path: String,
-    state: State<'_, AppState>,
-) -> Result<(), String> {
+pub fn remove_project_cmd(path: String, state: State<'_, AppState>) -> Result<(), String> {
     remove_project_service(path, state)
 }
 
@@ -48,9 +42,6 @@ pub fn get_project_files_cmd(
 }
 
 #[tauri::command]
-pub fn get_project_file_content_cmd(
-    path: String,
-    relative_path: String,
-) -> Result<String, String> {
+pub fn get_project_file_content_cmd(path: String, relative_path: String) -> Result<String, String> {
     get_project_file_content_service(path, relative_path)
 }

@@ -5,7 +5,7 @@ use std::sync::atomic::{AtomicU64, Ordering};
 
 /// 创建静默命令：Windows 上隐藏命令行窗口，其他平台正常执行
 fn silent_command(program: &str) -> Command {
-    let mut cmd = Command::new(program);
+    let cmd = Command::new(program);
     #[cfg(windows)]
     {
         use std::os::windows::process::CommandExt;
@@ -186,21 +186,30 @@ pub fn find_python() -> Option<String> {
     } else {
         &["python3", "python"]
     };
-    
+
     if let Some(cmd) = find_python_from_candidates(path_candidates) {
         return Some(cmd);
     }
-    
+
     // Windows 上如果 PATH 中找不到，尝试常见安装路径
     #[cfg(target_os = "windows")]
     {
         let local_app_data = std::env::var("LOCALAPPDATA").unwrap_or_default();
         let program_files = std::env::var("ProgramFiles").unwrap_or_default();
-        
+
         let common_paths = [
-            format!("{}\\Programs\\Python\\Python311\\python.exe", local_app_data),
-            format!("{}\\Programs\\Python\\Python312\\python.exe", local_app_data),
-            format!("{}\\Programs\\Python\\Python313\\python.exe", local_app_data),
+            format!(
+                "{}\\Programs\\Python\\Python311\\python.exe",
+                local_app_data
+            ),
+            format!(
+                "{}\\Programs\\Python\\Python312\\python.exe",
+                local_app_data
+            ),
+            format!(
+                "{}\\Programs\\Python\\Python313\\python.exe",
+                local_app_data
+            ),
             format!("{}\\Python311\\python.exe", program_files),
             format!("{}\\Python312\\python.exe", program_files),
             format!("{}\\Python313\\python.exe", program_files),
@@ -208,7 +217,7 @@ pub fn find_python() -> Option<String> {
             "C:\\Python312\\python.exe".to_string(),
             "C:\\Python313\\python.exe".to_string(),
         ];
-        
+
         for path in &common_paths {
             if std::path::Path::new(path).exists() {
                 // 验证这个 python.exe 真的能运行
@@ -223,7 +232,7 @@ pub fn find_python() -> Option<String> {
             }
         }
     }
-    
+
     None
 }
 
@@ -231,8 +240,8 @@ pub fn find_python() -> Option<String> {
 fn find_python_from_candidates(candidates: &[&str]) -> Option<String> {
     for cmd in candidates {
         if silent_command(cmd)
-                    .arg("--version")
-                    .output()
+            .arg("--version")
+            .output()
             .map(|o| o.status.success())
             .unwrap_or(false)
         {
@@ -249,18 +258,16 @@ fn find_python_from_candidates(candidates: &[&str]) -> Option<String> {
 /// 执行 `python <path> export json <tempfile>` 并解析输出的 JSON 为 ProjectConfig
 pub fn parse_parameters_py(path: &Path) -> Result<ProjectConfig, ParameterError> {
     if !path.exists() {
-        return Err(ParameterError::FileNotFound(path.to_string_lossy().to_string()));
+        return Err(ParameterError::FileNotFound(
+            path.to_string_lossy().to_string(),
+        ));
     }
 
     let python = find_python().ok_or(ParameterError::PythonNotFound)?;
 
     let temp_dir = std::env::temp_dir();
     let seq = TEMP_COUNTER.fetch_add(1, Ordering::Relaxed);
-    let temp_file = temp_dir.join(format!(
-        "parameters_{}_{}.json",
-        std::process::id(),
-        seq,
-    ));
+    let temp_file = temp_dir.join(format!("parameters_{}_{}.json", std::process::id(), seq,));
 
     let output = python_command(&python)
         .arg(path)
@@ -303,9 +310,8 @@ pub fn parse_parameters_py(path: &Path) -> Result<ProjectConfig, ParameterError>
 
     let _ = fs::remove_file(&temp_file);
 
-    let config: ProjectConfig = serde_json::from_str(&json_str).map_err(|e| {
-        ParameterError::ParseError(format!("JSON 解析错误: {}", e))
-    })?;
+    let config: ProjectConfig = serde_json::from_str(&json_str)
+        .map_err(|e| ParameterError::ParseError(format!("JSON 解析错误: {}", e)))?;
 
     Ok(config)
 }
@@ -352,8 +358,11 @@ mod tests {
 
     #[test]
     fn test_parse_nonexistent_path() {
-        let result = parse_parameters_py(&std::env::temp_dir().join("nonexistent_parameters_file.py"));
-        assert!(matches!(result, Err(ParameterError::FileNotFound(msg)) if msg.contains("nonexistent_parameters_file.py")));
+        let result =
+            parse_parameters_py(&std::env::temp_dir().join("nonexistent_parameters_file.py"));
+        assert!(
+            matches!(result, Err(ParameterError::FileNotFound(msg)) if msg.contains("nonexistent_parameters_file.py"))
+        );
     }
 
     #[test]
@@ -371,7 +380,8 @@ mod tests {
         let result = parse_parameters_py(&bad_script);
         assert!(
             matches!(result, Err(ParameterError::ExportFailed(ref msg)) if msg.contains("Intentional failure") || msg.contains("exit code")),
-            "期望 ExportFailed 错误，得到: {:?}", result
+            "期望 ExportFailed 错误，得到: {:?}",
+            result
         );
 
         let _ = fs::remove_file(&bad_script);
@@ -455,10 +465,8 @@ mod tests {
     #[test]
     fn test_find_python_all_fail() {
         // 所有候选都不存在 → 返回 None
-        let result = find_python_from_candidates(&[
-            "nonexistent_cmd_1_xyz",
-            "nonexistent_cmd_2_xyz",
-        ]);
+        let result =
+            find_python_from_candidates(&["nonexistent_cmd_1_xyz", "nonexistent_cmd_2_xyz"]);
         assert!(result.is_none());
     }
 }

@@ -4,7 +4,7 @@ use std::process::Command;
 
 /// 创建静默 git 命令：Windows 上隐藏命令行窗口
 fn git_cmd() -> Command {
-    let mut cmd = Command::new("git");
+    let cmd = Command::new("git");
     #[cfg(windows)]
     {
         use std::os::windows::process::CommandExt;
@@ -49,7 +49,6 @@ impl GitStatus {
             changed_files: Vec::new(),
         }
     }
-
 }
 
 impl Default for GitStatus {
@@ -143,7 +142,9 @@ impl GitCollector {
                     .map_err(|e| GitError::CommandFailed(format!("git rev-parse 失败: {}", e)))?;
 
                 if hash_output.status.success() {
-                    let hash = String::from_utf8_lossy(&hash_output.stdout).trim().to_string();
+                    let hash = String::from_utf8_lossy(&hash_output.stdout)
+                        .trim()
+                        .to_string();
                     Ok(format!("(HEAD detached at {})", hash))
                 } else {
                     Ok(String::from("(unknown)"))
@@ -257,7 +258,6 @@ mod tests {
     use super::*;
     use std::fs;
     use std::io::Write;
-    use std::process::Command;
 
     fn init_git_repo(dir: &Path) {
         git_cmd()
@@ -300,8 +300,11 @@ mod tests {
         let status = GitCollector::collect(dir.path()).unwrap();
         // 新创建的仓库可能在 master 或 main 分支
         assert!(
-            status.branch == "master" || status.branch == "main" || status.branch.contains("detached"),
-            "unexpected branch: {}", status.branch
+            status.branch == "master"
+                || status.branch == "main"
+                || status.branch.contains("detached"),
+            "unexpected branch: {}",
+            status.branch
         );
         assert!(status.is_clean);
     }

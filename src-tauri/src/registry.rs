@@ -139,19 +139,23 @@ impl ProjectRegistry {
                             .projects
                             .drain()
                             .map(|(path, entry)| {
-                                let cleaned_path = if path.starts_with(r"\\?\") {
-                                    path[4..].to_string()
-                                } else {
-                                    path
-                                };
-                                (cleaned_path.clone(), ProjectEntry { path: cleaned_path, added_at: entry.added_at })
+                                let cleaned_path =
+                                    if let Some(stripped) = path.strip_prefix(r"\\?\") {
+                                        stripped.to_string()
+                                    } else {
+                                        path
+                                    };
+                                (
+                                    cleaned_path.clone(),
+                                    ProjectEntry {
+                                        path: cleaned_path,
+                                        added_at: entry.added_at,
+                                    },
+                                )
                             })
                             .collect();
                         data.projects = cleaned;
-                        return Self {
-                            storage_path,
-                            data,
-                        };
+                        return Self { storage_path, data };
                     }
                     // JSON 格式错误：打印警告但不阻止启动
                     eprintln!(
@@ -227,13 +231,10 @@ impl ProjectRegistry {
     /// - `NotFound`: 路径未注册
     /// - `PersistFailed`: 写入 JSON 文件失败
     pub fn remove(&mut self, path: &Path) -> Result<(), RegistryError> {
-        let key = Self::canonicalize(path)
-            .unwrap_or_else(|_| path.to_string_lossy().into_owned());
+        let key = Self::canonicalize(path).unwrap_or_else(|_| path.to_string_lossy().into_owned());
 
         if self.data.projects.remove(&key).is_none() {
-            return Err(RegistryError::NotFound(
-                path.to_string_lossy().into_owned(),
-            ));
+            return Err(RegistryError::NotFound(path.to_string_lossy().into_owned()));
         }
 
         self.save()?;
@@ -253,8 +254,7 @@ impl ProjectRegistry {
     ///
     /// - `NotFound`: 路径未注册
     pub fn get(&self, path: &Path) -> Result<ProjectEntry, RegistryError> {
-        let key = Self::canonicalize(path)
-            .unwrap_or_else(|_| path.to_string_lossy().into_owned());
+        let key = Self::canonicalize(path).unwrap_or_else(|_| path.to_string_lossy().into_owned());
 
         self.data
             .projects
@@ -289,8 +289,7 @@ impl ProjectRegistry {
     fn save(&self) -> Result<(), RegistryError> {
         // 确保父目录存在
         if let Some(parent) = self.storage_path.parent() {
-            fs::create_dir_all(parent)
-                .map_err(|e| RegistryError::PersistFailed(e.to_string()))?;
+            fs::create_dir_all(parent).map_err(|e| RegistryError::PersistFailed(e.to_string()))?;
         }
 
         let json = serde_json::to_string_pretty(&self.data)
@@ -353,10 +352,7 @@ mod tests {
         let proj = create_project(&base, "my-project");
 
         let entry = registry.add(&proj).unwrap();
-        assert_eq!(
-            entry.path,
-            proj.canonicalize().unwrap().to_string_lossy()
-        );
+        assert_eq!(entry.path, proj.canonicalize().unwrap().to_string_lossy());
         assert!(entry.added_at > 0, "时间戳应为正数");
     }
 
@@ -500,10 +496,7 @@ mod tests {
 
         registry.add(&proj).unwrap();
         let entry = registry.get(&proj).unwrap();
-        assert_eq!(
-            entry.path,
-            proj.canonicalize().unwrap().to_string_lossy()
-        );
+        assert_eq!(entry.path, proj.canonicalize().unwrap().to_string_lossy());
     }
 
     /// 测试：获取未注册项目应返回 NotFound
@@ -599,7 +592,10 @@ mod tests {
     #[test]
     fn test_default_data_dir() {
         let dir = ProjectRegistry::default_data_dir();
-        assert!(dir.ends_with("agent-scope"), "默认数据目录应以 agent-scope 结尾");
+        assert!(
+            dir.ends_with("agent-scope"),
+            "默认数据目录应以 agent-scope 结尾"
+        );
         // 应包含平台对应的数据目录前缀
         let name = dir.to_string_lossy();
         assert!(
@@ -651,10 +647,7 @@ mod tests {
         let mut registry = ProjectRegistry::new(json_path);
 
         let names = ["alpha", "beta", "gamma", "delta"];
-        let paths: Vec<_> = names
-            .iter()
-            .map(|n| create_project(&base, n))
-            .collect();
+        let paths: Vec<_> = names.iter().map(|n| create_project(&base, n)).collect();
 
         for p in &paths {
             registry.add(p).unwrap();

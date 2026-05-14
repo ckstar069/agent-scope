@@ -5,7 +5,10 @@ use std::path::Path;
 
 use serde_json::Value;
 
-use super::models::{ExportFormat, SerClaudeSession, SerHistoryEntry, SerPreviewMessage, SerProjectSessionGroup, SerSessionPreview, SerSessionStatus};
+use super::models::{
+    ExportFormat, SerClaudeSession, SerHistoryEntry, SerPreviewMessage, SerProjectSessionGroup,
+    SerSessionPreview, SerSessionStatus,
+};
 use super::path_codec::{claude_config_dir, decode_project_dir};
 
 /// 扫描所有 Claude Code 会话并按项目分组
@@ -26,7 +29,8 @@ pub fn list_claude_sessions() -> Result<Vec<SerProjectSessionGroup>, String> {
         group.sessions.sort_by(|a, b| {
             let a_active = if a.is_active { 1 } else { 0 };
             let b_active = if b.is_active { 1 } else { 0 };
-            b_active.cmp(&a_active)
+            b_active
+                .cmp(&a_active)
                 .then_with(|| b.started_at.unwrap_or(0).cmp(&a.started_at.unwrap_or(0)))
         });
     }
@@ -35,7 +39,8 @@ pub fn list_claude_sessions() -> Result<Vec<SerProjectSessionGroup>, String> {
     groups.sort_by(|a, b| {
         let a_active = a.sessions.iter().filter(|s| s.is_active).count();
         let b_active = b.sessions.iter().filter(|s| s.is_active).count();
-        b_active.cmp(&a_active)
+        b_active
+            .cmp(&a_active)
             .then_with(|| b.sessions.len().cmp(&a.sessions.len()))
     });
 
@@ -46,7 +51,11 @@ pub fn list_claude_sessions() -> Result<Vec<SerProjectSessionGroup>, String> {
 pub fn get_session_detail(session_id: &str) -> Result<Option<SerClaudeSession>, String> {
     let groups = list_claude_sessions()?;
     for group in groups {
-        if let Some(session) = group.sessions.into_iter().find(|s| s.session_id == session_id) {
+        if let Some(session) = group
+            .sessions
+            .into_iter()
+            .find(|s| s.session_id == session_id)
+        {
             return Ok(Some(session));
         }
     }
@@ -68,13 +77,21 @@ pub fn search_claude_history(query: &str) -> Result<Vec<SerHistoryEntry>, String
     let mut results = Vec::new();
 
     for line in reader.lines() {
-        let line = match line { Ok(l) => l, Err(_) => continue };
-        if line.trim().is_empty() { continue; }
+        let line = match line {
+            Ok(l) => l,
+            Err(_) => continue,
+        };
+        if line.trim().is_empty() {
+            continue;
+        }
 
         match serde_json::from_str::<Value>(&line) {
             Ok(value) => {
                 let display = value.get("display").and_then(|v| v.as_str()).unwrap_or("");
-                let session_id = value.get("sessionId").and_then(|v| v.as_str()).unwrap_or("");
+                let session_id = value
+                    .get("sessionId")
+                    .and_then(|v| v.as_str())
+                    .unwrap_or("");
                 let project = value.get("project").and_then(|v| v.as_str()).unwrap_or("");
 
                 if display.to_lowercase().contains(&query_lower)
@@ -116,7 +133,9 @@ pub fn delete_claude_session(session_id: &str) -> Result<(), String> {
     for entry in fs::read_dir(&projects_dir).map_err(|e| e.to_string())? {
         let entry = entry.map_err(|e| e.to_string())?;
         let path = entry.path();
-        if !path.is_dir() { continue; }
+        if !path.is_dir() {
+            continue;
+        }
 
         let jsonl_path = path.join(format!("{}.jsonl", session_id));
         if jsonl_path.exists() {
@@ -162,7 +181,9 @@ pub fn export_claude_session(
     for entry in fs::read_dir(&projects_dir).map_err(|e| e.to_string())? {
         let entry = entry.map_err(|e| e.to_string())?;
         let path = entry.path();
-        if !path.is_dir() { continue; }
+        if !path.is_dir() {
+            continue;
+        }
 
         let candidate = path.join(format!("{}.jsonl", session_id));
         if candidate.exists() {
@@ -175,12 +196,8 @@ pub fn export_claude_session(
 
     // 2. 根据格式处理并写入目标路径
     let content = match format {
-        ExportFormat::Jsonl => {
-            fs::read_to_string(&jsonl_path).map_err(|e| e.to_string())?
-        }
-        ExportFormat::Markdown => {
-            jsonl_to_markdown(&jsonl_path, session_id)?
-        }
+        ExportFormat::Jsonl => fs::read_to_string(&jsonl_path).map_err(|e| e.to_string())?,
+        ExportFormat::Markdown => jsonl_to_markdown(&jsonl_path, session_id)?,
     };
 
     fs::write(output_path, content).map_err(|e| format!("写入文件失败: {}", e))?;
@@ -202,7 +219,9 @@ pub fn preview_claude_session(session_id: &str) -> Result<SerSessionPreview, Str
     for entry in fs::read_dir(&projects_dir).map_err(|e| e.to_string())? {
         let entry = entry.map_err(|e| e.to_string())?;
         let path = entry.path();
-        if !path.is_dir() { continue; }
+        if !path.is_dir() {
+            continue;
+        }
 
         let candidate = path.join(format!("{}.jsonl", session_id));
         if candidate.exists() {
@@ -222,8 +241,13 @@ pub fn preview_claude_session(session_id: &str) -> Result<SerSessionPreview, Str
     let mut messages: Vec<SerPreviewMessage> = Vec::new();
 
     for line in reader.lines() {
-        let line = match line { Ok(l) => l, Err(_) => continue };
-        if line.trim().is_empty() { continue; }
+        let line = match line {
+            Ok(l) => l,
+            Err(_) => continue,
+        };
+        if line.trim().is_empty() {
+            continue;
+        }
 
         let value: Value = match serde_json::from_str(&line) {
             Ok(v) => v,
@@ -235,7 +259,10 @@ pub fn preview_claude_session(session_id: &str) -> Result<SerSessionPreview, Str
         match msg_type {
             "user" => {
                 if let Some(message) = value.get("message") {
-                    let role = message.get("role").and_then(|v| v.as_str()).unwrap_or("user");
+                    let role = message
+                        .get("role")
+                        .and_then(|v| v.as_str())
+                        .unwrap_or("user");
                     if let Some(content) = message.get("content") {
                         // content 可能是字符串或数组
                         if let Some(text) = content.as_str() {
@@ -264,33 +291,37 @@ pub fn preview_claude_session(session_id: &str) -> Result<SerSessionPreview, Str
             }
             "assistant" => {
                 if let Some(message) = value.get("message") {
-                    let role = message.get("role").and_then(|v| v.as_str()).unwrap_or("assistant");
+                    let role = message
+                        .get("role")
+                        .and_then(|v| v.as_str())
+                        .unwrap_or("assistant");
                     if let Some(content) = message.get("content").and_then(|c| c.as_array()) {
                         let mut has_text = false;
                         for item in content {
                             let item_type = item.get("type").and_then(|v| v.as_str()).unwrap_or("");
-                            match item_type {
-                                "text" => {
-                                    if let Some(text) = item.get("text").and_then(|v| v.as_str()) {
-                                        has_text = true;
-                                        messages.push(SerPreviewMessage {
-                                            role: role.to_string(),
-                                            content: text.to_string(),
-                                            timestamp: None,
-                                        });
-                                    }
+                            if item_type == "text" {
+                                if let Some(text) = item.get("text").and_then(|v| v.as_str()) {
+                                    has_text = true;
+                                    messages.push(SerPreviewMessage {
+                                        role: role.to_string(),
+                                        content: text.to_string(),
+                                        timestamp: None,
+                                    });
                                 }
-                                _ => {}
                             }
                         }
                         // 如果没有 text 但有 tool_use，生成简化描述
                         if !has_text {
                             for item in content {
-                                let item_type = item.get("type").and_then(|v| v.as_str()).unwrap_or("");
+                                let item_type =
+                                    item.get("type").and_then(|v| v.as_str()).unwrap_or("");
                                 if item_type == "tool_use" {
                                     if let Some(name) = item.get("name").and_then(|v| v.as_str()) {
-                                        let detail = item.get("input")
-                                            .and_then(|i| i.get("command").or_else(|| i.get("query")))
+                                        let detail = item
+                                            .get("input")
+                                            .and_then(|i| {
+                                                i.get("command").or_else(|| i.get("query"))
+                                            })
                                             .and_then(|v| v.as_str())
                                             .unwrap_or("");
                                         let desc = if detail.is_empty() {
@@ -346,8 +377,13 @@ fn jsonl_to_markdown(path: &std::path::Path, session_id: &str) -> Result<String,
     let mut items: Vec<MdItem> = Vec::new();
 
     for line in reader.lines() {
-        let line = match line { Ok(l) => l, Err(_) => continue };
-        if line.trim().is_empty() { continue; }
+        let line = match line {
+            Ok(l) => l,
+            Err(_) => continue,
+        };
+        if line.trim().is_empty() {
+            continue;
+        }
 
         let value: Value = match serde_json::from_str(&line) {
             Ok(v) => v,
@@ -377,30 +413,37 @@ fn jsonl_to_markdown(path: &std::path::Path, session_id: &str) -> Result<String,
             }
             "assistant" => {
                 if let Some(message) = value.get("message") {
-                    let role = message.get("role").and_then(|v| v.as_str()).unwrap_or("assistant");
+                    let role = message
+                        .get("role")
+                        .and_then(|v| v.as_str())
+                        .unwrap_or("assistant");
                     if let Some(content) = message.get("content").and_then(|c| c.as_array()) {
                         let mut has_text = false;
                         for item in content {
                             let item_type = item.get("type").and_then(|v| v.as_str()).unwrap_or("");
-                            match item_type {
-                                "text" => {
-                                    if let Some(text) = item.get("text").and_then(|v| v.as_str()) {
-                                        has_text = true;
-                                        let label = if role == "user" { "User" } else { "Assistant" };
-                                        items.push(MdItem::Assistant(format!("**{}**: {}\n\n", label, text)));
-                                    }
+                            if item_type == "text" {
+                                if let Some(text) = item.get("text").and_then(|v| v.as_str()) {
+                                    has_text = true;
+                                    let label = if role == "user" { "User" } else { "Assistant" };
+                                    items.push(MdItem::Assistant(format!(
+                                        "**{}**: {}\n\n",
+                                        label, text
+                                    )));
                                 }
-                                _ => {}
                             }
                         }
                         // 无 text 但有 tool_use 时生成简化描述
                         if !has_text {
                             for item in content {
-                                let item_type = item.get("type").and_then(|v| v.as_str()).unwrap_or("");
+                                let item_type =
+                                    item.get("type").and_then(|v| v.as_str()).unwrap_or("");
                                 if item_type == "tool_use" {
                                     if let Some(name) = item.get("name").and_then(|v| v.as_str()) {
-                                        let detail = item.get("input")
-                                            .and_then(|i| i.get("command").or_else(|| i.get("query")))
+                                        let detail = item
+                                            .get("input")
+                                            .and_then(|i| {
+                                                i.get("command").or_else(|| i.get("query"))
+                                            })
                                             .and_then(|v| v.as_str())
                                             .unwrap_or("");
                                         let desc = if detail.is_empty() {
@@ -456,6 +499,7 @@ fn jsonl_to_markdown(path: &std::path::Path, session_id: &str) -> Result<String,
 // ============================================================================
 
 struct ActiveSessionInfo {
+    #[allow(dead_code)]
     session_id: String,
     name: Option<String>,
     cwd: String,
@@ -475,20 +519,40 @@ fn scan_active_sessions(config_dir: &Path) -> Result<HashMap<String, ActiveSessi
     for entry in fs::read_dir(&sessions_dir).map_err(|e| e.to_string())? {
         let entry = entry.map_err(|e| e.to_string())?;
         let path = entry.path();
-        if path.extension().and_then(|e| e.to_str()) != Some("json") { continue; }
+        if path.extension().and_then(|e| e.to_str()) != Some("json") {
+            continue;
+        }
 
         match fs::read_to_string(&path) {
             Ok(content) => {
                 if let Ok(value) = serde_json::from_str::<Value>(&content) {
-                    let sid = value.get("sessionId").and_then(|v| v.as_str()).unwrap_or("").to_string();
-                    active.insert(sid.clone(), ActiveSessionInfo {
-                        session_id: sid,
-                        name: value.get("name").and_then(|v| v.as_str()).map(|s| s.to_string()),
-                        cwd: value.get("cwd").and_then(|v| v.as_str()).unwrap_or("").to_string(),
-                        status: value.get("status").and_then(|v| v.as_str()).unwrap_or("unknown").to_string(),
-                        started_at: value.get("startedAt").and_then(|v| v.as_u64()),
-                        updated_at: value.get("updatedAt").and_then(|v| v.as_u64()),
-                    });
+                    let sid = value
+                        .get("sessionId")
+                        .and_then(|v| v.as_str())
+                        .unwrap_or("")
+                        .to_string();
+                    active.insert(
+                        sid.clone(),
+                        ActiveSessionInfo {
+                            session_id: sid,
+                            name: value
+                                .get("name")
+                                .and_then(|v| v.as_str())
+                                .map(|s| s.to_string()),
+                            cwd: value
+                                .get("cwd")
+                                .and_then(|v| v.as_str())
+                                .unwrap_or("")
+                                .to_string(),
+                            status: value
+                                .get("status")
+                                .and_then(|v| v.as_str())
+                                .unwrap_or("unknown")
+                                .to_string(),
+                            started_at: value.get("startedAt").and_then(|v| v.as_u64()),
+                            updated_at: value.get("updatedAt").and_then(|v| v.as_u64()),
+                        },
+                    );
                 }
             }
             Err(_) => continue,
@@ -512,12 +576,21 @@ fn scan_projects(
     for entry in fs::read_dir(&projects_dir).map_err(|e| e.to_string())? {
         let entry = entry.map_err(|e| e.to_string())?;
         let encoded_dir = entry.path();
-        if !encoded_dir.is_dir() { continue; }
+        if !encoded_dir.is_dir() {
+            continue;
+        }
 
-        let dir_name = encoded_dir.file_name().and_then(|n| n.to_str()).unwrap_or("").to_string();
+        let dir_name = encoded_dir
+            .file_name()
+            .and_then(|n| n.to_str())
+            .unwrap_or("")
+            .to_string();
         let project_path = decode_project_dir(&dir_name);
         let _project_name = Path::new(&project_path)
-            .file_name().and_then(|n| n.to_str()).unwrap_or("").to_string();
+            .file_name()
+            .and_then(|n| n.to_str())
+            .unwrap_or("")
+            .to_string();
         let _is_orphaned = !Path::new(&project_path).exists();
 
         let mut sessions = Vec::new();
@@ -526,11 +599,19 @@ fn scan_projects(
         for file_entry in fs::read_dir(&encoded_dir).map_err(|e| e.to_string())? {
             let file_entry = file_entry.map_err(|e| e.to_string())?;
             let file_path = file_entry.path();
-            if file_path.extension().and_then(|e| e.to_str()) != Some("jsonl") { continue; }
+            if file_path.extension().and_then(|e| e.to_str()) != Some("jsonl") {
+                continue;
+            }
 
-            let session_id = file_path.file_stem().and_then(|s| s.to_str()).unwrap_or("").to_string();
+            let session_id = file_path
+                .file_stem()
+                .and_then(|s| s.to_str())
+                .unwrap_or("")
+                .to_string();
 
-            let mtime = file_entry.metadata().ok()
+            let mtime = file_entry
+                .metadata()
+                .ok()
                 .and_then(|m| m.modified().ok())
                 .and_then(|t| t.duration_since(std::time::SystemTime::UNIX_EPOCH).ok())
                 .map(|d| d.as_secs() * 1000);
@@ -546,7 +627,10 @@ fn scan_projects(
                         real_project_path = Some(active.cwd.clone());
                     }
                     (
-                        active.name.clone().or_else(|| extract_session_name(&file_path)),
+                        active
+                            .name
+                            .clone()
+                            .or_else(|| extract_session_name(&file_path)),
                         parsed,
                         active.started_at,
                         active.updated_at,
@@ -578,7 +662,10 @@ fn scan_projects(
             // 优先使用活跃会话中的真实路径，编解码无法还原下划线
             let final_path = real_project_path.unwrap_or(project_path);
             let final_name = Path::new(&final_path)
-                .file_name().and_then(|n| n.to_str()).unwrap_or("").to_string();
+                .file_name()
+                .and_then(|n| n.to_str())
+                .unwrap_or("")
+                .to_string();
             let final_orphaned = !Path::new(&final_path).exists();
 
             groups.push(SerProjectSessionGroup {
@@ -617,7 +704,9 @@ fn extract_session_name(jsonl_path: &Path) -> Option<String> {
 
     for line in reader.lines() {
         let line = line.ok()?;
-        if line.trim().is_empty() { continue; }
+        if line.trim().is_empty() {
+            continue;
+        }
         let value: Value = serde_json::from_str(&line).ok()?;
 
         let msg_type = value.get("type").and_then(|v| v.as_str()).unwrap_or("");
@@ -644,7 +733,14 @@ fn extract_session_name(jsonl_path: &Path) -> Option<String> {
                     if !content.trim_start().starts_with('<') {
                         // 截断过长的消息作为标题
                         let preview = if content.chars().count() > 40 {
-                            format!("{}...", &content[..content.char_indices().nth(37).map(|(i,_)| i).unwrap_or(37)])
+                            format!(
+                                "{}...",
+                                &content[..content
+                                    .char_indices()
+                                    .nth(37)
+                                    .map(|(i, _)| i)
+                                    .unwrap_or(37)]
+                            )
                         } else {
                             content.to_string()
                         };
@@ -668,8 +764,13 @@ fn count_user_turns(path: &Path) -> Result<usize, String> {
     let reader = BufReader::new(file);
     let mut count = 0;
     for line in reader.lines() {
-        let line = match line { Ok(l) => l, Err(_) => continue };
-        if line.trim().is_empty() { continue; }
+        let line = match line {
+            Ok(l) => l,
+            Err(_) => continue,
+        };
+        if line.trim().is_empty() {
+            continue;
+        }
         let value: Value = match serde_json::from_str(&line) {
             Ok(v) => v,
             Err(_) => continue,
@@ -696,7 +797,6 @@ fn count_user_turns(path: &Path) -> Result<usize, String> {
     }
     Ok(count)
 }
-
 
 #[cfg(test)]
 mod tests {
@@ -727,7 +827,11 @@ mod tests {
     #[test]
     fn test_export_nonexistent_session() {
         let temp_path = std::env::temp_dir().join("test-export-nonexistent.jsonl");
-        let result = export_claude_session("nonexistent-session-id-12345", ExportFormat::Jsonl, &temp_path);
+        let result = export_claude_session(
+            "nonexistent-session-id-12345",
+            ExportFormat::Jsonl,
+            &temp_path,
+        );
         assert!(result.is_err());
         let err = result.unwrap_err();
         assert!(err.contains("不存在"));

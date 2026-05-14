@@ -1,8 +1,13 @@
 use std::path::Path;
 
 use crate::collectors::claude_history::{
-    models::{ExportFormat, SerClaudeSession, SerHistoryEntry, SerProjectSessionGroup, SerSessionPreview},
-    scanner::{delete_claude_session, export_claude_session, get_session_detail, list_claude_sessions, preview_claude_session, search_claude_history},
+    models::{
+        ExportFormat, SerClaudeSession, SerHistoryEntry, SerProjectSessionGroup, SerSessionPreview,
+    },
+    scanner::{
+        delete_claude_session, export_claude_session, get_session_detail, list_claude_sessions,
+        preview_claude_session, search_claude_history,
+    },
 };
 
 pub fn list_claude_sessions_service() -> Result<Vec<SerProjectSessionGroup>, String> {

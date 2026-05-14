@@ -95,7 +95,9 @@ impl TemplateData {
                 path.join(".current_stage").to_string_lossy().to_string(),
             )),
             config: Err(ParameterError::FileNotFound(
-                path.join("config/parameters.py").to_string_lossy().to_string(),
+                path.join("config/parameters.py")
+                    .to_string_lossy()
+                    .to_string(),
             )),
             project_files: Ok(Vec::new()),
             git: Ok(GitStatus::no_repo()),
@@ -105,10 +107,7 @@ impl TemplateData {
 
     /// 返回是否所有采集器都成功
     pub fn is_complete(&self) -> bool {
-        self.stage.is_ok()
-            && self.config.is_ok()
-            && self.project_files.is_ok()
-            && self.git.is_ok()
+        self.stage.is_ok() && self.config.is_ok() && self.project_files.is_ok() && self.git.is_ok()
     }
 }
 
@@ -226,8 +225,8 @@ impl WatchedCollector {
             watcher.add(path.join("docs").join("design"), true);
             watcher.add(path.join("docs").join("specs"), true);
 
-            let pending: Arc<Mutex<Option<(Instant, Vec<PathBuf>)>>> =
-                Arc::new(Mutex::new(None));
+            type PendingSnapshot = Arc<Mutex<Option<(Instant, Vec<PathBuf>)>>>;
+            let pending: PendingSnapshot = Arc::new(Mutex::new(None));
             let pending_for_callback = pending.clone();
             let tx_for_callback = tx.clone();
             let path_for_callback = path.clone();
@@ -305,7 +304,11 @@ mod tests {
     #[test]
     fn test_source_layout_namespaced() {
         let dir = tempfile::tempdir().unwrap();
-        let python_model = dir.path().join("src").join("my_module").join("python_model");
+        let python_model = dir
+            .path()
+            .join("src")
+            .join("my_module")
+            .join("python_model");
         fs::create_dir_all(&python_model).unwrap();
 
         assert_eq!(
@@ -357,7 +360,13 @@ mod tests {
     fn test_template_data_collector_with_flat_layout() {
         let dir = tempfile::tempdir().unwrap();
 
-        fs::create_dir_all(dir.path().join("src").join("python_model").join("L1_prototype")).unwrap();
+        fs::create_dir_all(
+            dir.path()
+                .join("src")
+                .join("python_model")
+                .join("L1_prototype"),
+        )
+        .unwrap();
         fs::create_dir_all(dir.path().join("src").join("verilog_model")).unwrap();
 
         let stage_file = dir.path().join(".current_stage");

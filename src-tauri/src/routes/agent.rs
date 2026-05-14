@@ -14,10 +14,7 @@ pub fn start_watching_cmd(
 }
 
 #[tauri::command]
-pub fn stop_watching_cmd(
-    path: String,
-    state: State<'_, AppState>,
-) -> Result<(), String> {
+pub fn stop_watching_cmd(path: String, state: State<'_, AppState>) -> Result<(), String> {
     agent_service::stop_watching(path, &state)
 }
 
@@ -32,10 +29,7 @@ pub fn list_project_sessions_cmd(path: String) -> Result<Vec<SerSessionSummary>,
 }
 
 #[tauri::command]
-pub fn search_sessions_cmd(
-    path: String,
-    query: String,
-) -> Result<Vec<SerSessionSummary>, String> {
+pub fn search_sessions_cmd(path: String, query: String) -> Result<Vec<SerSessionSummary>, String> {
     agent_service::search_sessions(path, query)
 }
 

@@ -6,9 +6,7 @@ use std::sync::{Arc, Mutex};
 use tauri::Manager;
 
 use crate::collectors::agent::AgentCollector;
-use crate::collectors::template::{
-    load_template_path, TemplateFingerprint,
-};
+use crate::collectors::template::{load_template_path, TemplateFingerprint};
 use crate::registry::ProjectRegistry;
 
 /// 模板指纹缓存 — 记录模板目录中所有文件路径的快照

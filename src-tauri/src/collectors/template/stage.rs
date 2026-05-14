@@ -139,7 +139,9 @@ impl StageCollector {
         let stage_file = path.join(".current_stage");
 
         if !stage_file.exists() {
-            return Err(StageError::FileNotFound(stage_file.to_string_lossy().to_string()));
+            return Err(StageError::FileNotFound(
+                stage_file.to_string_lossy().to_string(),
+            ));
         }
 
         let content = fs::read_to_string(&stage_file).map_err(|e| {
@@ -180,7 +182,11 @@ impl fmt::Display for StageError {
                 write!(f, "读取 .current_stage 失败：{}", err)
             }
             StageError::EmptyFile => write!(f, ".current_stage 文件内容为空"),
-            StageError::UnknownStage(s) => write!(f, "无法识别的阶段：'{}'，支持 L0-L6、Verilog、Synthesis、Hardware", s),
+            StageError::UnknownStage(s) => write!(
+                f,
+                "无法识别的阶段：'{}'，支持 L0-L6、Verilog、Synthesis、Hardware",
+                s
+            ),
         }
     }
 }

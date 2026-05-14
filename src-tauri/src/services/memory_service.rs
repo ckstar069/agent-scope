@@ -4,10 +4,7 @@ use std::path::PathBuf;
 use crate::models::project::SerCandidateMemory;
 use crate::utils::describe_path_error;
 
-pub fn save_candidate_memory(
-    path: String,
-    memory: SerCandidateMemory,
-) -> Result<(), String> {
+pub fn save_candidate_memory(path: String, memory: SerCandidateMemory) -> Result<(), String> {
     let path_buf = PathBuf::from(&path);
     if !path_buf.exists() || !path_buf.is_dir() {
         return Err(describe_path_error(&path));

@@ -187,11 +187,7 @@ impl ProjectFilesCollector {
                     );
                     return Ok(());
                 }
-                eprintln!(
-                    "[project_files] 读取目录失败 '{}': {}",
-                    dir.display(),
-                    e
-                );
+                eprintln!("[project_files] 读取目录失败 '{}': {}", dir.display(), e);
                 return Ok(());
             }
         };
@@ -452,13 +448,19 @@ mod tests {
         let files = ProjectFilesCollector::collect(dir.path()).unwrap();
         assert_eq!(files.len(), 2);
 
-        let claude = files.iter().find(|f| f.relative_path == "CLAUDE.md").unwrap();
+        let claude = files
+            .iter()
+            .find(|f| f.relative_path == "CLAUDE.md")
+            .unwrap();
         assert_eq!(claude.source_group, "root");
         assert!(claude.content.contains("CLAUDE"));
         assert!(!claude.content_truncated);
         assert!(claude.mtime_ms > 0);
 
-        let agents = files.iter().find(|f| f.relative_path == "AGENTS.md").unwrap();
+        let agents = files
+            .iter()
+            .find(|f| f.relative_path == "AGENTS.md")
+            .unwrap();
         assert_eq!(agents.source_group, "root");
         assert!(agents.content.contains("AGENTS"));
     }
@@ -518,7 +520,10 @@ mod tests {
         assert_eq!(plans.len(), 1);
         assert!(plans[0].relative_path.contains("my-plan.md"));
 
-        let drafts: Vec<_> = files.iter().filter(|f| f.source_group == "drafts").collect();
+        let drafts: Vec<_> = files
+            .iter()
+            .filter(|f| f.source_group == "drafts")
+            .collect();
         assert_eq!(drafts.len(), 1);
     }
 
@@ -535,21 +540,23 @@ mod tests {
 
         // 创建超过 1 MiB 的 .sisyphus/notepads 大文件
         let large_size = (MAX_FILE_SIZE as usize) + 1024; // 1 MiB + 1 KiB
-        write_sized_file(
-            dir.path(),
-            ".sisyphus/notepads/huge.md",
-            large_size,
-        );
+        write_sized_file(dir.path(), ".sisyphus/notepads/huge.md", large_size);
 
         let files = ProjectFilesCollector::collect(dir.path()).unwrap();
         assert_eq!(files.len(), 2);
 
-        let huge = files.iter().find(|f| f.relative_path.contains("huge.md")).unwrap();
+        let huge = files
+            .iter()
+            .find(|f| f.relative_path.contains("huge.md"))
+            .unwrap();
         assert!(huge.content_truncated);
         // 内容应被截断为 MAX_FILE_SIZE 字节（UTF-8 lossy 后可能略有不同）
         assert!(huge.content.len() <= MAX_FILE_SIZE as usize);
 
-        let normal = files.iter().find(|f| f.relative_path == "CLAUDE.md").unwrap();
+        let normal = files
+            .iter()
+            .find(|f| f.relative_path == "CLAUDE.md")
+            .unwrap();
         assert!(!normal.content_truncated);
     }
 

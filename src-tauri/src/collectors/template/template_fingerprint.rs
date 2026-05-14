@@ -360,7 +360,9 @@ mod tests {
 
     #[test]
     fn test_build_nonexistent_path() {
-        let fp = TemplateFingerprint::build(&std::env::temp_dir().join("nonexistent-agent-scope-test-path"));
+        let fp = TemplateFingerprint::build(
+            &std::env::temp_dir().join("nonexistent-agent-scope-test-path"),
+        );
         assert!(fp.is_ok());
         assert!(fp.unwrap().paths.is_empty());
     }

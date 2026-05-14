@@ -36,12 +36,10 @@ pub fn encode_cwd_path(cwd: &str) -> String {
 pub fn decode_project_dir(encoded: &str) -> String {
     if cfg!(target_os = "windows") {
         encoded.replace("--", "\\").replace('-', "\\")
+    } else if let Some(stripped) = encoded.strip_prefix('-') {
+        format!("/{}", stripped.replace('-', "/"))
     } else {
-        if let Some(stripped) = encoded.strip_prefix('-') {
-            format!("/{}", stripped.replace('-', "/"))
-        } else {
-            encoded.replace('-', "/")
-        }
+        encoded.replace('-', "/")
     }
 }
 
@@ -59,13 +57,19 @@ mod tests {
 
     #[test]
     fn test_encode_cwd_path_unix() {
-        assert_eq!(encode_cwd_path("/Users/ckstar/Repo/my_project"), "-Users-ckstar-Repo-my-project");
+        assert_eq!(
+            encode_cwd_path("/Users/ckstar/Repo/my_project"),
+            "-Users-ckstar-Repo-my-project"
+        );
         assert_eq!(encode_cwd_path("/home/user/project"), "-home-user-project");
     }
 
     #[test]
     fn test_decode_project_dir_unix() {
-        assert_eq!(decode_project_dir("-Users-ckstar-Repo"), "/Users/ckstar/Repo");
+        assert_eq!(
+            decode_project_dir("-Users-ckstar-Repo"),
+            "/Users/ckstar/Repo"
+        );
         assert_eq!(decode_project_dir("home-user-project"), "home/user/project");
     }
 

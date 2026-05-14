@@ -6,6 +6,8 @@ variables:
   CARGO_HOME: "$CI_PROJECT_DIR/.cargo"
   npm_config_cache: "$CI_PROJECT_DIR/.npm"
   PLAYWRIGHT_BROWSERS_PATH: "$CI_PROJECT_DIR/.cache/ms-playwright"
+  CARGO_NET_RETRY: "3"
+  CARGO_HTTP_TIMEOUT: "120"
 
 # 缓存依赖目录，避免重复下载
 cache:
@@ -15,9 +17,6 @@ cache:
     - .cargo/registry/
     - .cargo/git/
     - .cache/ms-playwright/
-    - src-tauri/target/debug/.fingerprint/
-    - src-tauri/target/debug/build/
-    - src-tauri/target/debug/deps/
 
 verify:
   stage: verify
@@ -25,13 +24,17 @@ verify:
   before_script:
     - echo "=== 安装系统依赖 ==="
     - apt-get update -qq
-    - apt-get install -y -qq libwebkit2gtk-4.1-dev libayatana-appindicator3-dev librsvg2-dev patchelf curl build-essential git
+    - apt-get install -y -qq --no-install-recommends libwebkit2gtk-4.1-dev libayatana-appindicator3-dev librsvg2-dev patchelf curl build-essential git ca-certificates
     - echo "=== 安装 Node.js ==="
     - curl -fsSL https://deb.nodesource.com/setup_${NODE_VERSION}.x | bash -
-    - apt-get install -y -qq nodejs
+    - apt-get install -y -qq --no-install-recommends nodejs
     - echo "=== 安装 Rust ==="
     - curl --proto '=https' --tlsv1.2 -sSf https://sh.rustup.rs | sh -s -- -y --default-toolchain stable
     - source "$CARGO_HOME/env"
+    - echo "=== 安装 cargo-binstall ==="
+    - curl -L --proto '=https' --tlsv1.2 -sSf https://github.com/cargo-bins/cargo-binstall/releases/download/v1.19.1/cargo-binstall-x86_64-unknown-linux-gnu.tgz | tar -xz -C ~/.cargo/bin/
+    - echo "=== 安装 cargo-audit ==="
+    - cargo binstall cargo-audit --locked --no-confirm
     - echo "=== 安装前端依赖 ==="
     - npm ci
     - echo "=== 安装 Playwright 浏览器 ==="
@@ -39,12 +42,20 @@ verify:
   script:
     - echo "=== 构建前端 ==="
     - npm run build
+    - echo "=== Rust 格式化检查 ==="
+    - cd "$CI_PROJECT_DIR/src-tauri" && cargo fmt --check
+    - echo "=== Rust Clippy 检查 ==="
+    - cd "$CI_PROJECT_DIR/src-tauri" && cargo clippy -- -D warnings
     - echo "=== Rust 检查 ==="
     - cd "$CI_PROJECT_DIR/src-tauri" && cargo check
     - echo "=== Rust 测试 ==="
     - cd "$CI_PROJECT_DIR/src-tauri" && cargo test
+    - echo "=== Rust 安全审计 ==="
+    - cd "$CI_PROJECT_DIR/src-tauri" && cargo audit || echo "cargo audit 发现警告（非阻塞）"
+    - echo "=== npm 安全审计 ==="
+    - npm audit --audit-level=moderate || echo "npm audit 发现警告（非阻塞）"
     - echo "=== E2E 测试 ==="
-    - npm test || echo "E2E tests exited with $? (non-blocking)"
+    - npm test
   artifacts:
     when: always
     paths:

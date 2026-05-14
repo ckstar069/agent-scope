@@ -3,12 +3,8 @@ use std::sync::atomic::Ordering;
 use tauri::State;
 
 use crate::app_state::AppState;
-use crate::collectors::template::{
-    ProjectFilesCollector, TemplateDataCollector,
-};
-use crate::models::project::{
-    SerProjectFile, TemplateDataPayload,
-};
+use crate::collectors::template::{ProjectFilesCollector, TemplateDataCollector};
+use crate::models::project::{SerProjectFile, TemplateDataPayload};
 use crate::registry::ProjectEntry;
 use crate::utils::describe_path_error;
 
@@ -81,10 +77,7 @@ pub fn get_project_files(
     get_project_files_impl(path, template_paths)
 }
 
-pub fn get_project_file_content(
-    path: String,
-    relative_path: String,
-) -> Result<String, String> {
+pub fn get_project_file_content(path: String, relative_path: String) -> Result<String, String> {
     let path_buf = PathBuf::from(&path);
     if !path_buf.exists() || !path_buf.is_dir() {
         return Err(describe_path_error(&path));
@@ -101,12 +94,12 @@ pub fn get_project_file_content(
     }
 }
 
-pub fn add_project(
-    path: String,
-    state: State<'_, AppState>,
-) -> Result<ProjectEntry, String> {
+pub fn add_project(path: String, state: State<'_, AppState>) -> Result<ProjectEntry, String> {
     let path_buf = PathBuf::from(&path);
-    let mut registry = state.registry.lock().map_err(|e| format!("锁获取失败: {}", e))?;
+    let mut registry = state
+        .registry
+        .lock()
+        .map_err(|e| format!("锁获取失败: {}", e))?;
 
     let entry = registry.add(&path_buf).map_err(|e| e.to_string())?;
 
@@ -117,12 +110,12 @@ pub fn add_project(
     Ok(entry)
 }
 
-pub fn remove_project(
-    path: String,
-    state: State<'_, AppState>,
-) -> Result<(), String> {
+pub fn remove_project(path: String, state: State<'_, AppState>) -> Result<(), String> {
     let path_buf = PathBuf::from(&path);
-    let mut registry = state.registry.lock().map_err(|e| format!("锁获取失败: {}", e))?;
+    let mut registry = state
+        .registry
+        .lock()
+        .map_err(|e| format!("锁获取失败: {}", e))?;
 
     let canonical_path = path_buf
         .canonicalize()
@@ -153,9 +146,7 @@ pub fn list_projects(state: State<'_, AppState>) -> Vec<ProjectEntry> {
     }
 }
 
-pub fn get_project_data(
-    path: String,
-) -> Result<TemplateDataPayload, String> {
+pub fn get_project_data(path: String) -> Result<TemplateDataPayload, String> {
     let path_buf = PathBuf::from(&path);
 
     if !path_buf.exists() {

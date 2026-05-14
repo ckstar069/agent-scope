@@ -7,6 +7,9 @@ pub mod services;
 pub mod utils;
 pub mod watcher;
 
+use app_state::init_app_state;
+use collectors::agent::AgentCollector;
+use registry::ProjectRegistry;
 use routes::{
     add_project_cmd, delete_claude_session_cmd, export_claude_session_cmd,
     get_claude_session_detail_cmd, get_latest_session_cmd, get_project_data_cmd,
@@ -16,9 +19,6 @@ use routes::{
     search_claude_history_cmd, search_sessions_cmd, set_template_path_cmd, start_watching_cmd,
     stop_watching_cmd,
 };
-use app_state::init_app_state;
-use collectors::agent::AgentCollector;
-use registry::ProjectRegistry;
 
 #[tauri::command]
 fn greet(name: &str) -> String {
