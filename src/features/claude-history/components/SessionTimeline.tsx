@@ -2,15 +2,8 @@ import { useEffect, useRef, useState } from "react";
 import { Circle, Download, Trash2, ChevronDown, ChevronUp } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { cn } from "@/lib/utils";
-import type { ClaudeSession, SessionPreview } from "@/hooks/useClaudeHistory";
 
-interface SessionTimelineProps {
-  sessions: ClaudeSession[];
-  onDelete: (sessionId: string) => void;
-  onExport: (sessionId: string, format: "Jsonl" | "Markdown") => void;
-  onPreview: (sessionId: string) => Promise<SessionPreview | null>;
-  previewCache: Record<string, SessionPreview>;
-}
+import type { SessionTimelineProps, SessionPreview } from "../types";
 
 function formatDate(timestamp: number | null): string {
   if (!timestamp) return "未知时间";

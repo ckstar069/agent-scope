@@ -11,10 +11,7 @@ import { useTauri } from "@/hooks/useTauri";
 import { useTheme, type Theme } from "@/hooks/useTheme";
 import { cn } from "@/lib/utils";
 
-interface ProjectEntry {
-  path: string;
-  added_at: number;
-}
+import type { ProjectEntry } from "./types";
 
 const collator = new Intl.Collator("zh-CN", { numeric: true, sensitivity: "base" });
 type FormSubmitEvent = Parameters<NonNullable<ComponentProps<"form">["onSubmit"]>>[0];

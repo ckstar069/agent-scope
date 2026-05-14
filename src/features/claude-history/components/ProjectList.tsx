@@ -1,12 +1,7 @@
 import { Folder, FolderOpen } from "lucide-react";
 import { cn } from "@/lib/utils";
-import type { ProjectSessionGroup } from "@/hooks/useClaudeHistory";
 
-interface ProjectListProps {
-  groups: ProjectSessionGroup[];
-  selectedPath: string | null;
-  onSelect: (path: string) => void;
-}
+import type { ProjectListProps } from "../types";
 
 export function ProjectList({ groups, selectedPath, onSelect }: ProjectListProps) {
   return (

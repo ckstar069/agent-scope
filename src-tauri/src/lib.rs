@@ -1,17 +1,22 @@
+pub mod app_state;
 pub mod collectors;
-pub mod commands;
+pub mod models;
 pub mod registry;
+pub mod routes;
+pub mod services;
+pub mod utils;
 pub mod watcher;
 
-use commands::{
-    add_project, delete_claude_session_cmd, export_claude_session_cmd,
-    get_claude_session_detail_cmd, preview_claude_session_cmd,
-    get_latest_session, get_project_data, get_project_files, get_project_file_content,
-    get_session_transcript, get_template_path, list_claude_sessions_cmd,
-    list_project_sessions, list_projects, remove_project, save_candidate_memory,
-    search_claude_history_cmd, search_sessions, set_template_path, start_watching,
-    stop_watching,
+use routes::{
+    add_project_cmd, delete_claude_session_cmd, export_claude_session_cmd,
+    get_claude_session_detail_cmd, get_latest_session_cmd, get_project_data_cmd,
+    get_project_file_content_cmd, get_project_files_cmd, get_session_transcript_cmd,
+    get_template_path_cmd, list_claude_sessions_cmd, list_project_sessions_cmd, list_projects_cmd,
+    preview_claude_session_cmd, remove_project_cmd, save_candidate_memory_cmd,
+    search_claude_history_cmd, search_sessions_cmd, set_template_path_cmd, start_watching_cmd,
+    stop_watching_cmd,
 };
+use app_state::init_app_state;
 use collectors::agent::AgentCollector;
 use registry::ProjectRegistry;
 
@@ -64,27 +69,27 @@ pub fn run() {
             let agent_handle = app.handle().clone();
             let _join_handle = agent_collector.start(agent_handle);
 
-            commands::init_app_state(app, registry, agent_collector);
+            init_app_state(app, registry, agent_collector);
 
             Ok(())
         })
         .invoke_handler(tauri::generate_handler![
             greet,
-            add_project,
-            remove_project,
-            list_projects,
-            get_project_data,
-            get_project_files,
-            get_project_file_content,
-            start_watching,
-            stop_watching,
-            get_latest_session,
-            list_project_sessions,
-            search_sessions,
-            get_session_transcript,
-            save_candidate_memory,
-            set_template_path,
-            get_template_path,
+            add_project_cmd,
+            remove_project_cmd,
+            list_projects_cmd,
+            get_project_data_cmd,
+            get_project_files_cmd,
+            get_project_file_content_cmd,
+            start_watching_cmd,
+            stop_watching_cmd,
+            get_latest_session_cmd,
+            list_project_sessions_cmd,
+            search_sessions_cmd,
+            get_session_transcript_cmd,
+            save_candidate_memory_cmd,
+            set_template_path_cmd,
+            get_template_path_cmd,
             list_claude_sessions_cmd,
             get_claude_session_detail_cmd,
             search_claude_history_cmd,

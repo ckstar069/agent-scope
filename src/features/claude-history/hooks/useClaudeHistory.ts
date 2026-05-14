@@ -1,37 +1,21 @@
 import { useCallback, useEffect, useState } from "react";
-import { invoke } from "@tauri-apps/api/core";
 import { save } from "@tauri-apps/plugin-dialog";
 
-export interface PreviewMessage {
-  role: string;
-  content: string;
-  timestamp: number | null;
-}
+import {
+  listClaudeSessions,
+  deleteClaudeSession,
+  exportClaudeSession,
+  previewClaudeSession,
+} from "@/lib/api";
 
-export interface SessionPreview {
-  session_id: string;
-  messages: PreviewMessage[];
-  total_turns: number;
-}
+import type {
+  PreviewMessage,
+  SessionPreview,
+  ClaudeSession,
+  ProjectSessionGroup,
+} from "../types";
 
-export interface ClaudeSession {
-  session_id: string;
-  name: string | null;
-  cwd: string;
-  status: "Active" | "Idle" | "Exited" | "Unknown";
-  started_at: number | null;
-  updated_at: number | null;
-  turn_count: number | null;
-  is_active: boolean;
-}
-
-export interface ProjectSessionGroup {
-  project_path: string;
-  project_name: string;
-  sessions: ClaudeSession[];
-  session_count: number;
-  is_orphaned: boolean;
-}
+export type { PreviewMessage, SessionPreview, ClaudeSession, ProjectSessionGroup };
 
 export function useClaudeHistory() {
   const [projectGroups, setProjectGroups] = useState<ProjectSessionGroup[]>([]);
@@ -45,7 +29,7 @@ export function useClaudeHistory() {
     setIsLoading(true);
     setError(null);
     try {
-      const groups = await invoke<ProjectSessionGroup[]>("list_claude_sessions_cmd");
+      const groups = await listClaudeSessions<ProjectSessionGroup[]>();
       setProjectGroups(groups);
       if (groups.length > 0 && !selectedProject) {
         setSelectedProject(groups[0].project_path);
@@ -57,19 +41,19 @@ export function useClaudeHistory() {
     }
   }, [selectedProject]);
 
-  const deleteSession = useCallback(async (sessionId: string) => {
+  const deleteSessionHandler = useCallback(async (sessionId: string) => {
     if (!confirm("此操作不可逆，删除后无法通过 /resume 恢复该会话。确定删除吗？")) {
       return;
     }
     try {
-      await invoke("delete_claude_session_cmd", { sessionId });
+      await deleteClaudeSession(sessionId);
       await fetchSessions();
     } catch (e) {
       alert(`删除失败: ${e}`);
     }
   }, [fetchSessions]);
 
-  const exportSession = useCallback(async (sessionId: string, format: "Jsonl" | "Markdown") => {
+  const exportSessionHandler = useCallback(async (sessionId: string, format: "Jsonl" | "Markdown") => {
     try {
       const ext = format === "Jsonl" ? "jsonl" : "md";
       const outputPath = await save({
@@ -84,25 +68,19 @@ export function useClaudeHistory() {
       if (!outputPath) {
         return; // 用户取消
       }
-      await invoke("export_claude_session_cmd", {
-        sessionId,
-        format,
-        outputPath,
-      });
+      await exportClaudeSession(sessionId, format, outputPath);
     } catch (e) {
       alert(`导出失败: ${e}`);
     }
   }, []);
 
-  const previewSession = useCallback(async (sessionId: string) => {
+  const previewSessionHandler = useCallback(async (sessionId: string) => {
     // 如果已缓存，直接返回
     if (previewCache[sessionId]) {
       return previewCache[sessionId];
     }
     try {
-      const preview = await invoke<SessionPreview>("preview_claude_session_cmd", {
-        sessionId,
-      });
+      const preview = await previewClaudeSession<SessionPreview>(sessionId);
       setPreviewCache((prev) => ({ ...prev, [sessionId]: preview }));
       return preview;
     } catch (e) {
@@ -115,7 +93,7 @@ export function useClaudeHistory() {
     fetchSessions();
     const interval = setInterval(() => {
       // 自动轮询时不显示 loading，避免闪烁
-      invoke<ProjectSessionGroup[]>("list_claude_sessions_cmd")
+      listClaudeSessions<ProjectSessionGroup[]>()
         .then((groups) => {
           setProjectGroups(groups);
           if (groups.length > 0 && !selectedProject) {
@@ -155,9 +133,9 @@ export function useClaudeHistory() {
     isLoading,
     error,
     fetchSessions,
-    deleteSession,
-    exportSession,
-    previewSession,
+    deleteSession: deleteSessionHandler,
+    exportSession: exportSessionHandler,
+    previewSession: previewSessionHandler,
     previewCache,
   };
 }

@@ -1,4 +1,4 @@
-import type { ComponentType, ReactNode } from "react";
+import type { ReactNode } from "react";
 import { useEffect, useMemo, useRef, useState } from "react";
 import {
   AlertCircle,
@@ -27,79 +27,16 @@ import { ProjectMemoryPanel } from "@/components/ProjectMemoryPanel";
 import { ScrollArea } from "@/components/ui/scroll-area";
 import { useTauri } from "@/hooks/useTauri";
 import { cn } from "@/lib/utils";
-
-interface ProjectDetailProps {
-  projectPath?: string;
-  onSelectProject?: (projectPath: string) => void;
-  onBack?: () => void;
-}
-
-interface SerStage {
-  name: string;
-  description: string;
-  ordinal: number;
-}
-
-interface SerProjectConfig {
-  project_name: string;
-  module_name: string;
-  interface_type: string;
-  reference_project?: string;
-  use_l0?: boolean;
-  data_width?: number;
-  iterations?: number;
-  q_int_bits?: number;
-  q_frac_bits?: number;
-  rounding_mode?: string;
-  saturation?: boolean;
-  pipeline_stages?: number;
-  cycles_per_stage?: number;
-  output_register?: boolean;
-  axis_data_width?: number;
-  axis_has_tlast?: boolean;
-  axis_has_tkeep?: boolean;
-  handshake_delay?: number;
-  axi_lite_addr_width?: number;
-  test_data_length?: number;
-  random_seed?: number;
-  float_tolerance?: number;
-  fixed_tolerance?: number;
-  clock_frequency?: number;
-  reset_sync_stages?: number;
-  use_clock_enable?: boolean;
-  debug_mode?: boolean;
-  debug_level?: number;
-  total_bits?: number | null;
-  q_scale?: number | null;
-  pipeline_latency?: number | null;
-  max_positive?: number | null;
-  min_negative?: number | null;
-}
-
-interface SerGitStatus {
-  branch: string;
-  modified_count: number;
-  staged_count: number;
-  untracked_count: number;
-  conflict_count: number;
-  is_clean: boolean;
-  changed_files: string[];
-}
-
-interface TemplateDataPayload {
-  project_path: string;
-  stage: SerStage | null;
-  stage_error: string | null;
-  config: SerProjectConfig | null;
-  config_error: string | null;
-  git: SerGitStatus;
-  git_error: string | null;
-  layout: string;
-  timestamp_ms: number;
-}
-
-type ConfigValue = string | number | boolean | null | undefined;
-type DetailIcon = ComponentType<{ className?: string; "aria-hidden"?: boolean | "true" | "false" }>;
+import type {
+  ConfigValue,
+  DetailIcon,
+  PanelAccent,
+  ProjectDetailProps,
+  SerGitStatus,
+  SerProjectConfig,
+  TemplateDataPayload,
+} from "./types";
+import type { ProjectEntry } from "@/lib/types";
 
 const stageSteps = [
   { name: "L0", label: "L0", description: "需求 / 基线" },
@@ -411,11 +348,6 @@ export function ProjectDetail({ projectPath = "", onSelectProject, onBack }: Pro
   );
 }
 
-interface ProjectEntry {
-  path: string;
-  added_at: number;
-}
-
 function EmptyProjectState({ onSelectProject }: { onSelectProject?: (projectPath: string) => void }) {
   const { invoke } = useTauri();
   const [projects, setProjects] = useState<ProjectEntry[]>([]);
@@ -508,8 +440,6 @@ function ErrorBanner({ message }: { message: string }) {
     </div>
   );
 }
-
-type PanelAccent = "blue" | "green" | "amber" | "purple";
 
 const ACCENT_TOP_STYLES: Record<PanelAccent, string> = {
   blue: "from-blue-500/40 via-blue-400/20 to-transparent",

@@ -5,57 +5,11 @@ import { Activity, AlertTriangle, Bot, ChevronRight, Clock, FolderKanban, Folder
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { useTauri } from "@/hooks/useTauri";
-
-interface DashboardProps {
-  onSelectProject: (projectPath: string) => void;
-  onNavigateSettings: () => void;
-}
-
-interface ProjectEntry {
-  path: string;
-  added_at: number;
-}
-
-interface StageInfo {
-  name: string;
-  description: string;
-  ordinal: number;
-}
-
-interface GitStatus {
-  branch: string;
-  modified_count: number;
-  staged_count: number;
-  untracked_count: number;
-  conflict_count: number;
-  is_clean: boolean;
-}
-
-interface ProjectConfig {
-  project_name: string;
-}
-
-interface TemplateDataPayload {
-  project_path: string;
-  stage: StageInfo | null;
-  stage_error: string | null;
-  config: ProjectConfig | null;
-  config_error: string | null;
-  git: GitStatus;
-  git_error: string | null;
-  timestamp_ms: number;
-}
-
-interface ProjectAgents {
-  project_path: string;
-  count: number;
-}
-
-interface AgentUpdatePayload {
-  projects: ProjectAgents[];
-  timestamp_ms: number;
-  total_sessions: number;
-}
+import type {
+  DashboardProps,
+  TemplateDataPayload,
+} from "./types";
+import type { ProjectEntry, AgentUpdatePayload } from "@/lib/types";
 
 const stageTokenPairs = [
   ["var(--chart-1)", "var(--sidebar-primary)"],

@@ -9,60 +9,16 @@ import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/com
 import { Input } from "@/components/ui/input";
 import { useTauri } from "@/hooks/useTauri";
 import { cn } from "@/lib/utils";
-
-type RawAgentStatus = "Thinking" | "Executing" | "Waiting" | "RateLimited" | "Done";
-type DisplayStatus = "Active" | "Idle" | "Offline";
-type TokenRateUnit = "second" | "minute";
-type RateType = "realtime" | "1min" | "total";
-type AgentDetailTab = "timeline" | "subagents" | "fileaudit";
-
-interface AgentInfo {
-  agent_type: string;
-  session_id: string;
-  cwd: string;
-  project_name: string;
-  status: RawAgentStatus;
-  model: string;
-  context_percent: number;
-  context_window: number;
-  total_input_tokens: number;
-  total_output_tokens: number;
-  total_cache_read: number;
-  total_cache_create: number;
-  turn_count: number;
-  current_tasks: string[];
-  mem_mb: number;
-  git_branch: string;
-  git_added: number;
-  git_modified: number;
-  token_history: number[];
-  context_history: number[];
-  compaction_count: number;
-  token_rate: number;
-  token_rate_1m: number;
-  token_rate_total: number;
-  pid: number;
-  version: string;
-  effort: string;
-  tool_calls: { name: string; arg: string; duration_ms: number }[];
-  subagents: { name: string; status: string; tokens: number }[];
-  file_accesses: { path: string; operation: string; turn_index: number }[];
-  pending_since_ms: number;
-  thinking_since_ms: number;
-}
-
-interface ProjectAgents {
-  project_path: string;
-  agents: AgentInfo[];
-  count: number;
-}
-
-interface AgentUpdatePayload {
-  projects: ProjectAgents[];
-  unmapped: AgentInfo[];
-  timestamp_ms: number;
-  total_sessions: number;
-}
+import type {
+  AgentDetailTab,
+  AgentInfo,
+  AgentUpdatePayload,
+  DisplayStatus,
+  ProjectAgents,
+  RateType,
+  RawAgentStatus,
+  TokenRateUnit,
+} from "./types";
 
 const statusStyles: Record<DisplayStatus, string> = {
   Active: "border-stage-l1/40 bg-stage-l1/15 text-stage-l1",
