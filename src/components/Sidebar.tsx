@@ -31,19 +31,18 @@ export function Sidebar({ activeRoute, isExpanded, onRouteChange, onToggle }: Si
         isExpanded ? "w-[var(--sidebar-width-expanded)]" : "w-[var(--sidebar-width-collapsed)]",
       )}
     >
-      <div className="flex h-16 items-center gap-3 border-b border-sidebar-border px-3">
-        <div className="flex size-9 shrink-0 items-center justify-center rounded-lg bg-sidebar-primary text-sidebar-primary-foreground">
+      <div className="flex h-14 items-center gap-3 border-b border-sidebar-border px-3">
+        <div className="flex size-8 shrink-0 items-center justify-center rounded-md bg-primary text-primary-foreground">
           <LayoutDashboard className="size-4" aria-hidden="true" />
         </div>
         {isExpanded && (
           <div className="min-w-0">
             <p className="truncate text-sm font-semibold">AgentScope</p>
-            <p className="truncate text-xs text-muted-foreground">Agent Monitor</p>
           </div>
         )}
       </div>
 
-      <nav className="flex flex-1 flex-col gap-1 p-3" aria-label="主导航">
+      <nav className="flex flex-1 flex-col gap-0.5 p-2" aria-label="主导航">
         {navigationItems.map((item) => {
           const Icon = item.icon;
           const isActive = activeRoute === item.route;
@@ -52,35 +51,45 @@ export function Sidebar({ activeRoute, isExpanded, onRouteChange, onToggle }: Si
             <Button
               key={item.route}
               type="button"
-              variant={isActive ? "secondary" : "ghost"}
+              variant="ghost"
               className={cn(
-                "h-10 justify-start text-sidebar-foreground hover:bg-sidebar-accent hover:text-sidebar-accent-foreground",
+                "h-9 justify-start gap-3 rounded-md px-3 text-sidebar-foreground/80 hover:bg-sidebar-accent hover:text-sidebar-foreground",
                 !isExpanded && "justify-center px-0",
-                isActive && "bg-sidebar-accent text-sidebar-accent-foreground",
+                isActive && "bg-sidebar-accent text-sidebar-accent-foreground font-medium",
               )}
               aria-current={isActive ? "page" : undefined}
               title={!isExpanded ? item.label : undefined}
               onClick={() => onRouteChange(item.route)}
             >
-              <Icon className="size-4" aria-hidden="true" />
-              {isExpanded && <span>{item.label}</span>}
+              <Icon className="size-4 shrink-0" aria-hidden="true" />
+              {isExpanded && <span className="text-sm">{item.label}</span>}
             </Button>
           );
         })}
       </nav>
 
-      <div className="border-t border-sidebar-border p-3">
-        <div className={cn("flex items-center gap-2", !isExpanded && "justify-center")}>
+      <div className="border-t border-sidebar-border p-2">
+        <div className={cn("flex items-center gap-1", !isExpanded && "justify-center")}>
           <ThemeToggle />
           <Button
             type="button"
-            variant="outline"
-            className={cn("flex-1 justify-start", !isExpanded && "justify-center px-0")}
+            variant="ghost"
+            size="icon"
+            className={cn("h-9 w-9", !isExpanded && "hidden")}
             aria-label={isExpanded ? "收起侧边栏" : "展开侧边栏"}
             onClick={onToggle}
           >
-            {isExpanded ? <PanelLeftClose className="size-4" /> : <PanelLeftOpen className="size-4" />}
-            {isExpanded && <span>收起</span>}
+            <PanelLeftClose className="size-4" />
+          </Button>
+          <Button
+            type="button"
+            variant="ghost"
+            size="icon"
+            className={cn("h-9 w-9", isExpanded && "hidden")}
+            aria-label={isExpanded ? "收起侧边栏" : "展开侧边栏"}
+            onClick={onToggle}
+          >
+            <PanelLeftOpen className="size-4" />
           </Button>
         </div>
       </div>

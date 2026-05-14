@@ -204,7 +204,7 @@ function ProjectCard({ project, onOpen }: ProjectCardProps) {
     <Card
       role="button"
       tabIndex={0}
-      className="group overflow-hidden transition-all hover:-translate-y-0.5 hover:border-primary/30 hover:shadow-lg hover:shadow-primary/5"
+      className="group overflow-hidden transition-all hover:border-primary/40"
       onClick={onOpen}
       onKeyDown={(event) => {
         if (event.key === "Enter" || event.key === " ") {
@@ -263,12 +263,12 @@ interface StatusTileProps {
 
 function StatusTile({ icon: Icon, label, value, detail }: StatusTileProps) {
   return (
-    <div className="rounded-lg border border-border bg-muted/40 p-3">
+    <div className="rounded-md border border-border/60 bg-muted/30 p-3">
       <div className="mb-2 flex items-center gap-2 text-xs text-muted-foreground">
         <Icon className="size-3.5" aria-hidden="true" />
         {label}
       </div>
-      <p className="truncate text-sm font-semibold">{value}</p>
+      <p className="truncate text-sm font-medium">{value}</p>
       <p className="mt-1 truncate text-xs text-muted-foreground">{detail}</p>
     </div>
   );

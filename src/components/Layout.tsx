@@ -31,7 +31,6 @@ export function Layout({ activeRoute, children, onRouteChange }: LayoutProps) {
           <div
             className={cn(
               "min-h-screen p-4 sm:p-6 lg:p-8",
-              "bg-[radial-gradient(circle_at_top_right,var(--muted),transparent_32rem)]",
             )}
           >
             {children}
