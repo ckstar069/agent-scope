@@ -5,6 +5,19 @@ variables:
   NODE_VERSION: "20"
   CARGO_HOME: "$CI_PROJECT_DIR/.cargo"
   npm_config_cache: "$CI_PROJECT_DIR/.npm"
+  PLAYWRIGHT_BROWSERS_PATH: "$CI_PROJECT_DIR/.cache/ms-playwright"
+
+# 缓存依赖目录，避免重复下载
+cache:
+  key: ${CI_COMMIT_REF_SLUG}
+  paths:
+    - .npm/
+    - .cargo/registry/
+    - .cargo/git/
+    - .cache/ms-playwright/
+    - src-tauri/target/debug/.fingerprint/
+    - src-tauri/target/debug/build/
+    - src-tauri/target/debug/deps/
 
 verify:
   stage: verify
@@ -32,6 +45,11 @@ verify:
     - cd "$CI_PROJECT_DIR/src-tauri" && cargo test
     - echo "=== E2E 测试 ==="
     - npm test || echo "E2E tests exited with $? (non-blocking)"
+  artifacts:
+    when: always
+    paths:
+      - .sisyphus/evidence/e2e/report/
+    expire_in: 1 week
   rules:
     - if: '$CI_PIPELINE_SOURCE == "merge_request_event"'
     - if: '$CI_COMMIT_BRANCH == "main"'
