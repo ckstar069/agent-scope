@@ -19,16 +19,17 @@ AgentScope 使用自托管 GitLab 作为 CI/CD 平台，通过 GitLab Runner 执
 ### 2.1 GitLab 服务器
 
 - **地址**: `http://192.168.3.100`
+- **后续标准拓扑**: 新项目按 `192.168.3.128` 作为 GitLab 服务器记录；当前仓库 remote/API 仍实测指向 `192.168.3.100`，如 GitLab 已迁移，需要同步更新 Git remote、GitLab Web/API 地址和 Runner 注册地址。
 - **项目路径**: `znxt_tools/agent-scope`
 - **访问方式**: Web 界面 + API（`PRIVATE-TOKEN` 认证）
 
 ### 2.2 GitLab Runner
 
-- **服务器**: `192.168.3.144`（Ubuntu 24.04 VM，用户 `yufei/yufei`）
+- **服务器**: `192.168.3.144`（Ubuntu 24.04 VM）
 - **Runner 名称**: `agent-scope-runner`
 - **执行器类型**: Docker
 - **基础镜像**: `ubuntu:22.04`
-- **SSH 访问**: `sshpass -p yufei ssh yufei@192.168.3.144`
+- **SSH 访问**: `sshpass` 可连接，凭据由项目负责人单独提供，避免在文档中继续扩散明文密码。
 
 ### 2.3 流水线配置概览
 
@@ -454,6 +455,172 @@ Pipeline #52（Job 221）成功，GitLab API 记录 job duration 为 `779.982949
 8. [ ] 制作内部 CI 基础镜像，预置 Node.js、Rust、Tauri Linux 依赖、Playwright 依赖和常用 cargo 工具
 9. [ ] 评估 cache 策略：当前 restore cache 约 120s、archive cache 约 42s，需要确认缓存收益是否大于压缩/解压成本
 10. [ ] 考虑移除 `cargo check`，因为 `cargo clippy -- -D warnings` 已覆盖编译检查；当前可节省约 5s
+
+---
+
+## 7. 后续排查与修复交接建议
+
+本节面向后续接手的 agent。当前代码和测试主线已经通过 Pipeline #56 验证，后续重点不是继续修业务代码，而是把 CI 环境从“能跑通”提升到“稳定、快、可复用”。
+
+### 7.1 先确认基础事实
+
+接手后先做一次只读确认，避免基于过期信息继续排查：
+
+```bash
+git remote -v
+git status --short
+curl -k -fsSL "https://<gitlab-host>/api/v4/projects/<project-id>/pipelines?per_page=10" | jq -r '.[] | [.id,.status,.ref,.sha,.created_at] | @tsv'
+sshpass -p '<password>' ssh yufei@192.168.3.144 'hostname; gitlab-runner --version; gitlab-runner status; docker info --format "{{.ServerVersion}} {{.CgroupVersion}}"; free -h; df -h / /var/lib/docker'
+```
+
+需要特别注意 GitLab 地址：本仓库 remote/API 当前实测为 `192.168.3.100`，但后续标准拓扑按 `192.168.3.128` 作为 GitLab 服务器。如果两者不一致，先向项目负责人确认是否已经迁移，再改 CI 配置或 Runner 注册。
+
+### 7.2 Runner 稳定性专项
+
+目标：避免再次出现 #35/#44/#45 这类 `runner_system_failure`。
+
+建议动作：
+
+1. 在 Runner 主机建立运维约束：有 job running 时不要重启 `gitlab-runner`、不要重新注册 Runner、不要直接编辑 `config.toml`。
+2. 修改 Runner 配置前，先在 GitLab 页面暂停 Runner 或确认 active build 为 0。
+3. 每次修改 `/etc/gitlab-runner/config.toml` 后执行：
+
+```bash
+sudo gitlab-runner verify
+sudo gitlab-runner list
+sudo systemctl status gitlab-runner --no-pager
+sudo journalctl -u gitlab-runner --since "30 min ago" --no-pager
+```
+
+4. 若再次出现 `runner_system_failure`，按时间线抓证据：
+
+```bash
+sudo journalctl -u gitlab-runner --since "YYYY-MM-DD HH:MM:SS" --until "YYYY-MM-DD HH:MM:SS" --no-pager
+sudo journalctl -u docker --since "YYYY-MM-DD HH:MM:SS" --until "YYYY-MM-DD HH:MM:SS" --no-pager
+dmesg -T | tail -200
+docker ps -a --no-trunc | head -50
+```
+
+5. 稳定期建议将 Runner `concurrent` 临时降到 `1`，等基础镜像和 job 拆分完成后再评估是否恢复到 `2` 或 `3`。
+
+验收标准：
+
+- 连续 5 次主线流水线无 `runner_system_failure`。
+- Runner journal 中没有运行中 job 被 stop signal 中断的记录。
+- `config.toml` 没有 TOML 解析错误、旧 token `403 Forbidden`、证书校验失败等噪音。
+
+### 7.3 内部 CI 基础镜像
+
+这是当前收益最高的优化。Pipeline #52/#56 仍需 11 到 13 分钟，主要耗时来自每次在 `ubuntu:22.04` 裸镜像中安装系统依赖、Node.js、Rust、Playwright 和 cargo 工具。
+
+建议制作一个内部基础镜像，例如：
+
+```text
+registry.<gitlab-host>/ci-images/agent-scope-tauri:node20-rust1.95-pw
+```
+
+镜像应预置：
+
+- Ubuntu 22.04 基础环境
+- Git、curl、ca-certificates、build-essential、pkg-config
+- Tauri Linux 依赖：`libwebkit2gtk-4.1-dev`、`libgtk-3-dev`、`libayatana-appindicator3-dev`、`librsvg2-dev` 等
+- Node.js 20
+- Rust 1.95.0，包含 `rustfmt`、`clippy`
+- `cargo-binstall` 固定版本
+- `cargo-audit`
+- Playwright Chromium 及其 Linux 运行库
+
+实施步骤：
+
+1. 新建 CI 镜像仓库或在当前项目下新增 `ci/Dockerfile`。
+2. 在 Runner 主机或专用构建机上构建镜像，并推送到 GitLab Container Registry 或内网 registry。
+3. 将 `.gitlab-ci.yml` 的 `image: ubuntu:22.04` 切换到内部镜像。
+4. 删除 CI 中重复的 NodeSource setup、rustup 安装、Playwright 系统依赖安装，仅保留版本检查和项目依赖安装。
+5. 连续跑 3 次流水线，对比耗时和失败率。
+
+验收标准：
+
+- `before_script + script` 主要耗时从约 600s 降到 300s 以内。
+- 不再出现 NodeSource/rustup 下载失败。
+- Playwright Chromium 不再因系统库缺失失败。
+
+### 7.4 Cache 策略评估
+
+当前 cache restore 约 120s，archive cache 约 42s，已经不是小开销。后续 agent 不应默认认为“缓存一定更快”，需要实测。
+
+建议做两组对比：
+
+1. 保留现有 cache，记录 3 次流水线耗时。
+2. 临时禁用或缩小 cache，只保留 `.npm/`、`.cargo/registry/`，记录 3 次流水线耗时。
+
+重点观察：
+
+- restore cache 是否稳定超过 60s。
+- archive cache 是否超过从公网重新下载的收益。
+- `.cache/ms-playwright/` 在使用内部基础镜像后是否还需要缓存。
+- `.cargo/git/` 和 `.cargo/registry/` 是否命中有效，还是压缩/解压成本更高。
+
+建议结论方向：
+
+- 如果使用内部基础镜像，优先删除 Playwright 浏览器缓存。
+- 如果 Rust 依赖变化不频繁，保留 cargo registry/git cache。
+- npm cache 可以保留，但需避免缓存 `node_modules`。
+
+### 7.5 拆分 verify job
+
+当前单个 `verify` job 适合早期排错，但长期会放大失败率，也让失败归因不清楚。基础镜像完成后再拆分更合适。
+
+建议拆分为：
+
+```text
+build:frontend
+check:rust
+test:rust
+test:e2e
+audit
+```
+
+拆分原则：
+
+- `check:rust` 执行 `cargo fmt --check`、`cargo clippy -- -D warnings`。
+- `test:rust` 只执行 `cargo test`。
+- `build:frontend` 执行 `npm ci`、`npm run build`，产物作为 artifact 给 `test:e2e`。
+- `test:e2e` 使用 `vite preview` 测试已构建产物，不使用 Vite dev server。
+- `audit` 可以 `allow_failure: true`，避免安全数据库临时波动阻塞主线。
+
+验收标准：
+
+- 任一失败能直接归因到前端构建、Rust 检查、Rust 测试、E2E 或审计。
+- E2E 不再重复构建前端产物。
+- 单个 job 日志长度下降，排查时间缩短。
+
+### 7.6 网络与 GitLab 地址治理
+
+当前已确认 Runner `192.168.3.144` 能访问 NodeSource、Rust、GitHub、npm registry。但长期仍建议减少 CI 对公网实时下载的依赖。
+
+后续需要确认：
+
+- GitLab 服务器最终是否统一为 `192.168.3.128`。
+- 当前项目 remote 是否需要从 `192.168.3.100` 迁移到 `192.168.3.128`。
+- Runner 注册 URL 是否与最终 GitLab 地址一致。
+- GitLab 自签证书是否已被 Runner 主机信任，避免再次出现 x509 失败。
+
+只读检查命令：
+
+```bash
+git remote -v
+sshpass -p '<password>' ssh yufei@192.168.3.144 'sudo gitlab-runner list'
+sshpass -p '<password>' ssh yufei@192.168.3.144 'curl -k -I https://192.168.3.128 || true; curl -k -I https://192.168.3.100 || true'
+```
+
+### 7.7 推荐执行顺序
+
+1. 确认 GitLab 最终地址：`192.168.3.128` 还是当前 remote 的 `192.168.3.100`。
+2. 固化 Runner 运维规范，避免运行中重启和配置异常。
+3. 制作内部 CI 基础镜像。
+4. 基于基础镜像重新评估 cache。
+5. 拆分 `verify` job。
+6. 连续运行 5 次主线流水线，统计成功率和耗时。
 
 ---
 
