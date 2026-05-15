@@ -4,7 +4,8 @@ use std::process::Command;
 
 /// 创建静默 git 命令：Windows 上隐藏命令行窗口
 fn git_cmd() -> Command {
-    let cmd = Command::new("git");
+    #[allow(unused_mut)]
+    let mut cmd = Command::new("git");
     #[cfg(windows)]
     {
         use std::os::windows::process::CommandExt;

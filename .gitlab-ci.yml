@@ -97,7 +97,7 @@ build:linux:
     - echo "=== 安装前端依赖 ==="
     - npm ci
     - echo "=== 安装 cargo-tauri CLI ==="
-    - cargo binstall cargo-tauri --locked --no-confirm
+    - cargo binstall tauri-cli --locked --no-confirm
   script:
     - echo "=== 构建前端 ==="
     - npm run build

@@ -5,7 +5,8 @@ use std::sync::atomic::{AtomicU64, Ordering};
 
 /// 创建静默命令：Windows 上隐藏命令行窗口，其他平台正常执行
 fn silent_command(program: &str) -> Command {
-    let cmd = Command::new(program);
+    #[allow(unused_mut)]
+    let mut cmd = Command::new(program);
     #[cfg(windows)]
     {
         use std::os::windows::process::CommandExt;
