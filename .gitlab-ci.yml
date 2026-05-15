@@ -9,14 +9,13 @@ variables:
   CARGO_NET_RETRY: "3"
   CARGO_HTTP_TIMEOUT: "120"
 
-# 缓存依赖目录，避免重复下载
+# 缓存策略评估：仅保留 npm 和 cargo registry，移除空的 cargo/git 和 ms-playwright
+# 实验目的：对比 archive/restore 开销 vs 重新下载浏览器的成本
 cache:
   key: ${CI_COMMIT_REF_SLUG}
   paths:
     - .npm/
     - .cargo/registry/
-    - .cargo/git/
-    - .cache/ms-playwright/
 
 verify:
   stage: verify
