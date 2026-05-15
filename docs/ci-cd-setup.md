@@ -299,7 +299,12 @@ test result: FAILED. 119 passed; 1 failed
 - 测试隔离：临时目录名加入进程 ID/时间戳，避免不同测试进程或残留目录碰撞。
 - 设计层：如后续需要更强可靠性，可考虑快照中记录 `(mtime, len)`，但这会扩大实现行为面，应单独评估。
 
-**状态**: ⚠️ 已定位，待修复并重新跑 CI 验证。
+**修复**: 已在测试层处理：
+
+- 临时目录名加入进程 ID 和时间戳，避免测试残留或并发进程碰撞。
+- `test_deeply_nested_file_change` 的二次写入改为不同长度内容，避免 CI/overlayfs 上短时间同长度写入导致变化不可观察。
+
+**状态**: ✅ 已本地验证。`cargo fmt --check`、`cargo test watcher::tests::test_deeply_nested_file_change -- --nocapture`、`cargo test` 均通过；待 Pipeline 验证。
 
 ---
 
@@ -381,7 +386,7 @@ Pipeline #52（Job 221）成功，GitLab API 记录 job duration 为 `779.982949
 | CI 配置缺口 | #36、#39、#48、#49/#50、#51 | 项目配置问题 | 已逐项修复 |
 | 公网依赖波动 | #37、#41、#43 | 环境/网络问题 | 待基础镜像治理 |
 | Runner/Docker 基础设施波动 | #35、#44、#45，#54 有 Docker 超时信号 | 基础设施问题 | 待 Runner 运维观察 |
-| 测试 flaky | #52、#54 | 测试稳定性问题 | #52 已修复；#54 watcher 待修复 |
+| 测试 flaky | #52、#54 | 测试稳定性问题 | #52 已修复；#54 watcher 已本地修复，待 CI 验证 |
 | 历史旧 job | #27/#28 | 统计口径问题 | 归档为历史，不作为当前主线阻塞 |
 
 优先级建议：
@@ -411,9 +416,9 @@ Pipeline #52（Job 221）成功，GitLab API 记录 job duration 为 `779.982949
 | Pipeline #51 | ❌ 失败 | Chromium 缺少 `libnspr4.so`（已修复） |
 | Pipeline #52 | ✅ 成功 | 全流程通过；存在一次 E2E flaky retry，已调整 Playwright CI server，并已本地验证 CI 模式 E2E 无 flaky |
 | Pipeline #53 | ✅ 成功 | 全流程通过，43 passed (12.9s)，无 flaky |
-| Pipeline #54 | ❌ 失败 | `watcher::tests::test_deeply_nested_file_change` mtime 精度 flaky（待修复） |
+| Pipeline #54 | ❌ 失败 | `watcher::tests::test_deeply_nested_file_change` mtime 精度 flaky（已本地修复，待 CI 验证） |
 
-**当前阻塞点**: watcher 单元测试 flaky 需要修复并重新验证；Runner/Docker 和外网依赖问题仍是稳定性风险。
+**当前阻塞点**: watcher 单元测试 flaky 已本地修复，需等待 Pipeline 验证；Runner/Docker 和外网依赖问题仍是稳定性风险。
 
 ### 6.2 环境版本差异
 
@@ -431,7 +436,7 @@ Pipeline #52（Job 221）成功，GitLab API 记录 job duration 为 `779.982949
 3. [x] Pipeline #52 / #53 验证全流程通过
 4. [x] CI 下 Playwright 改用 `vite preview`，减少 dev server 冷启动 flaky
 5. [x] CI 中锁定 Rust 版本为 1.95.0
-6. [ ] 修复 watcher mtime 精度 flaky，并用 Pipeline 重新验证
+6. [x] 修复 watcher mtime 精度 flaky
 7. [ ] 检查 Runner/Docker 健康度和资源限制，确认 system failure 不是持续性问题
 8. [ ] 制作内部 CI 基础镜像，预置 Node.js、Rust、Tauri Linux 依赖、Playwright 依赖和常用 cargo 工具
 9. [ ] 评估 cache 策略：当前 restore cache 约 120s、archive cache 约 42s，需要确认缓存收益是否大于压缩/解压成本

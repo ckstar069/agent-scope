@@ -450,6 +450,8 @@ mod tests {
     mod temp_cleanup {
         use std::path::{Path, PathBuf};
         use std::sync::atomic::{AtomicUsize, Ordering};
+        use std::time::{SystemTime, UNIX_EPOCH};
+
         static COUNTER: AtomicUsize = AtomicUsize::new(0);
 
         pub struct TempDir {
@@ -470,7 +472,16 @@ mod tests {
 
         pub fn create() -> (PathBuf, TempDir) {
             let id = COUNTER.fetch_add(1, Ordering::SeqCst);
-            let path = std::env::temp_dir().join(format!("agent-scope-watcher-test-{}", id));
+            let timestamp = SystemTime::now()
+                .duration_since(UNIX_EPOCH)
+                .expect("system clock should be after UNIX_EPOCH")
+                .as_nanos();
+            let path = std::env::temp_dir().join(format!(
+                "agent-scope-watcher-test-{}-{}-{}",
+                std::process::id(),
+                id,
+                timestamp
+            ));
             let _ = std::fs::create_dir_all(&path);
             let dir = TempDir { path: path.clone() };
             (path, dir)
@@ -958,7 +969,8 @@ mod tests {
 
         thread::sleep(Duration::from_millis(100));
 
-        write_file(&deep_file, "changed");
+        // watcher 依赖 mtime 轮询；CI/overlayfs 上短时间同长度写入可能落在同一时间戳 tick。
+        write_file(&deep_file, "changed content");
 
         let deadline = Instant::now() + Duration::from_secs(3);
         let mut received = false;
