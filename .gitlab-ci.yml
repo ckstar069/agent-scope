@@ -125,7 +125,20 @@ build:windows:
       - .cargo/git/
   before_script:
     - echo "=== 同步版本号 ==="
-    - powershell -NoProfile -Command "$tag=$env:CI_COMMIT_TAG; $ver=$tag -replace '^v',''; Write-Host \"Version: $ver\"; $c=Get-Content package.json -Raw; $c=$c -replace '\"version\":\s*\"[^\"]*\"', ('\"version\": \"'+$ver+'\"'); Set-Content package.json $c -NoNewline; Write-Host 'Updated package.json'; $c=Get-Content src-tauri/Cargo.toml -Raw; $c=$c -replace '^version = \"[^\"]*\"', ('version = \"'+$ver+'\"'); Set-Content src-tauri/Cargo.toml $c -NoNewline; Write-Host 'Updated Cargo.toml'"
+    - |
+      powershell -NoProfile -Command "
+        $tag = $env:CI_COMMIT_TAG;
+        $ver = $tag -replace '^v','';
+        Write-Host \"Version: $ver\";
+        $c = Get-Content package.json -Raw;
+        $c = $c -replace '\"version\":\s*\"[^\"]*\"', (\"`\"version`\": `\"$ver`\"\");
+        Set-Content package.json $c -NoNewline;
+        Write-Host 'Updated package.json';
+        $c = Get-Content src-tauri/Cargo.toml -Raw;
+        $c = $c -replace '^version = \"[^\"]*\"', (\"version = `\"$ver`\"\");
+        Set-Content src-tauri/Cargo.toml $c -NoNewline;
+        Write-Host 'Updated Cargo.toml'
+      "
     - echo "=== 安装前端依赖 ==="
     - npm ci
   script:
