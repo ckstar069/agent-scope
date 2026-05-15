@@ -455,7 +455,7 @@ Pipeline #52（Job 221）成功，GitLab API 记录 job duration 为 `779.982949
 8. [x] 制作内部 CI 基础镜像，预置 Node.js、Rust、Tauri Linux 依赖、Playwright 依赖和常用 cargo 工具
 9. [x] 将 Runner `concurrent` 从 3 降为 1，减少多 job 并发资源竞争
 9. [x] 评估 cache 策略：保留全部 4 个缓存目录；ms-playwright 缓存浏览器文件价值最高，移除后重新下载 Chromium 成本约 +120s
-10. [ ] 考虑移除 `cargo check`，因为 `cargo clippy -- -D warnings` 已覆盖编译检查；当前可节省约 5s
+10. [x] ~~考虑移除 `cargo check`~~ — 不实施。`cargo clippy` 虽覆盖编译检查，但 `cargo check` 更快（~5s），作为 fallback 保留价值大于节省的时间。
 
 **内部 CI 基础镜像**
 
