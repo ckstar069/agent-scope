@@ -128,6 +128,34 @@ shutdown_timeout = 0
     pull_policy = ["if-not-present"]
 ```
 
+#### Windows Shell executor
+
+用于构建 Windows 桌面应用（如 Tauri），典型配置：
+
+```toml
+concurrent = 1
+check_interval = 0
+shutdown_timeout = 0
+
+[[runners]]
+  name = "agent-scope-windows-runner"
+  url = "https://192.168.3.100"
+  executor = "shell"
+  shell = "powershell"
+
+  [runners.custom_build_dir]
+  [runners.cache]
+    [runners.cache.s3]
+    [runners.cache.gcs]
+    [runners.cache.azure]
+```
+
+Windows Shell executor 特点：
+- 直接在主机上执行命令（非容器化），适合需要完整 Windows 环境的构建任务
+- 默认使用 `cmd`，可通过 `shell = "powershell"` 切换
+- 缓存路径使用 `\\` 分隔符
+- 需要预装构建工具链（MSVC、Node.js、Rust 等）
+
 建议：
 
 - 稳定期先用 `concurrent = 1`，避免多个重型 job 同时争抢 CPU、内存、磁盘和 Docker。
@@ -407,15 +435,21 @@ df -h / /var/lib/docker
 | 资源 | 地址 | 用户名 | 密码 | 用途 |
 |------|------|--------|------|------|
 | GitLab 服务器 | `192.168.3.100` | `yufei` | `yufei` | GitLab 服务维护、项目与 CI 配置检查 |
-| Runner 服务器 | `192.168.3.144` | `yufei` | `yufei` | GitLab Runner、Docker、CI job 执行环境维护 |
+| Linux Runner | `192.168.3.144` | `yufei` | `yufei` | GitLab Runner（Docker executor）、CI job 执行 |
+| Windows Runner | `192.168.3.10` | `yufei` | `yufei` | GitLab Runner（Shell executor）、Windows 桌面应用构建 |
 
 常用命令：
 
 ```bash
+# Linux 基础设施
 sshpass -p yufei ssh yufei@192.168.3.100
 sshpass -p yufei ssh yufei@192.168.3.144
 sshpass -p yufei ssh yufei@192.168.3.144 'sudo gitlab-runner list'
 sshpass -p yufei ssh yufei@192.168.3.144 'sudo journalctl -u gitlab-runner --since "1 hour ago" --no-pager'
+
+# Windows Runner（检查服务状态）
+sshpass -p yufei ssh yufei@192.168.3.10 'sc query gitlab-runner'
+sshpass -p yufei ssh yufei@192.168.3.10 'C:\GitLab-Runner\gitlab-runner.exe --version'
 ```
 
 仍需谨慎处理的内容：

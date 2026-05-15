@@ -742,6 +742,173 @@ sshpass -p '<password>' ssh yufei@192.168.3.144 'curl -k -I https://192.168.3.10
 
 ---
 
+## 9. 自动构建与发布
+
+本节记录 AgentScope 桌面应用的自动构建与发布配置，覆盖 Linux 和 Windows 平台。
+
+### 9.1 方案概述
+
+| 平台 | 构建方式 | 产物 | Runner |
+|------|---------|------|--------|
+| Linux | GitLab CI 自动 | AppImage + deb | `192.168.3.144` Docker executor |
+| Windows | GitLab CI 自动 | exe (NSIS) + msi | `192.168.3.10` Shell executor |
+| macOS | 本机手动 | dmg | 开发者本机（不参与 CI） |
+
+### 9.2 触发方式
+
+- **自动构建**：推送符合语义化版本的 tag（如 `v0.2.1`）时自动触发
+- **验证阶段**：Push 到 `main` 分支或 MR 时运行 verify（原有行为不变）
+- **构建阶段**：Tag push 时运行 `build:linux` + `build:windows`，然后执行 `release`
+
+Tag 命名规则：`v<major>.<minor>.<patch>`，例如 `v0.2.1`
+
+### 9.3 版本号同步
+
+CI 自动将 Git tag 中的版本号同步到以下文件：
+
+| 文件 | 同步方式 |
+|------|---------|
+| `package.json` | CI 脚本直接修改 `version` 字段 |
+| `src-tauri/Cargo.toml` | CI 脚本直接修改 `version` 字段 |
+| `src-tauri/tauri.conf.json` | 已配置 `"version": "../package.json"`，自动读取 package.json |
+
+同步逻辑：
+1. 读取 `CI_COMMIT_TAG`（如 `v0.2.1`）
+2. 去掉 `v` 前缀得到 `0.2.1`
+3. 写入 `package.json` 和 `Cargo.toml`
+
+### 9.4 Runner 配置
+
+#### Linux Runner（已有）
+
+- **主机**：`192.168.3.144`
+- **执行器**：Docker
+- **镜像**：`agent-scope-ci:node20-rust1.95`
+- **Tags**：`linux`
+
+#### Windows Runner（新增）
+
+- **主机**：`192.168.3.10`（Windows 11 ESXi VM）
+- **执行器**：Shell
+- **Tags**：`windows`
+- **必需组件**：
+  - GitLab Runner（`C:\GitLab-Runner\gitlab-runner.exe`）
+  - Visual Studio Build Tools 2022（MSVC C++ 工具链）
+  - Windows 11 SDK (10.0.22621.0)
+  - Git 2.53.0
+  - Node.js v22.14.0
+  - Rust 1.95.0
+  - Tauri CLI 2.11.1
+  - WebView2 Runtime
+
+**Windows Runner 注册命令**（在 `192.168.3.10` 上执行）：
+
+```powershell
+cd C:\GitLab-Runner
+.\gitlab-runner.exe register `
+  --non-interactive `
+  --url "https://192.168.3.100" `
+  --registration-token "<从 GitLab 项目设置获取>" `
+  --executor "shell" `
+  --tag-list "windows" `
+  --name "agent-scope-windows-runner" `
+  --locked="false"
+
+# 启动服务
+.\gitlab-runner.exe start
+```
+
+获取 registration token：
+1. 登录 GitLab（`https://192.168.3.100`）
+2. 进入项目 `znxt_tools/agent-scope`
+3. 设置 → CI/CD → Runners → 项目 runners → 注册令牌
+
+### 9.5 流水线结构
+
+```
+stages:
+  - verify    # 代码检查、测试（main/MR 触发）
+  - build     # 桌面应用构建（tag 触发）
+  - release   # 创建 GitLab Release（tag 触发）
+```
+
+**build:linux** job：
+- 使用 Docker Runner + 内部镜像
+- 同步版本号 → `npm ci` → `npm run build` → `cargo tauri build`
+- 产物：`*.AppImage`、`*.deb`
+
+**build:windows** job：
+- 使用 Windows Shell Runner
+- 同步版本号 → `npm ci` → `npm run build` → `cargo tauri build`
+- 产物：`*.exe`（NSIS）、`*.msi`
+
+**release** job：
+- 依赖 build:linux 和 build:windows 的 artifacts
+- 调用 GitLab API 创建 Release
+- Release 描述包含各平台产物列表
+- 产物链接指向 job artifacts 下载地址
+
+### 9.6 产物路径
+
+| 平台 | 产物类型 | 路径（CI 中） |
+|------|---------|-------------|
+| Linux | AppImage | `src-tauri/target/release/bundle/appimage/*.AppImage` |
+| Linux | deb | `src-tauri/target/release/bundle/deb/*.deb` |
+| Windows | NSIS Installer | `src-tauri/target/release/bundle/nsis/*.exe` |
+| Windows | MSI | `src-tauri/target/release/bundle/msi/*.msi` |
+
+### 9.7 GitLab Release 权限
+
+`release` job 使用 `CI_JOB_TOKEN` 调用 GitLab Release API。需要在项目设置中授权：
+
+1. 项目设置 → CI/CD → Token Access
+2. 确保 `CI_JOB_TOKEN` 允许访问 Release API
+3. 或创建 Project Access Token（`api` + `write_repository` 权限）并设为 `GITLAB_TOKEN` 变量
+
+### 9.8 首次发布测试步骤
+
+1. 确认 Windows Runner 已注册并 online
+2. 确认 MSVC 安装完成（`cl.exe` 可用）
+3. 本地测试版本号同步逻辑：
+   ```bash
+   # 测试 Linux 同步脚本
+   export CI_COMMIT_TAG=v0.2.1
+   VERSION=${CI_COMMIT_TAG#v}
+   node -e "const fs=require('fs'); const pkg=JSON.parse(fs.readFileSync('package.json')); pkg.version='$VERSION'; fs.writeFileSync('package.json', JSON.stringify(pkg,null,2)+'\n');"
+   sed -i "s/^version = \".*\"/version = \"$VERSION\"/" src-tauri/Cargo.toml
+   ```
+4. 推送测试 tag：
+   ```bash
+   git tag v0.2.1-test
+   git push origin v0.2.1-test
+   ```
+5. 在 GitLab 查看流水线状态
+6. 确认 Release 页面已创建且产物可下载
+7. 删除测试 tag：
+   ```bash
+   git push --delete origin v0.2.1-test
+   git tag -d v0.2.1-test
+   ```
+
+### 9.9 macOS 手动构建说明
+
+macOS 产物（`.dmg`）不参与 CI，需要在本机手动构建：
+
+```bash
+# 在本机执行
+npm ci
+npm run build
+cd src-tauri
+cargo tauri build --target aarch64-apple-darwin  # Apple Silicon
+cargo tauri build --target x86_64-apple-darwin   # Intel（如需要）
+```
+
+产物位置：`src-tauri/target/release/bundle/dmg/*.dmg`
+
+如需将 macOS 产物加入 GitLab Release，可手动上传到同一 Release 页面。
+
+---
+
 ## 附录：相关文件
 
 - `.gitlab-ci.yml` — GitLab CI 配置
