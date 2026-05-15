@@ -165,7 +165,7 @@ Failed to exec create to container: ... context deadline exceeded
 - Runner 配置或重新注册前，先确认没有运行中的 job；必要时先暂停 Runner 或等待 active build 为 0。
 - 修改 `/etc/gitlab-runner/config.toml` 后执行 `gitlab-runner verify` / `gitlab-runner list`，避免 malformed TOML 进入服务运行状态。
 - 清理旧的无效 Runner 注册信息，避免旧 token、自签证书、当前 Runner 混杂导致误判。
-- 稳定期可考虑临时将 `concurrent` 从 3 降为 1，减少多个重型 CI job 同时运行时对 Docker/磁盘/内存的压力。
+- 已将 `concurrent` 从 3 降为 **1**，减少多 job 并发对 Docker/磁盘/内存的压力。
 
 **状态**: ⚠️ 已完成日志归因；后续按 Runner 运维规范观察，不需要改项目代码。
 
@@ -453,6 +453,7 @@ Pipeline #52（Job 221）成功，GitLab API 记录 job duration 为 `779.982949
 6. [x] 修复 watcher mtime 精度 flaky，并由 Pipeline #56 验证
 7. [x] 检查 Runner/Docker 健康度和资源限制，确认 system failure 主要来自 Runner 服务重启/配置变更
 8. [x] 制作内部 CI 基础镜像，预置 Node.js、Rust、Tauri Linux 依赖、Playwright 依赖和常用 cargo 工具
+9. [x] 将 Runner `concurrent` 从 3 降为 1，减少多 job 并发资源竞争
 9. [ ] 评估 cache 策略：当前 restore cache 约 120s、archive cache 约 42s，需要确认缓存收益是否大于压缩/解压成本
 10. [ ] 考虑移除 `cargo check`，因为 `cargo clippy -- -D warnings` 已覆盖编译检查；当前可节省约 5s
 
