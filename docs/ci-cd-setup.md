@@ -452,9 +452,28 @@ Pipeline #52（Job 221）成功，GitLab API 记录 job duration 为 `779.982949
 5. [x] CI 中锁定 Rust 版本为 1.95.0
 6. [x] 修复 watcher mtime 精度 flaky，并由 Pipeline #56 验证
 7. [x] 检查 Runner/Docker 健康度和资源限制，确认 system failure 主要来自 Runner 服务重启/配置变更
-8. [ ] 制作内部 CI 基础镜像，预置 Node.js、Rust、Tauri Linux 依赖、Playwright 依赖和常用 cargo 工具
+8. [x] 制作内部 CI 基础镜像，预置 Node.js、Rust、Tauri Linux 依赖、Playwright 依赖和常用 cargo 工具
 9. [ ] 评估 cache 策略：当前 restore cache 约 120s、archive cache 约 42s，需要确认缓存收益是否大于压缩/解压成本
 10. [ ] 考虑移除 `cargo check`，因为 `cargo clippy -- -D warnings` 已覆盖编译检查；当前可节省约 5s
+
+**内部 CI 基础镜像**
+
+| 项目 | 内容 |
+|------|------|
+| Dockerfile | `ci/Dockerfile` |
+| 镜像标签 | `agent-scope-ci:node20-rust1.95` |
+| 构建位置 | Runner 主机 `192.168.3.144` |
+| 预置内容 | Ubuntu 22.04 + Node.js 20 + Rust 1.95.0 + Tauri 依赖 + cargo-binstall + cargo-audit + Playwright 系统依赖 |
+| 效果 | 流水线耗时从 ~779s 降到 ~517s（节省约 34%） |
+| 验证 | Pipeline #57（Job 235）成功通过 |
+
+**镜像更新流程**
+
+当需要升级 Node.js、Rust 或工具版本时：
+1. 修改 `ci/Dockerfile` 中的版本号
+2. 在 Runner 主机执行 `docker build` 重新构建
+3. 更新 `.gitlab-ci.yml` 中的 `image:` 标签（如需要）
+4. 触发流水线验证
 
 ---
 
