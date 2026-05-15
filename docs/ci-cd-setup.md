@@ -644,8 +644,107 @@ sshpass -p '<password>' ssh yufei@192.168.3.144 'curl -k -I https://192.168.3.12
 
 ---
 
+## 8. 本次会话总结
+
+本次会话聚焦 CI/CD 稳定性完善，从问题排查、修复到基础设施优化，最终达成流水线稳定通过的目标。
+
+### 8.1 流水线配置现状
+
+| 配置项 | 当前值 |
+|-------|--------|
+| CI 平台 | GitLab CI（`192.168.3.100`） |
+| Runner | `agent-scope-runner` @ `192.168.3.144`（Docker executor） |
+| 基础镜像 | `agent-scope-ci:node20-rust1.95`（内部镜像，Runner 本地） |
+| Rust 版本 | 1.95.0（已锁定） |
+| Runner concurrent | 1 |
+| 缓存目录 | `.npm/`、`.cargo/registry/`、`.cargo/git/`、`.cache/ms-playwright/` |
+| 流水线耗时 | ~517s（约 8.6 分钟） |
+
+流水线步骤：
+1. `npm ci` + `npx playwright install chromium`
+2. `npm run build`
+3. `cargo fmt --check`
+4. `cargo clippy -- -D warnings`
+5. `cargo check`
+6. `cargo test`
+7. `cargo audit`（非阻塞）
+8. `npm audit`（非阻塞）
+9. `npm test`（E2E，Playwright）
+
+### 8.2 本次会话过程
+
+**Phase 1：问题排查与修复**
+- 分析 Pipeline #48~#56 失败日志，定位根因
+- 修复 cargo-binstall 路径错误（`~/.cargo/bin/` → `$CARGO_HOME/bin/`）
+- 修复 Clippy 4 个 lint 错误（Rust 1.95.0 新规则）
+- 修复 Playwright Chromium 缺少系统库（`--with-deps`）
+- 修复 E2E flaky（CI 改用 `vite preview`，`127.0.0.1` 替代 `localhost`）
+- 修复 watcher mtime 精度 flaky（进程 ID 隔离 + 不同长度写入内容）
+- 清理未使用的 GitHub Actions 配置
+
+**Phase 2：基础设施优化**
+- 制作内部 CI 基础镜像 `agent-scope-ci:node20-rust1.95`
+  - Dockerfile: `ci/Dockerfile`
+  - 预置：Node.js 20、Rust 1.95.0、Tauri 依赖、Playwright 依赖、cargo 工具
+  - 效果：耗时从 ~779s → ~517s（-34%）
+- Runner `concurrent` 从 3 降为 1，减少并发资源竞争
+- Cache 策略评估：实验对比后确认保留全部 4 个缓存目录最优
+- Rust 版本锁定：`.gitlab-ci.yml` 中固定 `1.95.0`
+
+**Phase 3：文档治理**
+- 创建/更新 `docs/ci-cd-setup.md`，记录全部 10+ 个问题和修复过程
+- 补充 Pipeline 耗时分析、失败归因、后续接手指南
+
+### 8.3 验证结果
+
+| 流水线 | 状态 | 说明 |
+|-------|------|------|
+| Pipeline #53 | ✅ | 修复 Clippy 后首次全流程通过 |
+| Pipeline #56 | ✅ | watcher flaky 修复后验证 |
+| Pipeline #57 | ✅ | 内部镜像验证，耗时 ~517s |
+| Pipeline #58 | ✅ | cache 评估实验（缩小缓存） |
+| Pipeline #59 | ✅ | cache 评估 round-2 |
+
+当前阻塞点：**无**。流水线已稳定。
+
+### 8.4 后续事项：自动构建与发布
+
+当前流水线仅执行**验证**（检查、测试、前端构建），未执行桌面应用构建和发布。
+
+**缺失能力**：
+
+| 能力 | 现状 | 差距 |
+|------|------|------|
+| 自动验证 | ✅ | 已配置，Push/MR 自动触发 |
+| 自动构建桌面应用 | ❌ | 无 `cargo tauri build` 步骤 |
+| 多平台构建 | ❌ | 仅 Linux Runner，无 macOS/Windows |
+| 自动发布 | ❌ | 无 Release/产物上传配置 |
+
+**建议方案**：
+
+1. **Linux 单平台（GitLab CI）**
+   - 在 `.gitlab-ci.yml` 增加 `build` stage
+   - 执行 `cargo tauri build` 生成 AppImage + deb
+   - 产物作为 artifacts 上传
+   - 限制：只能构建 Linux 包
+
+2. **多平台发布（GitHub Actions，推荐）**
+   - 恢复 `.github/workflows/release.yml`
+   - 矩阵构建：`macos-latest` + `windows-latest` + `ubuntu-22.04`
+   - 使用 `tauri-apps/tauri-action` 自动创建 GitHub Release
+   - 上传 AppImage、deb、dmg、exe、msi 等产物
+   - 需要：GitHub 仓库、Release 权限、各平台签名证书（可选）
+
+**实施前提**：
+- 确认项目是否需要多平台发布（还是仅 Linux 内部使用）
+- 确认发布触发条件（tag push？手动触发？）
+- 确认产物存储位置（GitLab artifacts？GitHub Release？内网 registry？）
+
+---
+
 ## 附录：相关文件
 
 - `.gitlab-ci.yml` — GitLab CI 配置
+- `ci/Dockerfile` — 内部 CI 基础镜像
 - `src/collectors/claude_history/scanner.rs` — Clippy 警告 #1
 - `src/collectors/template/session_transcript.rs` — Clippy 警告 #2~4
