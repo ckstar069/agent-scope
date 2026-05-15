@@ -143,7 +143,15 @@ ERROR: Job failed (system failure): aborted: terminated
 
 **根因**: GitLab Runner 进程或容器执行环境层面的中断。Pipeline #44 在 E2E 执行中被终止，Pipeline #45 在 cache restore 阶段被终止，MR Pipeline #35 在 prepare executor 阶段被终止。
 
-**修复现状**: 后续同一 Runner 可成功执行 #46/#47/#52，说明不是稳定复现的项目配置错误。
+**补充证据**: Pipeline #54 的 Runner journal 中还出现过 Docker API 超时：
+
+```
+Failed to exec create to container: ... context deadline exceeded
+```
+
+该日志发生在测试已失败后的收尾阶段，不是 #54 的主失败因，但说明 Docker/Runner 通道存在偶发迟滞。
+
+**修复现状**: 后续同一 Runner 可成功执行 #46/#47/#52/#53，说明不是稳定复现的项目配置错误，但仍属于 CI 稳定性风险源。
 
 **建议**: 保留为 Runner 运维观察项；若频繁出现，检查 Runner 主机 Docker、内存、磁盘、GitLab Runner 服务重启记录。
 
@@ -265,7 +273,63 @@ navigating to "http://localhost:1420/", waiting until "load"
 
 **修复**: CI 已先执行 `npm run build`，因此 Playwright 在 CI 中改用 `vite preview` 服务已构建产物；本地仍使用 `npm run dev`。
 
-**状态**: ✅ 已调整。本地执行 `npm run build && CI=1 npm test` 验证为 `43 passed (13.3s)`，待下一次 Pipeline 验证 flaky 是否消失。
+**状态**: ✅ 已调整。本地执行 `npm run build && CI=1 npm test` 验证为 `43 passed (13.3s)`，Pipeline #53 验证为 `43 passed` 且无 flaky。
+
+---
+
+### 问题 11: watcher 单元测试存在 mtime 精度 flaky
+
+**现象**: Pipeline #54（Job 223）在 `cargo test` 阶段失败。
+
+**错误日志**:
+```
+test watcher::tests::test_deeply_nested_file_change ... FAILED
+thread 'watcher::tests::test_deeply_nested_file_change' panicked at src/watcher.rs:975:9:
+deeply nested file change should be detected
+test result: FAILED. 119 passed; 1 failed
+```
+
+**根因**: `FileWatcher` 使用 `std::fs::metadata().modified()` 的 mtime 轮询来检测变化。失败用例在短时间内把文件内容从 `"initial"` 写成 `"changed"`，两者都是 7 字节。如果 CI 容器/overlayfs 的 mtime 精度没有跨过一个可见 tick，且文件大小也未变化，快照对比可能认为文件未变化。
+
+**影响范围**: 这是测试稳定性问题，不是 #54 中发现的业务功能必现失败。相同代码在 Pipeline #53 和本地可通过，说明该问题具备时序/文件系统相关的偶发性。
+
+**建议修复**:
+
+- 测试层：将该用例的二次写入改成不同长度内容，或显式等待 mtime 可观察变化后再写入。
+- 测试隔离：临时目录名加入进程 ID/时间戳，避免不同测试进程或残留目录碰撞。
+- 设计层：如后续需要更强可靠性，可考虑快照中记录 `(mtime, len)`，但这会扩大实现行为面，应单独评估。
+
+**状态**: ⚠️ 已定位，待修复并重新跑 CI 验证。
+
+---
+
+### 问题 12: 单 job 串行 verify 放大失败率
+
+**现象**: 当前主线只有一个 `verify` job，负责系统依赖、Node、Rust、前端构建、Rust 检查、Rust 测试、安全审计、E2E。历史上任一环节失败都会让整条流水线失败。
+
+**根因**: 验证面过宽，且大量步骤依赖外部网络或容器内冷安装。单 job 方便串行定位，但会放大单点波动对整条流水线成功率的影响。
+
+**影响范围**: 失败统计会被配置错误、网络波动、Runner 问题、测试 flaky 混在一起；从“流水线失败率”看会显得整体不可靠，但实际需要按失败源分层治理。
+
+**建议修复**:
+
+- 短期：保留单 job，但先修复已确认的 flaky 和脚本配置缺口。
+- 中期：拆分 `build:frontend`、`check:rust`、`test:rust`、`test:e2e`，让失败归因更清楚。
+- 长期：配合内部基础镜像，减少每个 job 的安装成本。
+
+**状态**: ⚠️ 已识别，待 CI 结构优化。
+
+---
+
+### 问题 13: 历史遗留 GitLab 模板 job 拉低统计口径
+
+**现象**: Pipeline #27/#28 包含 `secret_detection`、`semgrep-sast`、`nodejs-scan-sast`、`container_scanning`、`code_quality` 等旧 job，其中 #28 出现 `stuck_or_timeout_failure`。
+
+**根因**: 这些 job 属于早期/模板化 CI 配置，与当前 `.gitlab-ci.yml` 的 `verify` 主线不同。把它们和当前主线合并统计，会放大历史失败率。
+
+**影响范围**: 用于复盘时应保留记录；用于判断当前主线稳定性时，应单独剔除或分组。
+
+**状态**: ℹ️ 历史记录，非当前主线阻塞项。
 
 ---
 
@@ -306,9 +370,32 @@ Pipeline #52（Job 221）成功，GitLab API 记录 job duration 为 `779.982949
 
 ---
 
-## 5. 当前现状
+## 5. 失败超半数归因
 
-### 5.1 流水线状态
+截至 Pipeline #54，当前可见流水线状态为：`6 success`、`15 failed`、`1 canceled`。失败 job 的 failure reason 分布为：`11 script_failure`、`3 runner_system_failure`、`3 stuck_or_timeout_failure`。
+
+失败超半数不是单一根因，而是以下几类问题叠加：
+
+| 类别 | 对应流水线 | 性质 | 当前处理 |
+|------|------------|------|----------|
+| CI 配置缺口 | #36、#39、#48、#49/#50、#51 | 项目配置问题 | 已逐项修复 |
+| 公网依赖波动 | #37、#41、#43 | 环境/网络问题 | 待基础镜像治理 |
+| Runner/Docker 基础设施波动 | #35、#44、#45，#54 有 Docker 超时信号 | 基础设施问题 | 待 Runner 运维观察 |
+| 测试 flaky | #52、#54 | 测试稳定性问题 | #52 已修复；#54 watcher 待修复 |
+| 历史旧 job | #27/#28 | 统计口径问题 | 归档为历史，不作为当前主线阻塞 |
+
+优先级建议：
+
+1. 先修复 #54 的 watcher flaky，因为它是当前最新失败的直接原因。
+2. 再检查 Runner/Docker 健康度，避免 system failure 和 Docker API timeout 混入主线。
+3. 再做内部 CI 基础镜像，消除 NodeSource/rustup/Playwright 依赖公网下载。
+4. 最后考虑拆分 `verify` job，让失败归因更清楚。
+
+---
+
+## 6. 当前现状
+
+### 6.1 流水线状态
 
 | 流水线 | 状态 | 说明 |
 |-------|------|------|
@@ -324,10 +411,11 @@ Pipeline #52（Job 221）成功，GitLab API 记录 job duration 为 `779.982949
 | Pipeline #51 | ❌ 失败 | Chromium 缺少 `libnspr4.so`（已修复） |
 | Pipeline #52 | ✅ 成功 | 全流程通过；存在一次 E2E flaky retry，已调整 Playwright CI server，并已本地验证 CI 模式 E2E 无 flaky |
 | Pipeline #53 | ✅ 成功 | 全流程通过，43 passed (12.9s)，无 flaky |
+| Pipeline #54 | ❌ 失败 | `watcher::tests::test_deeply_nested_file_change` mtime 精度 flaky（待修复） |
 
-**当前阻塞点**: 无。所有问题已修复，流水线稳定通过。
+**当前阻塞点**: watcher 单元测试 flaky 需要修复并重新验证；Runner/Docker 和外网依赖问题仍是稳定性风险。
 
-### 5.2 环境版本差异
+### 6.2 环境版本差异
 
 | 环境 | Rust 版本 | Clippy 行为 |
 |-----|----------|------------|
@@ -336,16 +424,18 @@ Pipeline #52（Job 221）成功，GitLab API 记录 job duration 为 `779.982949
 
 **版本锁定**: CI 中已固定 Rust 版本为 `1.95.0`，本地建议同步升级以避免未来版本差异。如需升级，需同时更新 `.gitlab-ci.yml` 中的版本号并验证所有检查通过。
 
-### 5.3 后续优化建议
+### 6.3 后续优化建议
 
 1. [x] 修复 4 个 Clippy 警告（`scanner.rs`、`session_transcript.rs`）
 2. [x] 修复 Playwright Chromium 系统依赖安装方式（`--with-deps`）
 3. [x] Pipeline #52 / #53 验证全流程通过
 4. [x] CI 下 Playwright 改用 `vite preview`，减少 dev server 冷启动 flaky
 5. [x] CI 中锁定 Rust 版本为 1.95.0
-6. [ ] 制作内部 CI 基础镜像，预置 Node.js、Rust、Tauri Linux 依赖、Playwright 依赖和常用 cargo 工具
-7. [ ] 评估 cache 策略：当前 restore cache 约 120s、archive cache 约 42s，需要确认缓存收益是否大于压缩/解压成本
-8. [ ] 考虑移除 `cargo check`，因为 `cargo clippy -- -D warnings` 已覆盖编译检查；当前可节省约 5s
+6. [ ] 修复 watcher mtime 精度 flaky，并用 Pipeline 重新验证
+7. [ ] 检查 Runner/Docker 健康度和资源限制，确认 system failure 不是持续性问题
+8. [ ] 制作内部 CI 基础镜像，预置 Node.js、Rust、Tauri Linux 依赖、Playwright 依赖和常用 cargo 工具
+9. [ ] 评估 cache 策略：当前 restore cache 约 120s、archive cache 约 42s，需要确认缓存收益是否大于压缩/解压成本
+10. [ ] 考虑移除 `cargo check`，因为 `cargo clippy -- -D warnings` 已覆盖编译检查；当前可节省约 5s
 
 ---
 
