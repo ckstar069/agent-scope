@@ -109,7 +109,6 @@ build:linux:
   artifacts:
     when: on_success
     paths:
-      - src-tauri/target/release/bundle/appimage/*.AppImage
       - src-tauri/target/release/bundle/deb/*.deb
     expire_in: 1 month
   rules:
@@ -171,18 +170,15 @@ release:
     - apk add --no-cache curl jq
     - echo "=== 收集产物 ==="
     - |
-      APPIMAGE=$(find . -name "*.AppImage" -not -path "*/target/debug/*" | head -1)
       DEB=$(find . -name "*.deb" -not -path "*/target/debug/*" | head -1)
       EXE=$(find . -name "*.exe" -not -path "*/target/debug/*" | head -1)
       MSI=$(find . -name "*.msi" -not -path "*/target/debug/*" | head -1)
 
-      echo "AppImage: $APPIMAGE"
       echo "deb: $DEB"
       echo "exe: $EXE"
       echo "msi: $MSI"
     - echo "=== 创建 GitLab Release ==="
     - |
-      APPIMAGE=$(find . -name "*.AppImage" -not -path "*/target/debug/*" | head -1)
       DEB=$(find . -name "*.deb" -not -path "*/target/debug/*" | head -1)
       EXE=$(find . -name "*.exe" -not -path "*/target/debug/*" | head -1)
       MSI=$(find . -name "*.msi" -not -path "*/target/debug/*" | head -1)
@@ -191,7 +187,6 @@ release:
 
       # 构建 Release 描述
       DESC="## AgentScope ${CI_COMMIT_TAG}\n\n### Linux\n"
-      [ -n "$APPIMAGE" ] && DESC="${DESC}- AppImage: \`$(basename "$APPIMAGE")\`\n"
       [ -n "$DEB" ] && DESC="${DESC}- deb: \`$(basename "$DEB")\`\n"
       DESC="${DESC}\n### Windows\n"
       [ -n "$EXE" ] && DESC="${DESC}- Installer: \`$(basename "$EXE")\`\n"
@@ -200,7 +195,6 @@ release:
 
       # 构建 assets links
       LINKS="[]"
-      [ -n "$APPIMAGE" ] && LINKS=$(echo "$LINKS" | jq ". + [{\"name\":\"Linux AppImage\",\"url\":\"${JOB_URL}/artifacts/raw/${APPIMAGE}\",\"link_type\":\"package\"}]")
       [ -n "$DEB" ] && LINKS=$(echo "$LINKS" | jq ". + [{\"name\":\"Linux deb\",\"url\":\"${JOB_URL}/artifacts/raw/${DEB}\",\"link_type\":\"package\"}]")
       [ -n "$EXE" ] && LINKS=$(echo "$LINKS" | jq ". + [{\"name\":\"Windows Installer\",\"url\":\"${JOB_URL}/artifacts/raw/${EXE}\",\"link_type\":\"package\"}]")
       [ -n "$MSI" ] && LINKS=$(echo "$LINKS" | jq ". + [{\"name\":\"Windows MSI\",\"url\":\"${JOB_URL}/artifacts/raw/${MSI}\",\"link_type\":\"package\"}]")
@@ -220,7 +214,6 @@ release:
       echo "Release created successfully"
   artifacts:
     paths:
-      - "**/*.AppImage"
       - "**/*.deb"
       - "**/*.exe"
       - "**/*.msi"
