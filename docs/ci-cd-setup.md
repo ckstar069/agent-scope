@@ -350,6 +350,72 @@ test result: FAILED. 119 passed; 1 failed
 
 ---
 
+### 问题 14: build 产物路径未包含 target triple，导致 artifact 上传静默失败
+
+**现象**: Pipeline #107 中 `build:linux` 和 `build:windows` 均显示「Job succeeded」，但产物未上传，后续 `release` job 无法找到构建产物。
+
+**错误日志**（build:linux）：
+```
+WARNING: src-tauri/target/release/bundle/deb/*.deb: no matching files
+```
+
+**错误日志**（build:windows）：
+```
+WARNING: src-tauri/target/release/bundle/nsis/*.exe: no matching files
+WARNING: src-tauri/target/release/bundle/msi/*.msi: no matching files
+```
+
+**根因**: `.gitlab-ci.yml` 中 build job 的 `artifacts:paths` 使用了 `src-tauri/target/release/bundle/...`，但 `cargo tauri build --target <triple>` 时，产物实际输出到 `src-tauri/target/<target-triple>/release/bundle/...`。路径不匹配导致 GitLab artifact 上传阶段找不到文件，但 job 本身仍然标记为成功（因为编译确实通过了）。
+
+**涉及的目标三元组**：
+- Linux: `x86_64-unknown-linux-gnu`
+- Windows: `x86_64-pc-windows-msvc`
+
+**修复**: 更新 `.gitlab-ci.yml` 中 build job 的 artifact 路径，加入 target triple 目录：
+
+```diff
+   artifacts:
+     paths:
+-      - src-tauri/target/release/bundle/deb/*.deb
++      - src-tauri/target/x86_64-unknown-linux-gnu/release/bundle/deb/*.deb
+```
+
+```diff
+   artifacts:
+     paths:
+-      - src-tauri/target/release/bundle/nsis/*.exe
+-      - src-tauri/target/release/bundle/msi/*.msi
++      - src-tauri/target/x86_64-pc-windows-msvc/release/bundle/nsis/*.exe
++      - src-tauri/target/x86_64-pc-windows-msvc/release/bundle/msi/*.msi
+```
+
+**release job 的 artifact 查找**使用 `**/*.deb`、`**/*.exe`、`**/*.msi` 通配，只要 build job 正确上传，release job 即可正常收集。
+
+**状态**: ✅ 已修复，Pipeline #108 验证通过。build:linux ✅ → build:windows ✅ → release ✅，GitLab Release v0.2.10 成功创建并包含所有产物。
+
+---
+
+### 问题 15: AppImage 在 Docker 容器内构建失败
+
+**现象**: Pipeline #102 / #105 的 `build:linux` job 在构建 AppImage 时失败。
+
+**错误日志**:
+```
+failed to run linuxdeploy
+```
+
+**根因**: AppImage 构建依赖 `linuxdeploy` 和 FUSE，在 Docker 容器环境中不可靠。Tauri 官方文档也指出 AppImage bundling 在容器内存在已知限制。
+
+**修复**: 从构建目标中移除 AppImage：
+
+1. `src-tauri/tauri.conf.json` 中 `bundle.targets` 从 `"all"` 改为 `["deb", "rpm", "nsis", "msi"]`
+2. `.gitlab-ci.yml` 中 `build:linux` 不再收集 AppImage 产物
+3. CI 中不再尝试构建 AppImage
+
+**状态**: ✅ 已修复。Linux 产物仅保留 deb，已在 Pipeline #108 验证。
+
+---
+
 ## 4. Pipeline #52 耗时分析
 
 Pipeline #52（Job 221）成功，GitLab API 记录 job duration 为 `779.982949s`，约 13 分钟。
@@ -431,8 +497,12 @@ Pipeline #52（Job 221）成功，GitLab API 记录 job duration 为 `779.982949
 | Pipeline #54 | ❌ 失败 | `watcher::tests::test_deeply_nested_file_change` mtime 精度 flaky（已修复） |
 | Pipeline #55 | ✅ 成功 | 文档变更流水线通过 |
 | Pipeline #56 | ✅ 成功 | watcher flaky 修复后全流程通过，Rust tests `120 passed; 0 failed`，E2E `43 passed` |
+| Pipeline #57 | ✅ 成功 | 内部 CI 基础镜像验证通过 |
+| Pipeline #102~#105 | ❌ 失败 | build/release 阶段调试：AppImage 容器内构建失败、产物路径错误、curl SSL 证书问题（已逐项修复） |
+| Pipeline #107 | ❌ 失败 | build:linux / build:windows 编译成功但 artifact 路径未包含 target triple，产物上传静默失败（已修复，详见问题 14） |
+| Pipeline #108 | ✅ 成功 | 修复产物路径后首次完整 build + release 成功，GitLab Release v0.2.10 包含 deb、exe、msi 三个产物 |
 
-**当前阻塞点**: 当前没有已知代码或测试阻塞点；Runner/Docker 运维操作和外网依赖下载仍是稳定性风险。
+**当前阻塞点**: 当前没有已知代码或测试阻塞点；自动构建与发布流水线已通过 Pipeline #108 验证。
 
 ### 6.2 环境版本差异
 
@@ -456,6 +526,12 @@ Pipeline #52（Job 221）成功，GitLab API 记录 job duration 为 `779.982949
 9. [x] 将 Runner `concurrent` 从 3 降为 1，减少多 job 并发资源竞争
 9. [x] 评估 cache 策略：保留全部 4 个缓存目录；ms-playwright 缓存浏览器文件价值最高，移除后重新下载 Chromium 成本约 +120s
 10. [x] ~~考虑移除 `cargo check`~~ — 不实施。`cargo clippy` 虽覆盖编译检查，但 `cargo check` 更快（~5s），作为 fallback 保留价值大于节省的时间。
+11. [x] 配置 Windows Shell Runner（`192.168.3.10`），安装 MSVC、Rust、Node.js、Tauri CLI
+12. [x] 配置 GitLab CI build + release 阶段：Linux deb、Windows exe/msi 自动构建
+13. [x] 修复 AppImage Docker 容器内构建失败，从构建目标中排除 AppImage
+14. [x] 修复 build job artifact 路径，加入 target triple 目录（`x86_64-unknown-linux-gnu`、`x86_64-pc-windows-msvc`）
+15. [x] 修复 release job curl SSL 自签证书问题（`-k` 参数）
+16. [x] Pipeline #108 验证完整 build + release 流程，GitLab Release v0.2.10 成功创建
 
 **内部 CI 基础镜像**
 
@@ -480,7 +556,7 @@ Pipeline #52（Job 221）成功，GitLab API 记录 job duration 为 `779.982949
 
 ## 7. 后续排查与修复交接建议
 
-本节面向后续接手的 agent。当前代码和测试主线已经通过 Pipeline #56 验证，后续重点不是继续修业务代码，而是把 CI 环境从“能跑通”提升到“稳定、快、可复用”。
+本节面向后续接手的 agent。当前代码和测试主线已经通过 Pipeline #56 验证，自动构建与发布已经通过 Pipeline #108 验证，后续重点不是继续修业务代码，而是把 CI 环境从”能跑通”提升到”稳定、快、可复用”。
 
 ### 7.1 先确认基础事实
 
@@ -750,7 +826,7 @@ sshpass -p '<password>' ssh yufei@192.168.3.144 'curl -k -I https://192.168.3.10
 
 | 平台 | 构建方式 | 产物 | Runner |
 |------|---------|------|--------|
-| Linux | GitLab CI 自动 | AppImage + deb | `192.168.3.144` Docker executor |
+| Linux | GitLab CI 自动 | deb | `192.168.3.144` Docker executor |
 | Windows | GitLab CI 自动 | exe (NSIS) + msi | `192.168.3.10` Shell executor |
 | macOS | 本机手动 | dmg | 开发者本机（不参与 CI） |
 
@@ -834,12 +910,12 @@ stages:
 
 **build:linux** job：
 - 使用 Docker Runner + 内部镜像
-- 同步版本号 → `npm ci` → `npm run build` → `cargo tauri build`
-- 产物：`*.AppImage`、`*.deb`
+- 同步版本号 → `npm ci` → `npm run build` → `cargo tauri build --target x86_64-unknown-linux-gnu`
+- 产物：`*.deb`
 
 **build:windows** job：
 - 使用 Windows Shell Runner
-- 同步版本号 → `npm ci` → `npm run build` → `cargo tauri build`
+- 同步版本号 → `npm ci` → `npm run build` → `cargo tauri build --target x86_64-pc-windows-msvc`
 - 产物：`*.exe`（NSIS）、`*.msi`
 
 **release** job：
@@ -852,10 +928,13 @@ stages:
 
 | 平台 | 产物类型 | 路径（CI 中） |
 |------|---------|-------------|
-| Linux | AppImage | `src-tauri/target/release/bundle/appimage/*.AppImage` |
-| Linux | deb | `src-tauri/target/release/bundle/deb/*.deb` |
-| Windows | NSIS Installer | `src-tauri/target/release/bundle/nsis/*.exe` |
-| Windows | MSI | `src-tauri/target/release/bundle/msi/*.msi` |
+| Linux | deb | `src-tauri/target/x86_64-unknown-linux-gnu/release/bundle/deb/*.deb` |
+| Windows | NSIS Installer | `src-tauri/target/x86_64-pc-windows-msvc/release/bundle/nsis/*.exe` |
+| Windows | MSI | `src-tauri/target/x86_64-pc-windows-msvc/release/bundle/msi/*.msi` |
+
+> **重要**：当使用 `cargo tauri build --target <target-triple>` 时，产物输出到 `target/<target-triple>/release/bundle/`，而非 `target/release/bundle/`。CI 中 `artifacts:paths` 必须与实际输出路径一致，否则产物上传会静默失败。详见「问题 14」。
+
+**排除 AppImage 的原因**：Docker 容器内构建 AppImage 依赖 FUSE/linuxdeploy，在容器环境中不可靠。已在 `tauri.conf.json` 中移除 `appimage`，在 `.gitlab-ci.yml` 中也未配置 AppImage 产物收集。
 
 ### 9.7 GitLab Release 权限
 
@@ -903,7 +982,8 @@ cargo tauri build --target aarch64-apple-darwin  # Apple Silicon
 cargo tauri build --target x86_64-apple-darwin   # Intel（如需要）
 ```
 
-产物位置：`src-tauri/target/release/bundle/dmg/*.dmg`
+产物位置（Apple Silicon）：`src-tauri/target/aarch64-apple-darwin/release/bundle/dmg/*.dmg`
+产物位置（Intel）：`src-tauri/target/x86_64-apple-darwin/release/bundle/dmg/*.dmg`
 
 如需将 macOS 产物加入 GitLab Release，可手动上传到同一 Release 页面。
 
