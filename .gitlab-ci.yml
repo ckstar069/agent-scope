@@ -96,6 +96,8 @@ build:linux:
     - *sync-version-script
     - echo "=== 安装前端依赖 ==="
     - npm ci
+    - echo "=== 安装 cargo-tauri CLI ==="
+    - cargo binstall cargo-tauri --locked --no-confirm
   script:
     - echo "=== 构建前端 ==="
     - npm run build
@@ -126,19 +128,11 @@ build:windows:
   before_script:
     - echo "=== 同步版本号 ==="
     - |
-      powershell -NoProfile -Command "
-        $tag = $env:CI_COMMIT_TAG;
-        $ver = $tag -replace '^v','';
-        Write-Host \"Version: $ver\";
-        $c = Get-Content package.json -Raw;
-        $c = $c -replace '\"version\":\s*\"[^\"]*\"', (\"`\"version`\": `\"$ver`\"\");
-        Set-Content package.json $c -NoNewline;
-        Write-Host 'Updated package.json';
-        $c = Get-Content src-tauri/Cargo.toml -Raw;
-        $c = $c -replace '^version = \"[^\"]*\"', (\"version = `\"$ver`\"\");
-        Set-Content src-tauri/Cargo.toml $c -NoNewline;
-        Write-Host 'Updated Cargo.toml'
-      "
+      $VERSION = $env:CI_COMMIT_TAG -replace '^v',''
+      Write-Host "Tag: $env:CI_COMMIT_TAG -> Version: $VERSION"
+      node -e "const fs=require('fs'); const f='package.json'; const p=JSON.parse(fs.readFileSync(f)); p.version='$VERSION'; fs.writeFileSync(f, JSON.stringify(p,null,2)+'\n'); console.log('Updated', f, '->', p.version);"
+      (Get-Content src-tauri/Cargo.toml -Raw) -replace '^version = ".*"', "version = `"$VERSION`"" | Set-Content src-tauri/Cargo.toml -NoNewline
+      Write-Host "Updated src-tauri/Cargo.toml -> $VERSION"
     - echo "=== 安装前端依赖 ==="
     - npm ci
   script:
