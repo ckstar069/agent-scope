@@ -1,18 +1,29 @@
 # GitLab + Docker Runner CI 模式说明
 
-本文总结一套可复用的内网 GitLab CI/CD 模式，供 AgentScope 以及后续其他项目接入。目标是把 GitLab 服务、Runner 执行环境、项目 `.gitlab-ci.yml` 的职责边界说清楚，避免每个项目重新摸索。
+本文总结一套可复用的内网 GitLab CI/CD 模式，供所有需要接入 CI/CD 的项目使用。目标是把 GitLab 服务、Runner 执行环境、项目 `.gitlab-ci.yml` 的职责边界说清楚，避免每个项目重新摸索。
 
 ---
 
 ## 1. 标准拓扑
 
-| 角色 | 地址 | 职责 |
-|------|------|------|
-| GitLab 服务器 | `192.168.3.128` | 托管代码、项目、CI 配置、流水线状态、Job 日志、Container Registry |
-| GitLab Runner 服务器 | `192.168.3.144` | 拉取 GitLab job，使用 Docker executor 在容器中执行 CI |
-| 项目仓库 | GitLab 项目路径 | 提供 `.gitlab-ci.yml`、源码、测试和构建脚本 |
+| 角色 | 地址 | 用户名 | 密码 | 职责 |
+|------|------|--------|------|------|
+| GitLab 服务器 | `192.168.3.128` | `yufei` | `yufei` | 托管代码、项目、CI 配置、流水线状态、Job 日志、Container Registry |
+| GitLab Runner 服务器 | `192.168.3.144` | `yufei` | `yufei` | 拉取 GitLab job，使用 Docker executor 在容器中执行 CI |
+| 项目仓库 | GitLab 项目路径 | 按项目权限配置 | 按项目权限配置 | 提供 `.gitlab-ci.yml`、源码、测试和构建脚本 |
 
-注意：AgentScope 当前仓库 remote 实测仍指向 `192.168.3.100`。如果 GitLab 已迁移到 `192.168.3.128`，需要同步更新项目 remote、Runner 注册地址、API 调用地址和文档。
+常用访问方式：
+
+```bash
+# 登录 GitLab 服务器
+sshpass -p yufei ssh yufei@192.168.3.128
+
+# 登录 Runner 服务器
+sshpass -p yufei ssh yufei@192.168.3.144
+
+# 只读检查 Runner 服务和 Docker 状态
+sshpass -p yufei ssh yufei@192.168.3.144 'hostname; gitlab-runner --version; gitlab-runner status; docker info --format "{{.ServerVersion}} {{.CgroupVersion}}"; free -h; df -h / /var/lib/docker'
+```
 
 ---
 
@@ -158,7 +169,7 @@ verify:
 
 ### 5.1 Node + Rust + Tauri 项目
 
-适合 AgentScope 这类项目。
+适合 React/Vite + Rust/Tauri + Playwright 这类桌面或前端项目。
 
 镜像建议包含：
 
@@ -354,24 +365,34 @@ df -h / /var/lib/docker
 
 ---
 
-## 9. 安全与凭据
+## 9. 凭据与使用边界
 
-文档中不要记录明文密码、Runner token、Personal Access Token。
+本文件按内部操作文档处理，可以记录当前 CI/CD 基础设施的 SSH 用户名和密码，便于其他项目快速接入。
 
-可以记录：
+已知基础设施凭据：
 
-- 服务器地址。
-- 用户名。
-- 访问方式。
-- 凭据由谁提供。
-- token 用途和创建位置。
+| 资源 | 地址 | 用户名 | 密码 | 用途 |
+|------|------|--------|------|------|
+| GitLab 服务器 | `192.168.3.128` | `yufei` | `yufei` | GitLab 服务维护、项目与 CI 配置检查 |
+| Runner 服务器 | `192.168.3.144` | `yufei` | `yufei` | GitLab Runner、Docker、CI job 执行环境维护 |
 
-不应记录：
+常用命令：
 
-- SSH 密码。
-- GitLab token。
+```bash
+sshpass -p yufei ssh yufei@192.168.3.128
+sshpass -p yufei ssh yufei@192.168.3.144
+sshpass -p yufei ssh yufei@192.168.3.144 'sudo gitlab-runner list'
+sshpass -p yufei ssh yufei@192.168.3.144 'sudo journalctl -u gitlab-runner --since "1 hour ago" --no-pager'
+```
+
+仍需谨慎处理的内容：
+
+- GitLab Personal Access Token。
 - Runner registration token。
-- `/etc/gitlab-runner/config.toml` 中的 token。
+- `/etc/gitlab-runner/config.toml` 中已经注册后的 Runner token。
+- Container Registry 登录 token。
+
+这些 token 通常有更高权限或更长有效期，不建议写入项目仓库；需要时应从 GitLab 页面实时获取或由负责人提供。
 
 ---
 
@@ -392,14 +413,14 @@ df -h / /var/lib/docker
 
 ---
 
-## 11. AgentScope 当前经验
+## 11. 通用经验
 
-AgentScope 的主要教训：
+当前内网 GitLab + Docker Runner 模式的主要经验：
 
-- 裸 `ubuntu:22.04` 镜像每次安装 Node、Rust、Tauri、Playwright，耗时长且依赖外网。
+- 裸 `ubuntu:22.04` 镜像每次安装 Node、Rust、Tauri、Playwright 等工具链，耗时长且依赖外网。
 - Playwright 需要 `--with-deps` 或基础镜像预置系统库，否则 Chromium 会因动态库缺失退出。
 - CI Rust 版本比本地新时，Clippy 可能出现本地没有的 lint。
-- 基于 mtime 的文件监听测试在容器/overlayfs 上可能 flaky，测试写入内容应让变化可观察。
-- Runner system failure 要看 Runner 主机 journal；本次主要不是代码问题，而是 Runner 服务重启和配置变更打断 job。
+- 基于 mtime、sleep、端口监听、文件系统事件的测试在容器/overlayfs 上可能 flaky，测试应让状态变化可观察，并避免依赖过短时间窗口。
+- Runner system failure 要优先看 Runner 主机 journal 和 Docker journal，不要先假设是项目代码问题。
+- 有 job 正在运行时不要重启 Runner、重新注册 Runner 或直接编辑 `config.toml`。
 - 单 job 能快速建立基线，但长期要拆分，否则失败统计会被不同类型问题混在一起。
-
