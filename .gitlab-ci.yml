@@ -85,6 +85,7 @@ build:linux:
   variables:
     CARGO_HOME: "$CI_PROJECT_DIR/.cargo"
     npm_config_cache: "$CI_PROJECT_DIR/.npm"
+    APPIMAGE_EXTRACT_AND_RUN: "1"
   cache:
     key: ${CI_COMMIT_REF_SLUG}
     paths:
@@ -99,7 +100,7 @@ build:linux:
     - echo "=== 安装 cargo-tauri CLI ==="
     - cargo binstall tauri-cli --locked --no-confirm
     - echo "=== 安装 AppImage 依赖 ==="
-    - apt-get update && apt-get install -y xdg-utils
+    - apt-get update && apt-get install -y xdg-utils patchelf libfuse2
   script:
     - echo "=== 构建前端 ==="
     - npm run build
