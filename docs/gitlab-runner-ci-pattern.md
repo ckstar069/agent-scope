@@ -8,7 +8,7 @@
 
 | 角色 | 地址 | 用户名 | 密码 | 职责 |
 |------|------|--------|------|------|
-| GitLab 服务器 | `192.168.3.128` | `yufei` | `yufei` | 托管代码、项目、CI 配置、流水线状态、Job 日志、Container Registry |
+| GitLab 服务器 | `192.168.3.100` | `yufei` | `yufei` | 托管代码、项目、CI 配置、流水线状态、Job 日志、Container Registry |
 | GitLab Runner 服务器 | `192.168.3.144` | `yufei` | `yufei` | 拉取 GitLab job，使用 Docker executor 在容器中执行 CI |
 | 项目仓库 | GitLab 项目路径 | 按项目权限配置 | 按项目权限配置 | 提供 `.gitlab-ci.yml`、源码、测试和构建脚本 |
 
@@ -16,7 +16,7 @@
 
 ```bash
 # 登录 GitLab 服务器
-sshpass -p yufei ssh yufei@192.168.3.128
+sshpass -p yufei ssh yufei@192.168.3.100
 
 # 登录 Runner 服务器
 sshpass -p yufei ssh yufei@192.168.3.144
@@ -116,7 +116,7 @@ shutdown_timeout = 0
 
 [[runners]]
   name = "project-or-shared-runner"
-  url = "https://192.168.3.128"
+  url = "https://192.168.3.100"
   executor = "docker"
 
   [runners.docker]
@@ -148,7 +148,7 @@ shutdown_timeout = 0
 
 ```bash
 git remote -v
-git remote set-url origin https://192.168.3.128/<group>/<project>.git
+git remote set-url origin https://192.168.3.100/<group>/<project>.git
 ```
 
 ### 4.2 Runner 注册
@@ -161,7 +161,7 @@ sudo gitlab-runner register
 
 关键选项：
 
-- GitLab URL：`https://192.168.3.128`
+- GitLab URL：`https://192.168.3.100`
 - Executor：`docker`
 - Default image：优先使用内部 CI 基础镜像；没有时临时使用 `ubuntu:22.04`
 - Tags：按项目或技术栈设置，例如 `linux`、`docker`、`tauri`、`node-rust`
@@ -229,9 +229,9 @@ verify:
 ### 5.2 镜像命名建议
 
 ```text
-registry.192.168.3.128/ci-images/node20-rust1.95-tauri-playwright:YYYYMMDD
-registry.192.168.3.128/ci-images/node20:YYYYMMDD
-registry.192.168.3.128/ci-images/rust1.95:YYYYMMDD
+registry.192.168.3.100/ci-images/node20-rust1.95-tauri-playwright:YYYYMMDD
+registry.192.168.3.100/ci-images/node20:YYYYMMDD
+registry.192.168.3.100/ci-images/rust1.95:YYYYMMDD
 ```
 
 建议使用日期 tag 或语义化 tag，避免 `latest` 漂移导致不可复现。
@@ -406,13 +406,13 @@ df -h / /var/lib/docker
 
 | 资源 | 地址 | 用户名 | 密码 | 用途 |
 |------|------|--------|------|------|
-| GitLab 服务器 | `192.168.3.128` | `yufei` | `yufei` | GitLab 服务维护、项目与 CI 配置检查 |
+| GitLab 服务器 | `192.168.3.100` | `yufei` | `yufei` | GitLab 服务维护、项目与 CI 配置检查 |
 | Runner 服务器 | `192.168.3.144` | `yufei` | `yufei` | GitLab Runner、Docker、CI job 执行环境维护 |
 
 常用命令：
 
 ```bash
-sshpass -p yufei ssh yufei@192.168.3.128
+sshpass -p yufei ssh yufei@192.168.3.100
 sshpass -p yufei ssh yufei@192.168.3.144
 sshpass -p yufei ssh yufei@192.168.3.144 'sudo gitlab-runner list'
 sshpass -p yufei ssh yufei@192.168.3.144 'sudo journalctl -u gitlab-runner --since "1 hour ago" --no-pager'
@@ -431,7 +431,7 @@ sshpass -p yufei ssh yufei@192.168.3.144 'sudo journalctl -u gitlab-runner --sin
 
 ## 10. 新项目接入检查表
 
-1. [ ] GitLab 项目已创建，remote 指向 `192.168.3.128`。
+1. [ ] GitLab 项目已创建，remote 指向 `192.168.3.100`。
 2. [ ] Runner `192.168.3.144` 可访问 GitLab。
 3. [ ] Runner 已注册到项目或 group。
 4. [ ] Runner tags 与 `.gitlab-ci.yml` 匹配。

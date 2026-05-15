@@ -19,7 +19,7 @@ AgentScope 使用自托管 GitLab 作为 CI/CD 平台，通过 GitLab Runner 执
 ### 2.1 GitLab 服务器
 
 - **地址**: `http://192.168.3.100`
-- **后续标准拓扑**: 新项目按 `192.168.3.128` 作为 GitLab 服务器记录；当前仓库 remote/API 仍实测指向 `192.168.3.100`，如 GitLab 已迁移，需要同步更新 Git remote、GitLab Web/API 地址和 Runner 注册地址。
+- **标准拓扑**: 新项目也按 `192.168.3.100` 作为 GitLab 服务器记录，Runner 统一使用 `192.168.3.144`。
 - **项目路径**: `znxt_tools/agent-scope`
 - **访问方式**: Web 界面 + API（`PRIVATE-TOKEN` 认证）
 
@@ -493,7 +493,7 @@ curl -k -fsSL "https://<gitlab-host>/api/v4/projects/<project-id>/pipelines?per_
 sshpass -p '<password>' ssh yufei@192.168.3.144 'hostname; gitlab-runner --version; gitlab-runner status; docker info --format "{{.ServerVersion}} {{.CgroupVersion}}"; free -h; df -h / /var/lib/docker'
 ```
 
-需要特别注意 GitLab 地址：本仓库 remote/API 当前实测为 `192.168.3.100`，但后续标准拓扑按 `192.168.3.128` 作为 GitLab 服务器。如果两者不一致，先向项目负责人确认是否已经迁移，再改 CI 配置或 Runner 注册。
+需要特别注意 GitLab 地址：本仓库 remote/API 当前实测为 `192.168.3.100`，后续新项目也按 `192.168.3.100` 作为 GitLab 服务器；Runner 统一使用 `192.168.3.144`。
 
 ### 7.2 Runner 稳定性专项
 
@@ -620,8 +620,8 @@ audit
 
 后续需要确认：
 
-- GitLab 服务器最终是否统一为 `192.168.3.128`。
-- 当前项目 remote 是否需要从 `192.168.3.100` 迁移到 `192.168.3.128`。
+- GitLab 服务器是否统一使用 `192.168.3.100`。
+- 当前项目 remote 是否已指向 `192.168.3.100`。
 - Runner 注册 URL 是否与最终 GitLab 地址一致。
 - GitLab 自签证书是否已被 Runner 主机信任，避免再次出现 x509 失败。
 
@@ -630,12 +630,12 @@ audit
 ```bash
 git remote -v
 sshpass -p '<password>' ssh yufei@192.168.3.144 'sudo gitlab-runner list'
-sshpass -p '<password>' ssh yufei@192.168.3.144 'curl -k -I https://192.168.3.128 || true; curl -k -I https://192.168.3.100 || true'
+sshpass -p '<password>' ssh yufei@192.168.3.144 'curl -k -I https://192.168.3.100 || true'
 ```
 
 ### 7.7 推荐执行顺序
 
-1. 确认 GitLab 最终地址：`192.168.3.128` 还是当前 remote 的 `192.168.3.100`。
+1. 确认 GitLab 地址统一为 `192.168.3.100`。
 2. 固化 Runner 运维规范，避免运行中重启和配置异常。
 3. 制作内部 CI 基础镜像。
 4. 基于基础镜像重新评估 cache。
