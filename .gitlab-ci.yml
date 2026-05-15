@@ -98,6 +98,8 @@ build:linux:
     - npm ci
     - echo "=== 安装 cargo-tauri CLI ==="
     - cargo binstall tauri-cli --locked --no-confirm
+    - echo "=== 安装 AppImage 依赖 ==="
+    - apt-get update && apt-get install -y xdg-utils
   script:
     - echo "=== 构建前端 ==="
     - npm run build
