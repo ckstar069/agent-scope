@@ -108,7 +108,7 @@ build:linux:
       - src-tauri/target/release/bundle/deb/*.deb
     expire_in: 1 month
   rules:
-    - if: '$CI_COMMIT_TAG =~ /^v\d+\.\d+\.\d+$/'
+    - if: '$CI_COMMIT_TAG =~ /^v\d+\.\d+\.\d+(-[0-9A-Za-z.-]+)?$/'
 
 build:windows:
   stage: build
@@ -154,7 +154,7 @@ build:windows:
       - src-tauri/target/release/bundle/msi/*.msi
     expire_in: 1 month
   rules:
-    - if: '$CI_COMMIT_TAG =~ /^v\d+\.\d+\.\d+$/'
+    - if: '$CI_COMMIT_TAG =~ /^v\d+\.\d+\.\d+(-[0-9A-Za-z.-]+)?$/'
 
 # -----------------------------------------------------------------------------
 # Release Stage: 创建 GitLab Release 并汇总产物
@@ -170,8 +170,6 @@ release:
       artifacts: true
     - job: build:windows
       artifacts: true
-  variables:
-    GITLAB_TOKEN: "$CI_JOB_TOKEN"
   script:
     - apk add --no-cache curl jq
     - echo "=== 收集产物 ==="
@@ -212,7 +210,7 @@ release:
 
       # 创建 Release
       curl --fail --request POST \
-        --header "PRIVATE-TOKEN: ${GITLAB_TOKEN}" \
+        --header "JOB-TOKEN: ${CI_JOB_TOKEN}" \
         --header "Content-Type: application/json" \
         --data "{
           \"name\": \"AgentScope ${CI_COMMIT_TAG}\",
