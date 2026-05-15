@@ -61,6 +61,39 @@ Runner 主机需要稳定运行：
 - 到 GitLab 服务器的网络访问
 - 到必要外部依赖源或内部镜像源的网络访问
 
+Runner 在 `192.168.3.144` 上应作为 systemd 常驻服务运行。它不是每个项目手动启动一次的临时命令，而是后台持续轮询 GitLab；只要 GitLab 上有匹配 tag 的 job，Runner 就会自动拉取并创建 Docker 容器执行。
+
+常用运维命令：
+
+```bash
+# 查看 Runner 服务状态
+sshpass -p yufei ssh yufei@192.168.3.144 'sudo systemctl status gitlab-runner --no-pager'
+
+# 启动 Runner
+sshpass -p yufei ssh yufei@192.168.3.144 'sudo systemctl start gitlab-runner'
+
+# 设置开机自启
+sshpass -p yufei ssh yufei@192.168.3.144 'sudo systemctl enable gitlab-runner'
+
+# 重启 Runner，仅在确认没有 job 正在运行时执行
+sshpass -p yufei ssh yufei@192.168.3.144 'sudo systemctl restart gitlab-runner'
+
+# 查看 Runner 注册与连通性
+sshpass -p yufei ssh yufei@192.168.3.144 'sudo gitlab-runner list; sudo gitlab-runner verify'
+
+# 查看 Runner 最近日志
+sshpass -p yufei ssh yufei@192.168.3.144 'sudo journalctl -u gitlab-runner --since "1 hour ago" --no-pager'
+```
+
+保持运行的检查点：
+
+- `systemctl status gitlab-runner` 应为 `active (running)`。
+- `systemctl status docker` 应为 `active (running)`。
+- `gitlab-runner verify` 应能连通 GitLab，不能出现 `403 Forbidden`、证书校验失败或 runner unhealthy。
+- GitLab 项目或 group 的 Runner 页面应显示 Runner online。
+- Runner tag 必须与 `.gitlab-ci.yml` 中 job 的 `tags` 匹配；否则 job 会 pending。
+- 有流水线运行时，不要重启 `gitlab-runner`、重启 Docker、重新注册 Runner 或编辑 `/etc/gitlab-runner/config.toml`。这些操作会直接中断正在执行的 job，表现为 `runner_system_failure`。
+
 ### 2.3 项目仓库
 
 项目负责：
