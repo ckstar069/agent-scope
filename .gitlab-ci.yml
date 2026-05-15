@@ -99,8 +99,6 @@ build:linux:
     - npm ci
     - echo "=== 安装 cargo-tauri CLI ==="
     - cargo binstall tauri-cli --locked --no-confirm
-    - echo "=== 安装 AppImage 依赖 ==="
-    - apt-get update && apt-get install -y xdg-utils patchelf libfuse2
   script:
     - echo "=== 构建前端 ==="
     - npm run build
@@ -168,20 +166,24 @@ release:
       artifacts: true
   script:
     - apk add --no-cache curl jq
+    - echo "=== 调试：当前目录和文件 ==="
+    - pwd && ls -la
+    - echo "=== 调试：查找所有产物 ==="
+    - find . -name "*.deb" -o -name "*.exe" -o -name "*.msi" | head -20
     - echo "=== 收集产物 ==="
     - |
-      DEB=$(find . -name "*.deb" -not -path "*/target/debug/*" | head -1)
-      EXE=$(find . -name "*.exe" -not -path "*/target/debug/*" | head -1)
-      MSI=$(find . -name "*.msi" -not -path "*/target/debug/*" | head -1)
+      DEB=$(find . -name "*.deb" | head -1)
+      EXE=$(find . -name "*.exe" | head -1)
+      MSI=$(find . -name "*.msi" | head -1)
 
       echo "deb: $DEB"
       echo "exe: $EXE"
       echo "msi: $MSI"
     - echo "=== 创建 GitLab Release ==="
     - |
-      DEB=$(find . -name "*.deb" -not -path "*/target/debug/*" | head -1)
-      EXE=$(find . -name "*.exe" -not -path "*/target/debug/*" | head -1)
-      MSI=$(find . -name "*.msi" -not -path "*/target/debug/*" | head -1)
+      DEB=$(find . -name "*.deb" | head -1)
+      EXE=$(find . -name "*.exe" | head -1)
+      MSI=$(find . -name "*.msi" | head -1)
 
       JOB_URL="${CI_SERVER_URL}/${CI_PROJECT_PATH}/-/jobs/${CI_JOB_ID}"
 
@@ -199,8 +201,8 @@ release:
       [ -n "$EXE" ] && LINKS=$(echo "$LINKS" | jq ". + [{\"name\":\"Windows Installer\",\"url\":\"${JOB_URL}/artifacts/raw/${EXE}\",\"link_type\":\"package\"}]")
       [ -n "$MSI" ] && LINKS=$(echo "$LINKS" | jq ". + [{\"name\":\"Windows MSI\",\"url\":\"${JOB_URL}/artifacts/raw/${MSI}\",\"link_type\":\"package\"}]")
 
-      # 创建 Release
-      curl --fail --request POST \
+      # 创建 Release（-k 跳过自签名证书验证）
+      curl -k --fail --request POST \
         --header "JOB-TOKEN: ${CI_JOB_TOKEN}" \
         --header "Content-Type: application/json" \
         --data "{
