@@ -416,6 +416,33 @@ failed to run linuxdeploy
 
 ---
 
+### 问题 16: Release 描述中换行符显示为字面量 `\n`
+
+**现象**: GitLab Release 页面中，Release 描述显示为 `AgentScope v0.2.10\n\n### Linux\n- deb: ...`，换行符以字面量 `\n` 出现，排版混乱。
+
+**根因**: `.gitlab-ci.yml` release job 中构建描述时使用了 shell 双引号字符串：
+
+```bash
+DESC="## AgentScope ${CI_COMMIT_TAG}\n\n### Linux\n"
+```
+
+在 bash 的双引号中，`\n` **不会**被解释为换行符，而是两个普通字符 `\` 和 `n`。随后通过 `jq -sR .` JSON 编码时，反斜杠被二次转义，最终 GitLab API 收到的是字面量 `\n`，导致页面上直接显示为 `\n`。
+
+**修复**: 使用 `printf` 构建描述，确保 `\n` 被解析为真正的换行符（ASCII 0x0a）：
+
+```bash
+DESC=$(printf '## AgentScope %s\n\n### Linux\n' "${CI_COMMIT_TAG}")
+[ -n "$DEB" ] && DESC=$(printf '%s- deb: `%s`\n' "$DESC" "$(basename "$DEB")")
+DESC=$(printf '%s\n### Windows\n' "$DESC")
+[ -n "$EXE" ] && DESC=$(printf '%s- Installer: `%s`\n' "$DESC" "$(basename "$EXE")")
+[ -n "$MSI" ] && DESC=$(printf '%s- MSI: `%s`\n' "$DESC" "$(basename "$MSI")")
+DESC=$(printf '%s\n---\n点击下方 Artifacts 区域下载各平台安装包。' "$DESC")
+```
+
+**状态**: ✅ 已修复，将在下一次 tag 发布时验证。
+
+---
+
 ## 4. Pipeline #52 耗时分析
 
 Pipeline #52（Job 221）成功，GitLab API 记录 job duration 为 `779.982949s`，约 13 分钟。

@@ -187,13 +187,13 @@ release:
 
       JOB_URL="${CI_SERVER_URL}/${CI_PROJECT_PATH}/-/jobs/${CI_JOB_ID}"
 
-      # 构建 Release 描述
-      DESC="## AgentScope ${CI_COMMIT_TAG}\n\n### Linux\n"
-      [ -n "$DEB" ] && DESC="${DESC}- deb: \`$(basename "$DEB")\`\n"
-      DESC="${DESC}\n### Windows\n"
-      [ -n "$EXE" ] && DESC="${DESC}- Installer: \`$(basename "$EXE")\`\n"
-      [ -n "$MSI" ] && DESC="${DESC}- MSI: \`$(basename "$MSI")\`\n"
-      DESC="${DESC}\n---\n点击下方 Artifacts 区域下载各平台安装包。"
+      # 构建 Release 描述（用 printf 确保 \n 变成真正的换行符）
+      DESC=$(printf '## AgentScope %s\n\n### Linux\n' "${CI_COMMIT_TAG}")
+      [ -n "$DEB" ] && DESC=$(printf '%s- deb: `%s`\n' "$DESC" "$(basename "$DEB")")
+      DESC=$(printf '%s\n### Windows\n' "$DESC")
+      [ -n "$EXE" ] && DESC=$(printf '%s- Installer: `%s`\n' "$DESC" "$(basename "$EXE")")
+      [ -n "$MSI" ] && DESC=$(printf '%s- MSI: `%s`\n' "$DESC" "$(basename "$MSI")")
+      DESC=$(printf '%s\n---\n点击下方 Artifacts 区域下载各平台安装包。' "$DESC")
 
       # 构建 assets links
       LINKS="[]"
