@@ -554,7 +554,7 @@ Pipeline #52（Job 221）成功，GitLab API 记录 job duration 为 `779.982949
 9. [x] 评估 cache 策略：保留全部 4 个缓存目录；ms-playwright 缓存浏览器文件价值最高，移除后重新下载 Chromium 成本约 +120s
 10. [x] ~~考虑移除 `cargo check`~~ — 不实施。`cargo clippy` 虽覆盖编译检查，但 `cargo check` 更快（~5s），作为 fallback 保留价值大于节省的时间。
 11. [x] 配置 Windows Shell Runner（`192.168.3.10`），安装 MSVC、Rust、Node.js、Tauri CLI
-12. [x] 配置 GitLab CI build + release 阶段：Linux deb、Windows exe/msi 自动构建
+12. [x] 配置 GitLab CI build + release 阶段：Linux deb/AppImage、Windows exe/zip 自动构建
 13. [x] 修复 AppImage Docker 容器内构建失败，从构建目标中排除 AppImage
 14. [x] 修复 build job artifact 路径，加入 target triple 目录（`x86_64-unknown-linux-gnu`、`x86_64-pc-windows-msvc`）
 15. [x] 修复 release job curl SSL 自签证书问题（`-k` 参数）
@@ -838,7 +838,7 @@ sshpass -p '<password>' ssh yufei@192.168.3.144 'curl -k -I https://192.168.3.10
 | 平台 | 构建方式 | 产物 | Runner |
 |------|---------|------|--------|
 | Linux | GitLab CI 自动 | deb + AppImage（免安装） | `192.168.3.144` Docker executor |
-| Windows | GitLab CI 自动 | exe (NSIS) + msi + zip（免安装） | `192.168.3.10` Shell executor |
+| Windows | GitLab CI 自动 | exe (NSIS) + zip（免安装） | `192.168.3.10` Shell executor |
 | macOS | 本机手动 | dmg | 开发者本机（不参与 CI） |
 
 ### 9.2 触发方式
@@ -929,7 +929,7 @@ stages:
 - 使用 Windows Shell Runner
 - 同步版本号 → `npm ci` → `npm run build` → `cargo tauri build --target x86_64-pc-windows-msvc`
 - 额外步骤：`Compress-Archive` 打包 `agent-scope.exe` 为 zip 便携版
-- 产物：`*.exe`（NSIS）、`*.msi`、`*.zip`（免安装）
+- 产物：`*.exe`（NSIS）、`*.zip`（免安装）
 
 **release** job：
 - 依赖 build:linux 和 build:windows 的 artifacts
@@ -944,7 +944,6 @@ stages:
 | Linux | deb | `src-tauri/target/x86_64-unknown-linux-gnu/release/bundle/deb/*.deb` |
 | Linux | AppImage（免安装） | `src-tauri/target/x86_64-unknown-linux-gnu/release/bundle/appimage/*.AppImage` |
 | Windows | NSIS Installer | `src-tauri/target/x86_64-pc-windows-msvc/release/bundle/nsis/*.exe` |
-| Windows | MSI | `src-tauri/target/x86_64-pc-windows-msvc/release/bundle/msi/*.msi` |
 | Windows | Portable zip（免安装） | `src-tauri/target/x86_64-pc-windows-msvc/release/bundle/portable/*.zip` |
 
 > **重要**：当使用 `cargo tauri build --target <target-triple>` 时，产物输出到 `target/<target-triple>/release/bundle/`，而非 `target/release/bundle/`。CI 中 `artifacts:paths` 必须与实际输出路径一致，否则产物上传会静默失败。详见「问题 14」。

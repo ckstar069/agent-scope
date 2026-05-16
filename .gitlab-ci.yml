@@ -158,7 +158,6 @@ build:windows:
     when: on_success
     paths:
       - src-tauri/target/x86_64-pc-windows-msvc/release/bundle/nsis/*.exe
-      - src-tauri/target/x86_64-pc-windows-msvc/release/bundle/msi/*.msi
       - src-tauri/target/x86_64-pc-windows-msvc/release/bundle/portable/*.zip
     expire_in: 1 month
   rules:
@@ -183,26 +182,23 @@ release:
     - echo "=== 调试：当前目录和文件 ==="
     - pwd && ls -la
     - echo "=== 调试：查找所有产物 ==="
-    - find . -name "*.deb" -o -name "*.AppImage" -o -name "*.exe" -o -name "*.msi" -o -name "*.zip" | head -20
+    - find . -name "*.deb" -o -name "*.AppImage" -o -name "*.exe" -o -name "*.zip" | head -20
     - echo "=== 收集产物 ==="
     - |
       DEB=$(find . -name "*.deb" | head -1)
       APPIMAGE=$(find . -name "*.AppImage" | head -1)
       EXE=$(find . -name "*.exe" | head -1)
-      MSI=$(find . -name "*.msi" | head -1)
       ZIP=$(find . -name "*.zip" | head -1)
 
       echo "deb: $DEB"
       echo "appimage: $APPIMAGE"
       echo "exe: $EXE"
-      echo "msi: $MSI"
       echo "zip: $ZIP"
     - echo "=== 创建 GitLab Release ==="
     - |
       DEB=$(find . -name "*.deb" | head -1)
       APPIMAGE=$(find . -name "*.AppImage" | head -1)
       EXE=$(find . -name "*.exe" | head -1)
-      MSI=$(find . -name "*.msi" | head -1)
       ZIP=$(find . -name "*.zip" | head -1)
 
       JOB_URL="${CI_SERVER_URL}/${CI_PROJECT_PATH}/-/jobs/${CI_JOB_ID}"
@@ -213,7 +209,6 @@ release:
       [ -n "$APPIMAGE" ] && DESC=$(printf '%s- AppImage (免安装): `%s`\n' "$DESC" "$(basename "$APPIMAGE")")
       DESC=$(printf '%s\n### Windows\n' "$DESC")
       [ -n "$EXE" ] && DESC=$(printf '%s- Installer: `%s`\n' "$DESC" "$(basename "$EXE")")
-      [ -n "$MSI" ] && DESC=$(printf '%s- MSI: `%s`\n' "$DESC" "$(basename "$MSI")")
       [ -n "$ZIP" ] && DESC=$(printf '%s- Portable (免安装): `%s`\n' "$DESC" "$(basename "$ZIP")")
       DESC=$(printf '%s\n---\n点击下方 Artifacts 区域下载各平台安装包。' "$DESC")
 
@@ -222,7 +217,6 @@ release:
       [ -n "$DEB" ] && LINKS=$(echo "$LINKS" | jq ". + [{\"name\":\"Linux deb\",\"url\":\"${JOB_URL}/artifacts/raw/${DEB}\",\"link_type\":\"package\"}]")
       [ -n "$APPIMAGE" ] && LINKS=$(echo "$LINKS" | jq ". + [{\"name\":\"Linux AppImage\",\"url\":\"${JOB_URL}/artifacts/raw/${APPIMAGE}\",\"link_type\":\"package\"}]")
       [ -n "$EXE" ] && LINKS=$(echo "$LINKS" | jq ". + [{\"name\":\"Windows Installer\",\"url\":\"${JOB_URL}/artifacts/raw/${EXE}\",\"link_type\":\"package\"}]")
-      [ -n "$MSI" ] && LINKS=$(echo "$LINKS" | jq ". + [{\"name\":\"Windows MSI\",\"url\":\"${JOB_URL}/artifacts/raw/${MSI}\",\"link_type\":\"package\"}]")
       [ -n "$ZIP" ] && LINKS=$(echo "$LINKS" | jq ". + [{\"name\":\"Windows Portable\",\"url\":\"${JOB_URL}/artifacts/raw/${ZIP}\",\"link_type\":\"package\"}]")
 
       # 创建 Release（-k 跳过自签名证书验证）
@@ -243,7 +237,6 @@ release:
       - "**/*.deb"
       - "**/*.AppImage"
       - "**/*.exe"
-      - "**/*.msi"
       - "**/*.zip"
     expire_in: 1 month
   rules:
