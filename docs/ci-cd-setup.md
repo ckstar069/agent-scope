@@ -559,6 +559,9 @@ Pipeline #52（Job 221）成功，GitLab API 记录 job duration 为 `779.982949
 14. [x] 修复 build job artifact 路径，加入 target triple 目录（`x86_64-unknown-linux-gnu`、`x86_64-pc-windows-msvc`）
 15. [x] 修复 release job curl SSL 自签证书问题（`-k` 参数）
 16. [x] Pipeline #108 验证完整 build + release 流程，GitLab Release v0.2.10 成功创建
+17. [x] 增加 Windows Portable zip 免安装版（`Compress-Archive` 打包 `agent-scope.exe`）
+18. [x] 增加 Linux AppImage 免安装版（`APPIMAGE_EXTRACT_AND_RUN=1` 解决 Docker FUSE 限制）
+19. [x] 修复 Release 描述换行符显示为字面量 `\n` 的问题
 
 **内部 CI 基础镜像**
 
@@ -810,38 +813,19 @@ sshpass -p '<password>' ssh yufei@192.168.3.144 'curl -k -I https://192.168.3.10
 
 当前阻塞点：**无**。流水线已稳定。
 
-### 8.4 后续事项：自动构建与发布
+### 8.4 自动构建与发布（已完成）
 
-当前流水线仅执行**验证**（检查、测试、前端构建），未执行桌面应用构建和发布。
+自动构建与发布已配置并验证通过（Pipeline #108）。详见 Section 9。
 
-**缺失能力**：
+**当前能力**：
 
-| 能力 | 现状 | 差距 |
+| 能力 | 状态 | 说明 |
 |------|------|------|
-| 自动验证 | ✅ | 已配置，Push/MR 自动触发 |
-| 自动构建桌面应用 | ❌ | 无 `cargo tauri build` 步骤 |
-| 多平台构建 | ❌ | 仅 Linux Runner，无 macOS/Windows |
-| 自动发布 | ❌ | 无 Release/产物上传配置 |
-
-**建议方案**：
-
-1. **Linux 单平台（GitLab CI）**
-   - 在 `.gitlab-ci.yml` 增加 `build` stage
-   - 执行 `cargo tauri build` 生成 AppImage + deb
-   - 产物作为 artifacts 上传
-   - 限制：只能构建 Linux 包
-
-2. **多平台发布（GitHub Actions，推荐）**
-   - 恢复 `.github/workflows/release.yml`
-   - 矩阵构建：`macos-latest` + `windows-latest` + `ubuntu-22.04`
-   - 使用 `tauri-apps/tauri-action` 自动创建 GitHub Release
-   - 上传 AppImage、deb、dmg、exe、msi 等产物
-   - 需要：GitHub 仓库、Release 权限、各平台签名证书（可选）
-
-**实施前提**：
-- 确认项目是否需要多平台发布（还是仅 Linux 内部使用）
-- 确认发布触发条件（tag push？手动触发？）
-- 确认产物存储位置（GitLab artifacts？GitHub Release？内网 registry？）
+| 自动验证 | ✅ | Push/MR 自动触发 verify |
+| 自动构建桌面应用 | ✅ | tag push 触发 `build:linux` + `build:windows` |
+| 多平台构建 | ✅ | Linux (Docker) + Windows (Shell) |
+| 自动发布 | ✅ | `release` job 自动创建 GitLab Release |
+| 免安装版 | ✅ | Linux AppImage + Windows Portable zip |
 
 ---
 
@@ -853,8 +837,8 @@ sshpass -p '<password>' ssh yufei@192.168.3.144 'curl -k -I https://192.168.3.10
 
 | 平台 | 构建方式 | 产物 | Runner |
 |------|---------|------|--------|
-| Linux | GitLab CI 自动 | deb | `192.168.3.144` Docker executor |
-| Windows | GitLab CI 自动 | exe (NSIS) + msi | `192.168.3.10` Shell executor |
+| Linux | GitLab CI 自动 | deb + AppImage（免安装） | `192.168.3.144` Docker executor |
+| Windows | GitLab CI 自动 | exe (NSIS) + msi + zip（免安装） | `192.168.3.10` Shell executor |
 | macOS | 本机手动 | dmg | 开发者本机（不参与 CI） |
 
 ### 9.2 触发方式
@@ -938,12 +922,14 @@ stages:
 **build:linux** job：
 - 使用 Docker Runner + 内部镜像
 - 同步版本号 → `npm ci` → `npm run build` → `cargo tauri build --target x86_64-unknown-linux-gnu`
-- 产物：`*.deb`
+- 环境变量：`APPIMAGE_EXTRACT_AND_RUN=1`（解决 Docker 内 FUSE 限制）
+- 产物：`*.deb`、`*.AppImage`
 
 **build:windows** job：
 - 使用 Windows Shell Runner
 - 同步版本号 → `npm ci` → `npm run build` → `cargo tauri build --target x86_64-pc-windows-msvc`
-- 产物：`*.exe`（NSIS）、`*.msi`
+- 额外步骤：`Compress-Archive` 打包 `agent-scope.exe` 为 zip 便携版
+- 产物：`*.exe`（NSIS）、`*.msi`、`*.zip`（免安装）
 
 **release** job：
 - 依赖 build:linux 和 build:windows 的 artifacts
@@ -956,12 +942,14 @@ stages:
 | 平台 | 产物类型 | 路径（CI 中） |
 |------|---------|-------------|
 | Linux | deb | `src-tauri/target/x86_64-unknown-linux-gnu/release/bundle/deb/*.deb` |
+| Linux | AppImage（免安装） | `src-tauri/target/x86_64-unknown-linux-gnu/release/bundle/appimage/*.AppImage` |
 | Windows | NSIS Installer | `src-tauri/target/x86_64-pc-windows-msvc/release/bundle/nsis/*.exe` |
 | Windows | MSI | `src-tauri/target/x86_64-pc-windows-msvc/release/bundle/msi/*.msi` |
+| Windows | Portable zip（免安装） | `src-tauri/target/x86_64-pc-windows-msvc/release/bundle/portable/*.zip` |
 
 > **重要**：当使用 `cargo tauri build --target <target-triple>` 时，产物输出到 `target/<target-triple>/release/bundle/`，而非 `target/release/bundle/`。CI 中 `artifacts:paths` 必须与实际输出路径一致，否则产物上传会静默失败。详见「问题 14」。
 
-**排除 AppImage 的原因**：Docker 容器内构建 AppImage 依赖 FUSE/linuxdeploy，在容器环境中不可靠。已在 `tauri.conf.json` 中移除 `appimage`，在 `.gitlab-ci.yml` 中也未配置 AppImage 产物收集。
+**AppImage Docker 构建**：之前排除 AppImage 是因为 Docker 容器内 FUSE 权限不足导致 `linuxdeploy` 失败。修复方式是在 `build:linux` job 中设置环境变量 `APPIMAGE_EXTRACT_AND_RUN=1`，让 linuxdeploy 不挂载 FUSE 而是直接解压运行。已在 Pipeline #108 之后验证可行。
 
 ### 9.7 GitLab Release 权限
 
