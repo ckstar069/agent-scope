@@ -87,6 +87,7 @@ build:linux:
     npm_config_cache: "$CI_PROJECT_DIR/.npm"
     APPIMAGE_EXTRACT_AND_RUN: "1"
     NO_STRIP: "true"
+    RUST_LOG: "debug"
   cache:
     key: ${CI_COMMIT_REF_SLUG}
     paths:
