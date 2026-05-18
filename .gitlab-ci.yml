@@ -120,6 +120,7 @@ build:windows:
     CARGO_HOME: "$CI_PROJECT_DIR\\.cargo"
     npm_config_cache: "$CI_PROJECT_DIR\\.npm"
     GIT_STRATEGY: clone
+    CI_COMMIT_AUTHOR: "ckstar"
   cache:
     key: ${CI_COMMIT_REF_SLUG}-windows
     paths:
