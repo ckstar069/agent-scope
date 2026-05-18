@@ -130,6 +130,16 @@ build:windows:
     - $env:Path += ";C:\Users\yufei\.cargo\bin"
     - rustup default stable
     - cargo --version
+    - echo "=== 安装 NSIS (Windows 安装包打包工具) ==="
+    - |
+      if (-not (Get-Command makensis -ErrorAction SilentlyContinue)) {
+        Write-Host "NSIS not found, installing via Chocolatey..."
+        choco install nsis -y --no-progress
+        $env:Path += ";C:\Program Files (x86)\NSIS"
+      } else {
+        Write-Host "NSIS already installed"
+      }
+      makensis -VERSION
     - echo "=== 同步版本号 ==="
     - |
       $VERSION = $env:CI_COMMIT_TAG -replace '^v',''
