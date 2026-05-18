@@ -95,6 +95,8 @@ build:linux:
   before_script:
     - echo "=== 同步版本号 ==="
     - *sync-version-script
+    - echo "=== 安装系统依赖（AppImage 需要 xdg-open）==="
+    - apt-get update && apt-get install -y xdg-utils
     - echo "=== 安装前端依赖 ==="
     - npm ci
     - echo "=== 安装 cargo-tauri CLI ==="
@@ -148,12 +150,11 @@ build:windows:
       $TARGET = "x86_64-pc-windows-msvc"
       $RELEASE_DIR = "target/$TARGET/release"
       $ZIP_NAME = "AgentScope_${VERSION}_x64_portable.zip"
-      # 进入 release 目录打包 exe（Windows 上 Tauri 默认静态链接，无需额外 dll）
-      Compress-Archive -Path "$RELEASE_DIR/agent-scope.exe" -DestinationPath "$RELEASE_DIR/$ZIP_NAME" -Force
-      Write-Host "Created portable: $RELEASE_DIR/$ZIP_NAME"
-      # 移动 zip 到 bundle 目录，方便 artifact 统一收集
-      New-Item -ItemType Directory -Path "target/$TARGET/release/bundle/portable" -Force | Out-Null
-      Move-Item -Path "$RELEASE_DIR/$ZIP_NAME" -Destination "target/$TARGET/release/bundle/portable/$ZIP_NAME" -Force
+      $PORTABLE_DIR = "$RELEASE_DIR/bundle/portable"
+      # 创建 portable 目录，直接在该目录下打包（省去移动步骤，避免路径问题）
+      New-Item -ItemType Directory -Path $PORTABLE_DIR -Force | Out-Null
+      Compress-Archive -Path "$RELEASE_DIR/agent-scope.exe" -DestinationPath "$PORTABLE_DIR/$ZIP_NAME" -Force
+      Write-Host "Created portable: $PORTABLE_DIR/$ZIP_NAME"
   artifacts:
     when: on_success
     paths:
