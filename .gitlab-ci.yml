@@ -139,9 +139,6 @@ build:windows:
       cargo --version
       echo "=== 添加 NSIS 到 PATH ==="
       $env:Path += ";C:\PROGRA~2\NSIS\Bin"
-      New-Item -ItemType Directory -Path "C:\Users\yufei\.cargo\bin" -Force | Out-Null
-      Copy-Item "C:\PROGRA~2\NSIS\Bin\makensis.exe" "C:\Users\yufei\.cargo\bin\makensis.exe" -Force
-      Test-Path "C:\Users\yufei\.cargo\bin\makensis.exe"
       Get-Command makensis | Select-Object Source
       makensis -VERSION
     - echo "=== 同步版本号 ==="
