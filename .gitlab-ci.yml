@@ -128,6 +128,7 @@ build:windows:
   before_script:
     - echo "=== 配置环境变量 ==="
     - $env:Path += ";C:\Users\yufei\.cargo\bin"
+    - rustup default stable
     - cargo --version
     - echo "=== 同步版本号 ==="
     - |
