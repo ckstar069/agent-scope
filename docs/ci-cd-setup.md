@@ -21,7 +21,7 @@ AgentScope 使用自托管 GitLab 作为 CI/CD 平台，通过 GitLab Runner 执
 - **地址**: `http://192.168.3.100`
 - **标准拓扑**: 新项目也按 `192.168.3.100` 作为 GitLab 服务器记录，Runner 统一使用 `192.168.3.42`。
 - **项目路径**: `znxt_tools/agent-scope`
-- **访问方式**: Web 界面 + API（`PRIVATE-TOKEN` 认证）
+- **访问方式**: Web 界面 + API；CI job 内使用 `CI_JOB_TOKEN`/`JOB-TOKEN` 认证，人工运维时可能使用 Personal/Project Access Token
 
 ### 2.2 GitLab Runner
 
@@ -60,7 +60,7 @@ shutdown_timeout = 0
   name = "agent-scope-runner-42"
   url = "https://192.168.3.100/"
   id = 4
-  token = "glrt-HC57mLQespAnm-LqSx6e"
+  token = "<RUNNER_TOKEN>"
   executor = "docker"
   tags = ["linux"]
   [runners.cache]
@@ -466,7 +466,7 @@ WARNING: src-tauri/target/release/bundle/msi/*.msi: no matching files
 +      - src-tauri/target/x86_64-pc-windows-msvc/release/bundle/msi/*.msi
 ```
 
-**release job 的 artifact 查找**使用 `**/*.deb`、`**/*.exe`、`**/*.msi` 通配，只要 build job 正确上传，release job 即可正常收集。
+**release job 的 artifact 查找**使用 `**/*.deb`、`**/*.AppImage`、`**/*.exe`、`**/*.zip` 通配，只要 build job 正确上传，release job 即可正常收集。
 
 **状态**: ✅ 已修复，Pipeline #108 验证通过。build:linux ✅ → build:windows ✅ → release ✅，GitLab Release v0.2.10 成功创建并包含所有产物。
 
@@ -483,13 +483,15 @@ failed to run linuxdeploy
 
 **根因**: AppImage 构建依赖 `linuxdeploy` 和 FUSE，在 Docker 容器环境中不可靠。Tauri 官方文档也指出 AppImage bundling 在容器内存在已知限制。
 
-**修复**: 从构建目标中移除 AppImage：
+**根因**: Docker 容器内缺少 `file` 命令，`appimagetool` 依赖它识别文件类型。
 
-1. `src-tauri/tauri.conf.json` 中 `bundle.targets` 从 `"all"` 改为 `["deb", "rpm", "nsis", "msi"]`
-2. `.gitlab-ci.yml` 中 `build:linux` 不再收集 AppImage 产物
-3. CI 中不再尝试构建 AppImage
+**修复**: 在 `build:linux` job 中安装 `file` 包（后移至 CI 基础镜像预装）：
 
-**状态**: ✅ 已修复。Linux 产物仅保留 deb，已在 Pipeline #108 验证。
+```yaml
+- apt-get update && apt-get install -y xdg-utils libfuse2 file
+```
+
+**状态**: ✅ 已修复。Runner 迁移至 `192.168.3.42` 后，deb 与 AppImage 均可正常构建。rpm 已从 `tauri.conf.json` 的 `bundle.targets` 中移除（不实际分发），详见问题 15 后续更新。
 
 ---
 
@@ -510,10 +512,11 @@ DESC="## AgentScope ${CI_COMMIT_TAG}\n\n### Linux\n"
 ```bash
 DESC=$(printf '## AgentScope %s\n\n### Linux\n' "${CI_COMMIT_TAG}")
 [ -n "$DEB" ] && DESC=$(printf '%s- deb: `%s`\n' "$DESC" "$(basename "$DEB")")
+[ -n "$APPIMAGE" ] && DESC=$(printf '%s- AppImage (免安装): `%s`\n' "$DESC" "$(basename "$APPIMAGE")")
 DESC=$(printf '%s\n### Windows\n' "$DESC")
 [ -n "$EXE" ] && DESC=$(printf '%s- Installer: `%s`\n' "$DESC" "$(basename "$EXE")")
-[ -n "$MSI" ] && DESC=$(printf '%s- MSI: `%s`\n' "$DESC" "$(basename "$MSI")")
-DESC=$(printf '%s\n---\n点击下方 Artifacts 区域下载各平台安装包。' "$DESC")
+[ -n "$ZIP" ] && DESC=$(printf '%s- Portable (免安装): `%s`\n' "$DESC" "$(basename "$ZIP")")
+DESC=$(printf '%s\n---\n各平台安装包已上传至 GitLab Package Registry，点击下方 Assets 下载。' "$DESC")
 ```
 
 **状态**: ✅ 已修复，将在下一次 tag 发布时验证。
@@ -604,7 +607,7 @@ Pipeline #52（Job 221）成功，GitLab API 记录 job duration 为 `779.982949
 | Pipeline #57 | ✅ 成功 | 内部 CI 基础镜像验证通过 |
 | Pipeline #102~#105 | ❌ 失败 | build/release 阶段调试：AppImage 容器内构建失败、产物路径错误、curl SSL 证书问题（已逐项修复） |
 | Pipeline #107 | ❌ 失败 | build:linux / build:windows 编译成功但 artifact 路径未包含 target triple，产物上传静默失败（已修复，详见问题 14） |
-| Pipeline #108 | ✅ 成功 | 修复产物路径后首次完整 build + release 成功，GitLab Release v0.2.10 包含 deb、exe、msi 三个产物 |
+| Pipeline #108 | ✅ 成功 | 修复产物路径后首次完整 build + release 成功，GitLab Release v0.2.10 包含 deb、AppImage、exe、zip 四个产物 |
 
 **当前阻塞点**: 当前没有已知代码或测试阻塞点；自动构建与发布流水线已通过 Pipeline #108 验证。
 
@@ -727,10 +730,12 @@ registry.<gitlab-host>/ci-images/agent-scope-tauri:node20-rust1.95-pw
 - Ubuntu 22.04 基础环境
 - Git、curl、ca-certificates、build-essential、pkg-config
 - Tauri Linux 依赖：`libwebkit2gtk-4.1-dev`、`libgtk-3-dev`、`libayatana-appindicator3-dev`、`librsvg2-dev` 等
+- AppImage 构建依赖：`file`、`xdg-utils`、`libfuse2`
 - Node.js 20
 - Rust 1.95.0，包含 `rustfmt`、`clippy`
 - `cargo-binstall` 固定版本
 - `cargo-audit`
+- `cargo-tauri` CLI（通过 `cargo binstall tauri-cli` 预装）
 - Playwright Chromium 及其 Linux 运行库
 
 实施步骤：
@@ -1012,7 +1017,7 @@ stages:
 - 依赖 build:linux 和 build:windows 的 artifacts
 - 调用 GitLab API 创建 Release
 - Release 描述包含各平台产物列表
-- 产物链接指向 job artifacts 下载地址
+- 产物先上传至 GitLab Generic Package Registry（链接永久有效），Release assets 指向 Package Registry 地址
 
 ### 9.6 产物路径
 
@@ -1027,13 +1032,17 @@ stages:
 
 **AppImage Docker 构建**：之前排除 AppImage 是因为 Docker 容器内 FUSE 权限不足导致 `linuxdeploy` 失败。修复方式是在 `build:linux` job 中设置环境变量 `APPIMAGE_EXTRACT_AND_RUN=1`，让 linuxdeploy 不挂载 FUSE 而是直接解压运行。已在 Pipeline #108 之后验证可行。
 
-### 9.7 GitLab Release 权限
+### 9.7 GitLab Release 与 Package Registry 权限
 
-`release` job 使用 `CI_JOB_TOKEN` 调用 GitLab Release API。需要在项目设置中授权：
+`release` job 使用 `CI_JOB_TOKEN` 完成两件事：
+1. **上传产物**到 GitLab Generic Package Registry（`PUT /projects/:id/packages/generic/...`）
+2. **创建 Release**（`POST /projects/:id/releases`）
+
+需要在项目设置中授权：
 
 1. 项目设置 → CI/CD → Token Access
-2. 确保 `CI_JOB_TOKEN` 允许访问 Release API
-3. 或创建 Project Access Token（`api` + `write_repository` 权限）并设为 `GITLAB_TOKEN` 变量
+2. 确保 `CI_JOB_TOKEN` 允许访问 **Release API** 和 **Package Registry**（`write_package_registry`）
+3. 或创建 Project Access Token（`api` + `write_repository` + `write_package_registry` 权限）并设为 `GITLAB_TOKEN` 变量
 
 ### 9.8 首次发布测试步骤
 
@@ -1047,18 +1056,47 @@ stages:
    node -e "const fs=require('fs'); const pkg=JSON.parse(fs.readFileSync('package.json')); pkg.version='$VERSION'; fs.writeFileSync('package.json', JSON.stringify(pkg,null,2)+'\n');"
    sed -i "s/^version = \".*\"/version = \"$VERSION\"/" src-tauri/Cargo.toml
    ```
-4. 推送测试 tag：
+4. 推送测试 tag（pre-release tag，仅触发 build 不触发 release）：
    ```bash
    git tag v0.2.1-test
    git push origin v0.2.1-test
    ```
-5. 在 GitLab 查看流水线状态
-6. 确认 Release 页面已创建且产物可下载
+   > **注意**：`.gitlab-ci.yml` 中 `release` job 的规则仅匹配严格三段式版本号（如 `v0.2.1`）。带后缀的 pre-release tag（如 `v0.2.1-test`）只会触发 `build:linux` 和 `build:windows`，**不会**创建 GitLab Release。如需测试完整 release 流程，应使用 `git tag v0.2.1 && git push origin v0.2.1`。
+5. 在 GitLab 查看流水线状态，确认 `build:linux` 和 `build:windows` 成功并产出 artifact
+6. 如需测试完整 release 流程，使用严格版本号 tag（如 `v0.2.11`）推送，确认 `release` job 成功并创建 GitLab Release
 7. 删除测试 tag：
    ```bash
    git push --delete origin v0.2.1-test
    git tag -d v0.2.1-test
    ```
+
+### 9.8.1 Release 与 Package Registry 验证清单
+
+发布流程使用 **Generic Package Registry** 存储产物，Release assets 链接指向 Package Registry URL（永久有效）。验证时需逐项确认：
+
+| 验证项 | 预期结果 | 检查位置 |
+|--------|---------|---------|
+| `build:linux` 成功 | Pipeline 状态 ✅，产物包含 deb + AppImage | GitLab Job → Artifacts |
+| `build:windows` 成功 | Pipeline 状态 ✅，产物包含 exe + zip | GitLab Job → Artifacts |
+| `release` 成功 | Pipeline 状态 ✅，Release 页面创建 | GitLab Releases |
+| Package Registry 上传 | 存在 `packages/generic/agent-scope/{VERSION}/` 下四个文件 | 项目 → Packages & Registries → Package Registry |
+| Release assets 链接 | 四个链接均指向 `.../packages/generic/agent-scope/...` URL，非 `.../artifacts/raw/...` | Release 页面 → Assets |
+| 链接可下载 | 点击每个 asset 链接能直接下载对应文件 | 浏览器验证 |
+
+**Prerelease tag 验证**（如 `v0.2.11-rc.1`）：
+- 仅验证 `build:linux` + `build:windows` 是否成功
+- 不创建 Release，不触发 Package Registry 上传
+- 适用于 CI 配置变更后的快速回归验证
+
+**Strict semver tag 验证**（如 `v0.2.11`）：
+- 验证完整流程：build → release → Package Registry → Release assets
+- 确认 Package Registry 中存在 deb、AppImage、exe、zip 四个文件
+- 确认 Release assets 链接指向 `packages/generic` URL 且可下载
+
+**故障排查**：
+- 若 `release` job 中 `curl PUT` 返回 `401/403`：检查项目设置中 `CI_JOB_TOKEN` 是否授权 `write_package_registry`；或改用 Project Access Token 设为 `GITLAB_TOKEN` 变量，**不要**将真实 token 写入仓库
+- 若 Package Registry 中文件缺失：检查 `release` job 日志中的 `upload_pkg` 输出，确认产物查找路径与实际构建输出一致
+- 未经用户明确要求，不要创建正式发布 tag
 
 ### 9.9 macOS 手动构建说明
 
@@ -1126,7 +1164,7 @@ cargo tauri build --target x86_64-apple-darwin   # Intel（如需要）
 - apt-get update && apt-get install -y xdg-utils libfuse2 file
 ```
 
-**状态**: 修复后 deb、rpm、AppImage 全部构建通过。
+**状态**: 修复后 deb、AppImage 构建通过。rpm 已从 `tauri.conf.json` 的 `bundle.targets` 中移除（不实际分发）。
 
 #### 问题 18: Runner Cache 配置缺失
 
@@ -1163,7 +1201,7 @@ sudo chown gitlab-runner:gitlab-runner /cache
 | 项目 | 值 |
 |------|-----|
 | 服务状态 | `active (running)` |
-| 最后验证 | deb、rpm、AppImage 全部构建通过 |
+| 最后验证 | deb、AppImage 构建通过；rpm 已从 targets 移除 |
 | 产物上传 | 成功（201 Created） |
 | 证书信任 | 已配置（`/etc/ssl/certs/gitlab.pem`） |
 | Cache 配置 | 已修复（Type = "cache" + /cache 目录） |
@@ -1175,7 +1213,7 @@ sudo chown gitlab-runner:gitlab-runner /cache
 
 | 事项 | 说明 | 优先级 |
 |------|------|--------|
-| `file` 命令预装到镜像 | 当前每次构建都需 `apt-get install file`，增加 30-60 秒 | 低 |
+| `file`/`xdg-utils`/`libfuse2`/`tauri-cli` 预装到镜像 | 已加入 `ci/Dockerfile`，Runner 本地镜像已重建（`sha256:d4a66...` 2026-05-18） | 已完成 |
 | Cache 仅本地有效 | Runner 重启或容器重建后缓存丢失；当前可接受 | 低 |
 | 旧 Runner 离线状态 | 3.144 的旧 Runner 已从 GitLab 注销，但 UI 可能仍显示离线条目 | 低（可手动清理） |
 | 通用模式文档同步 | `docs/gitlab-runner-ci-pattern.md` 中的 Runner 地址已同步更新为 3.42 | 已完成 |

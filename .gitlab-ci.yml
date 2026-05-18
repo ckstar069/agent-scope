@@ -96,12 +96,8 @@ build:linux:
   before_script:
     - echo "=== 同步版本号 ==="
     - *sync-version-script
-    - echo "=== 安装系统依赖（AppImage 需要 xdg-open、libfuse2、file）==="
-    - apt-get update && apt-get install -y xdg-utils libfuse2 file
     - echo "=== 安装前端依赖 ==="
     - npm ci
-    - echo "=== 安装 cargo-tauri CLI ==="
-    - cargo binstall tauri-cli --locked --no-confirm
   script:
     - echo "=== 构建前端 ==="
     - npm run build
@@ -181,10 +177,6 @@ release:
       artifacts: true
   script:
     - apk add --no-cache curl jq
-    - echo "=== 调试：当前目录和文件 ==="
-    - pwd && ls -la
-    - echo "=== 调试：查找所有产物 ==="
-    - find . -name "*.deb" -o -name "*.AppImage" -o -name "*.exe" -o -name "*.zip" | head -20
     - echo "=== 收集产物 ==="
     - |
       DEB=$(find . -name "*.deb" | head -1)
@@ -196,30 +188,55 @@ release:
       echo "appimage: $APPIMAGE"
       echo "exe: $EXE"
       echo "zip: $ZIP"
+    - echo "=== 上传产物到 Generic Package Registry ==="
+    - |
+      VERSION=${CI_COMMIT_TAG#v}
+      PKG_URL="${CI_API_V4_URL}/projects/${CI_PROJECT_ID}/packages/generic/agent-scope/${VERSION}"
+
+      upload_pkg() {
+        local file="$1"
+        local name="$2"
+        if [ -n "$file" ]; then
+          echo "Uploading $name: $file"
+          curl -k --fail --request PUT \
+            --header "JOB-TOKEN: ${CI_JOB_TOKEN}" \
+            --upload-file "$file" \
+            "${PKG_URL}/$(basename "$file")"
+          echo ""
+        else
+          echo "Skipping $name (not found)"
+        fi
+      }
+
+      upload_pkg "$DEB"     "deb"
+      upload_pkg "$APPIMAGE" "AppImage"
+      upload_pkg "$EXE"      "exe"
+      upload_pkg "$ZIP"      "zip"
     - echo "=== 创建 GitLab Release ==="
     - |
+      VERSION=${CI_COMMIT_TAG#v}
+      PKG_URL="${CI_API_V4_URL}/projects/${CI_PROJECT_ID}/packages/generic/agent-scope/${VERSION}"
+
       DEB=$(find . -name "*.deb" | head -1)
       APPIMAGE=$(find . -name "*.AppImage" | head -1)
       EXE=$(find . -name "*.exe" | head -1)
       ZIP=$(find . -name "*.zip" | head -1)
 
-      JOB_URL="${CI_SERVER_URL}/${CI_PROJECT_PATH}/-/jobs/${CI_JOB_ID}"
-
-      # 构建 Release 描述（用 printf 确保 \n 变成真正的换行符）
+      # 构建 Release 描述
       DESC=$(printf '## AgentScope %s\n\n### Linux\n' "${CI_COMMIT_TAG}")
-      [ -n "$DEB" ] && DESC=$(printf '%s- deb: `%s`\n' "$DESC" "$(basename "$DEB")")
+      [ -n "$DEB" ]     && DESC=$(printf '%s- deb: `%s`\n' "$DESC" "$(basename "$DEB")")
       [ -n "$APPIMAGE" ] && DESC=$(printf '%s- AppImage (免安装): `%s`\n' "$DESC" "$(basename "$APPIMAGE")")
       DESC=$(printf '%s\n### Windows\n' "$DESC")
-      [ -n "$EXE" ] && DESC=$(printf '%s- Installer: `%s`\n' "$DESC" "$(basename "$EXE")")
-      [ -n "$ZIP" ] && DESC=$(printf '%s- Portable (免安装): `%s`\n' "$DESC" "$(basename "$ZIP")")
-      DESC=$(printf '%s\n---\n点击下方 Artifacts 区域下载各平台安装包。' "$DESC")
+      [ -n "$EXE" ]     && DESC=$(printf '%s- Installer: `%s`\n' "$DESC" "$(basename "$EXE")")
+      [ -n "$ZIP" ]     && DESC=$(printf '%s- Portable (免安装): `%s`\n' "$DESC" "$(basename "$ZIP")")
+      DESC=$(printf '%s\n---\n各平台安装包已上传至 GitLab Package Registry，点击下方 Assets 下载。' "$DESC")
 
-      # 构建 assets links
+      # 构建 assets links（指向 Generic Package Registry，链接永久有效）
       LINKS="[]"
-      [ -n "$DEB" ] && LINKS=$(echo "$LINKS" | jq ". + [{\"name\":\"Linux deb\",\"url\":\"${JOB_URL}/artifacts/raw/${DEB}\",\"link_type\":\"package\"}]")
-      [ -n "$APPIMAGE" ] && LINKS=$(echo "$LINKS" | jq ". + [{\"name\":\"Linux AppImage\",\"url\":\"${JOB_URL}/artifacts/raw/${APPIMAGE}\",\"link_type\":\"package\"}]")
-      [ -n "$EXE" ] && LINKS=$(echo "$LINKS" | jq ". + [{\"name\":\"Windows Installer\",\"url\":\"${JOB_URL}/artifacts/raw/${EXE}\",\"link_type\":\"package\"}]")
-      [ -n "$ZIP" ] && LINKS=$(echo "$LINKS" | jq ". + [{\"name\":\"Windows Portable\",\"url\":\"${JOB_URL}/artifacts/raw/${ZIP}\",\"link_type\":\"package\"}]")
+      [ -n "$DEB" ]     && LINKS=$(echo "$LINKS" | jq ". + [{\"name\":\"Linux deb\",\"url\":\"${PKG_URL}/$(basename "$DEB")\",\"link_type\":\"package\"}]")
+      [ -n "$APPIMAGE" ] && LINKS=$(echo "$LINKS" | jq ". + [{\"name\":\"Linux AppImage\",\"url\":\"${PKG_URL}/$(basename "$APPIMAGE")\",\"link_type\":\"package\"}]")
+      [ -n "$EXE" ]     && LINKS=$(echo "$LINKS" | jq ". + [{\"name\":\"Windows Installer\",\"url\":\"${PKG_URL}/$(basename "$EXE")\",\"link_type\":\"package\"}]")
+      [ -n "$ZIP" ]     && LINKS=$(echo "$LINKS" | jq ". + [{\"name\":\"Windows Portable\",\"url\":\"${PKG_URL}/$(basename "$ZIP")\",\"link_type\":\"package\"}]")
 
       # 创建 Release（-k 跳过自签名证书验证）
       curl -k --fail --request POST \

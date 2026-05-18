@@ -26,7 +26,10 @@ RUN apt-get update -qq && \
         ca-certificates \
         pkg-config \
         python3 \
-        python3-distutils && \
+        python3-distutils \
+        file \
+        xdg-utils \
+        libfuse2 && \
     rm -rf /var/lib/apt/lists/*
 
 # 2. 安装 Node.js（NodeSource）
@@ -44,8 +47,9 @@ RUN curl -L --proto '=https' --tlsv1.2 -sSf \
     https://github.com/cargo-bins/cargo-binstall/releases/download/v${CARGO_BINSTALL_VERSION}/cargo-binstall-x86_64-unknown-linux-gnu.tgz | \
     tar -xz -C /usr/local/cargo/bin/
 
-# 5. 安装 cargo-audit
-RUN cargo binstall cargo-audit --locked --no-confirm
+# 5. 安装 cargo 工具（audit + tauri-cli）
+RUN cargo binstall cargo-audit --locked --no-confirm && \
+    cargo binstall tauri-cli --locked --no-confirm
 
 # 6. 安装 Playwright Chromium 及系统依赖
 # 先装一个占位目录让 Playwright 安装器能找到位置
@@ -63,7 +67,8 @@ RUN node --version && \
     cargo fmt --version && \
     cargo clippy --version && \
     which cargo-audit && \
-    which cargo-binstall
+    which cargo-binstall && \
+    cargo tauri --version
 
 # 8. 设置工作目录
 WORKDIR /builds
