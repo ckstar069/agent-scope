@@ -86,6 +86,7 @@ build:linux:
     CARGO_HOME: "$CI_PROJECT_DIR/.cargo"
     npm_config_cache: "$CI_PROJECT_DIR/.npm"
     APPIMAGE_EXTRACT_AND_RUN: "1"
+    NO_STRIP: "true"
   cache:
     key: ${CI_COMMIT_REF_SLUG}
     paths:
@@ -95,8 +96,8 @@ build:linux:
   before_script:
     - echo "=== 同步版本号 ==="
     - *sync-version-script
-    - echo "=== 安装系统依赖（AppImage 需要 xdg-open）==="
-    - apt-get update && apt-get install -y xdg-utils
+    - echo "=== 安装系统依赖（AppImage 需要 xdg-open、libfuse2）==="
+    - apt-get update && apt-get install -y xdg-utils libfuse2
     - echo "=== 安装前端依赖 ==="
     - npm ci
     - echo "=== 安装 cargo-tauri CLI ==="
