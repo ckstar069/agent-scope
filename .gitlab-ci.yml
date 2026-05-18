@@ -87,7 +87,6 @@ build:linux:
     npm_config_cache: "$CI_PROJECT_DIR/.npm"
     APPIMAGE_EXTRACT_AND_RUN: "1"
     NO_STRIP: "true"
-    RUST_LOG: "debug"
   cache:
     key: ${CI_COMMIT_REF_SLUG}
     paths:
@@ -97,8 +96,8 @@ build:linux:
   before_script:
     - echo "=== 同步版本号 ==="
     - *sync-version-script
-    - echo "=== 安装系统依赖（AppImage 需要 xdg-open、libfuse2）==="
-    - apt-get update && apt-get install -y xdg-utils libfuse2
+    - echo "=== 安装系统依赖（AppImage 需要 xdg-open、libfuse2、file）==="
+    - apt-get update && apt-get install -y xdg-utils libfuse2 file
     - echo "=== 安装前端依赖 ==="
     - npm ci
     - echo "=== 安装 cargo-tauri CLI ==="
@@ -107,7 +106,7 @@ build:linux:
     - echo "=== 构建前端 ==="
     - npm run build
     - echo "=== 构建 Linux 桌面应用 ==="
-    - cd "$CI_PROJECT_DIR/src-tauri" && cargo tauri build --verbose --target x86_64-unknown-linux-gnu || (echo "=== Tauri build failed, trying manual linuxdeploy ===" && ls -la target/x86_64-unknown-linux-gnu/release/bundle/appimage/ && bash target/x86_64-unknown-linux-gnu/release/bundle/appimage/linuxdeploy*.AppImage --appimage-extract-and-run --help || true && exit 1)
+    - cd "$CI_PROJECT_DIR/src-tauri" && cargo tauri build --target x86_64-unknown-linux-gnu
   artifacts:
     when: on_success
     paths:
