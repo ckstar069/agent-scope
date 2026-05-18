@@ -121,6 +121,10 @@ build:windows:
     npm_config_cache: "$CI_PROJECT_DIR\\.npm"
     GIT_STRATEGY: clone
     CI_COMMIT_AUTHOR: "ckstar"
+    GIT_COMMITTER_NAME: "ckstar"
+    GIT_COMMITTER_EMAIL: "ckstar@localhost"
+    GIT_AUTHOR_NAME: "ckstar"
+    GIT_AUTHOR_EMAIL: "ckstar@localhost"
   cache:
     key: ${CI_COMMIT_REF_SLUG}-windows
     paths:
