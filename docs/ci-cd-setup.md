@@ -19,17 +19,94 @@ AgentScope 使用自托管 GitLab 作为 CI/CD 平台，通过 GitLab Runner 执
 ### 2.1 GitLab 服务器
 
 - **地址**: `http://192.168.3.100`
-- **标准拓扑**: 新项目也按 `192.168.3.100` 作为 GitLab 服务器记录，Runner 统一使用 `192.168.3.144`。
+- **标准拓扑**: 新项目也按 `192.168.3.100` 作为 GitLab 服务器记录，Runner 统一使用 `192.168.3.42`。
 - **项目路径**: `znxt_tools/agent-scope`
 - **访问方式**: Web 界面 + API（`PRIVATE-TOKEN` 认证）
 
 ### 2.2 GitLab Runner
 
-- **服务器**: `192.168.3.144`（Ubuntu 24.04 VM）
-- **Runner 名称**: `agent-scope-runner`
+- **服务器**: `192.168.3.42`（Ubuntu 24.04，i7-12700 / 32GB / 932GB NVMe）
+- **主机名**: `znxt-ser`
+- **Runner 名称**: `agent-scope-runner-42`
 - **执行器类型**: Docker
-- **基础镜像**: `ubuntu:22.04`
-- **SSH 访问**: `sshpass` 可连接，凭据由项目负责人单独提供，避免在文档中继续扩散明文密码。
+- **基础镜像**: `agent-scope-ci:node20-rust1.95`
+- **SSH 访问**: `sshpass -p znxt ssh znxt@192.168.3.42`
+- **Tags**: `linux`
+
+**Runner 主机信息**：
+
+| 项目 | 值 |
+|------|-----|
+| 地址 | `192.168.3.42` |
+| 用户名 | `znxt` |
+| 密码 | `znxt` |
+| 系统 | Ubuntu 24.04.4 LTS (Noble Numbat) |
+| 内核 | 6.17.0-29 |
+| CPU | Intel i7-12700 (20 线程) |
+| 内存 | 32 GB |
+| 磁盘 | NVMe 932G，已用 35G (4%) |
+| 已安装 | Docker CE 29.5.0、GitLab Runner v18.11.3、Rust、Node.js |
+| 运行服务 | gitlab-runner、docker、clash-verge-service、samba、nxserver |
+| 其他访问 | Tailscale `znxt-ser.tail449221.ts.net` / `100.70.62.93` |
+
+**Runner 配置**（`/etc/gitlab-runner/config.toml`）：
+
+```toml
+concurrent = 1
+check_interval = 0
+shutdown_timeout = 0
+
+[[runners]]
+  name = "agent-scope-runner-42"
+  url = "https://192.168.3.100/"
+  id = 4
+  token = "glrt-HC57mLQespAnm-LqSx6e"
+  executor = "docker"
+  tags = ["linux"]
+  [runners.cache]
+    Type = "cache"
+    MaxUploadedArchiveSize = 0
+    [runners.cache.s3]
+    [runners.cache.gcs]
+    [runners.cache.azure]
+  [runners.docker]
+    tls_verify = false
+    image = "ubuntu:22.04"
+    privileged = false
+    volumes = ["/cache"]
+    pull_policy = ["if-not-present"]
+    shm_size = 268435456
+```
+
+**注册方式**：
+1. 在 GitLab 项目设置 → CI/CD → Runners 中获取注册令牌
+2. 在 Runner 主机执行：
+   ```bash
+   sudo gitlab-runner register \
+     --non-interactive \
+     --url "https://192.168.3.100" \
+     --registration-token "<token>" \
+     --executor "docker" \
+     --docker-image "ubuntu:22.04" \
+     --tag-list "linux" \
+     --name "agent-scope-runner-42"
+   ```
+3. 由于 GitLab 使用自签证书，注册后需添加证书信任：
+   ```bash
+   # 导出 GitLab 证书
+   openssl s_client -connect 192.168.3.100:443 -servername 192.168.3.100 </dev/null 2>/dev/null | \
+     openssl x509 > /usr/local/share/ca-certificates/gitlab.crt
+   sudo update-ca-certificates
+   ```
+4. 创建 cache 目录：
+   ```bash
+   sudo mkdir -p /cache
+   sudo chown gitlab-runner:gitlab-runner /cache
+   ```
+5. 重启 Runner：
+   ```bash
+   sudo systemctl restart gitlab-runner
+   ```
 
 ### 2.3 流水线配置概览
 
@@ -144,7 +221,7 @@ ERROR: Job failed (system failure): aborted: terminated
 
 **根因**: GitLab Runner 进程或容器执行环境层面的中断。Pipeline #44 在 E2E 执行中被终止，Pipeline #45 在 cache restore 阶段被终止，MR Pipeline #35 在 prepare executor 阶段被终止。
 
-进一步查看 Runner 主机 `192.168.3.144` 的 journal 后，三次 `runner_system_failure` 都与 Runner 服务重启、Runner 重新注册或 `config.toml` 配置异常高度相关：
+进一步查看 Runner 主机 `192.168.3.42` 的 journal 后，三次 `runner_system_failure` 都与 Runner 服务重启、Runner 重新注册或 `config.toml` 配置异常高度相关：
 
 - MR Pipeline #35：Runner 曾出现自签证书校验失败、旧 Runner token `403 Forbidden`，随后服务在已有 build 运行时收到 stop signal。
 - Pipeline #44：Runner 配置文件曾出现 TOML 解析错误，随后服务重启，正在执行的 job 收到 `context canceled`。
@@ -569,7 +646,7 @@ Pipeline #52（Job 221）成功，GitLab API 记录 job duration 为 `779.982949
 |------|------|
 | Dockerfile | `ci/Dockerfile` |
 | 镜像标签 | `agent-scope-ci:node20-rust1.95` |
-| 构建位置 | Runner 主机 `192.168.3.144` |
+| 构建位置 | Runner 主机 `192.168.3.42` |
 | 预置内容 | Ubuntu 22.04 + Node.js 20 + Rust 1.95.0 + Tauri 依赖 + cargo-binstall + cargo-audit + Playwright 系统依赖 |
 | 效果 | 流水线耗时从 ~779s 降到 ~517s（节省约 34%） |
 | 验证 | Pipeline #57（Job 235）成功通过 |
@@ -596,10 +673,10 @@ Pipeline #52（Job 221）成功，GitLab API 记录 job duration 为 `779.982949
 git remote -v
 git status --short
 curl -k -fsSL "https://<gitlab-host>/api/v4/projects/<project-id>/pipelines?per_page=10" | jq -r '.[] | [.id,.status,.ref,.sha,.created_at] | @tsv'
-sshpass -p '<password>' ssh yufei@192.168.3.144 'hostname; gitlab-runner --version; gitlab-runner status; docker info --format "{{.ServerVersion}} {{.CgroupVersion}}"; free -h; df -h / /var/lib/docker'
+sshpass -p 'znxt' ssh znxt@192.168.3.42 'hostname; sudo gitlab-runner --version; sudo gitlab-runner status; sudo docker info --format "{{.ServerVersion}} {{.CgroupVersion}}"; free -h; df -h / /var/lib/docker'
 ```
 
-需要特别注意 GitLab 地址：本仓库 remote/API 当前实测为 `192.168.3.100`，后续新项目也按 `192.168.3.100` 作为 GitLab 服务器；Runner 统一使用 `192.168.3.144`。
+需要特别注意 GitLab 地址：本仓库 remote/API 当前实测为 `192.168.3.100`，后续新项目也按 `192.168.3.100` 作为 GitLab 服务器；Runner 统一使用 `192.168.3.42`。
 
 ### 7.2 Runner 稳定性专项
 
@@ -722,7 +799,7 @@ audit
 
 ### 7.6 网络与 GitLab 地址治理
 
-当前已确认 Runner `192.168.3.144` 能访问 NodeSource、Rust、GitHub、npm registry。但长期仍建议减少 CI 对公网实时下载的依赖。
+当前已确认 Runner `192.168.3.42` 能访问 NodeSource、Rust、GitHub、npm registry。但长期仍建议减少 CI 对公网实时下载的依赖。
 
 后续需要确认：
 
@@ -735,8 +812,8 @@ audit
 
 ```bash
 git remote -v
-sshpass -p '<password>' ssh yufei@192.168.3.144 'sudo gitlab-runner list'
-sshpass -p '<password>' ssh yufei@192.168.3.144 'curl -k -I https://192.168.3.100 || true'
+sshpass -p 'znxt' ssh znxt@192.168.3.42 'sudo gitlab-runner list'
+sshpass -p 'znxt' ssh znxt@192.168.3.42 'curl -k -I https://192.168.3.100 || true'
 ```
 
 ### 7.7 推荐执行顺序
@@ -759,7 +836,7 @@ sshpass -p '<password>' ssh yufei@192.168.3.144 'curl -k -I https://192.168.3.10
 | 配置项 | 当前值 |
 |-------|--------|
 | CI 平台 | GitLab CI（`192.168.3.100`） |
-| Runner | `agent-scope-runner` @ `192.168.3.144`（Docker executor） |
+| Runner | `agent-scope-runner-42` @ `192.168.3.42`（Docker executor） |
 | 基础镜像 | `agent-scope-ci:node20-rust1.95`（内部镜像，Runner 本地） |
 | Rust 版本 | 1.95.0（已锁定） |
 | Runner concurrent | 1 |
@@ -837,7 +914,7 @@ sshpass -p '<password>' ssh yufei@192.168.3.144 'curl -k -I https://192.168.3.10
 
 | 平台 | 构建方式 | 产物 | Runner |
 |------|---------|------|--------|
-| Linux | GitLab CI 自动 | deb + AppImage（免安装） | `192.168.3.144` Docker executor |
+| Linux | GitLab CI 自动 | deb + AppImage（免安装） | `192.168.3.42` Docker executor |
 | Windows | GitLab CI 自动 | exe (NSIS) + zip（免安装） | `192.168.3.10` Shell executor |
 | macOS | 本机手动 | dmg | 开发者本机（不参与 CI） |
 
@@ -868,7 +945,7 @@ CI 自动将 Git tag 中的版本号同步到以下文件：
 
 #### Linux Runner（已有）
 
-- **主机**：`192.168.3.144`
+- **主机**：`192.168.3.42`
 - **执行器**：Docker
 - **镜像**：`agent-scope-ci:node20-rust1.95`
 - **Tags**：`linux`
@@ -1000,6 +1077,133 @@ cargo tauri build --target x86_64-apple-darwin   # Intel（如需要）
 产物位置（Intel）：`src-tauri/target/x86_64-apple-darwin/release/bundle/dmg/*.dmg`
 
 如需将 macOS 产物加入 GitLab Release，可手动上传到同一 Release 页面。
+
+---
+
+## 10. Runner 服务器迁移记录（2026-05-18）
+
+### 10.1 迁移背景
+
+原 Linux Runner 服务器 `192.168.3.144`（Ubuntu 24.04 VM，4 核 / 16GB / 97GB 磁盘）磁盘使用率已达 81%，且作为多项目共享的代理网关和 Docker 宿主机，资源竞争激烈。决定将 AgentScope 项目的 Linux Runner 迁移到专用实体机 `192.168.3.42`（i7-12700 / 32GB / 932GB NVMe）。
+
+### 10.2 迁移过程
+
+| 步骤 | 操作 | 结果 |
+|------|------|------|
+| 1 | 在 3.42 安装 Docker CE 29.5.0 | 完成 |
+| 2 | 在 3.42 安装 GitLab Runner v18.11.3 | 完成 |
+| 3 | 导出 GitLab 自签证书并添加到系统 CA | 完成，证书验证通过 |
+| 4 | 注册 Runner 到 GitLab 项目 | 完成，Runner ID = 4 |
+| 5 | 手动编辑 config.toml 添加 tags = ["linux"] | 完成 |
+| 6 | 从 3.144 导出 agent-scope-ci Docker 镜像 | 完成（3.79GB） |
+| 7 | 将镜像导入 3.42 | 完成 |
+| 8 | 验证 deb 构建 | 通过 |
+| 9 | 排查 AppImage 构建失败 | 发现并修复 |
+| 10 | 验证 AppImage 构建 | 通过 |
+| 11 | 修复 Cache 配置（Type + /cache 目录） | 完成 |
+| 12 | 注销 3.144 上的旧 Runner | 完成 |
+| 13 | 删除 3.144 上的 agent-scope-ci 镜像 | 完成（释放 3.79GB） |
+
+### 10.3 迁移中发现的新问题与修复
+
+#### 问题 17: AppImage 构建失败（`failed to run linuxdeploy`）
+
+**现象**: 在 3.42 新 Runner 上，AppImage 构建失败，Tauri bundler 报错 `failed to run linuxdeploy`，但 linuxdeploy 二进制文件本身可以正常下载和运行。
+
+**根因诊断过程**:
+1. 首先怀疑是 Docker 容器内 FUSE 问题，但 `APPIMAGE_EXTRACT_AND_RUN=1` 已设置
+2. 添加 `RUST_LOG=debug` 和 `--verbose` 后仍无有效错误信息
+3. 使用 `|| (echo "..."; ls -la ...; bash linuxdeploy*.AppImage --help)` 作为 fallback，但路径不正确
+4. 最终下载完整 job 日志，发现 `appimagetool` 输出的关键错误：
+   ```
+   file command is missing but required, please install it
+   ```
+
+**根本原因**: Docker 容器内缺少 `file` 命令。`appimagetool`（linuxdeploy 的 output plugin）依赖 `file` 命令来识别文件类型，该命令在最小化 Ubuntu 镜像中默认未安装。此问题在 3.144 的旧环境中未出现，可能是因为旧环境的容器镜像层或宿主机环境不同。
+
+**修复**: 在 `.gitlab-ci.yml` 的 `build:linux` job 的系统依赖安装中添加 `file`：
+```yaml
+- apt-get update && apt-get install -y xdg-utils libfuse2 file
+```
+
+**状态**: 修复后 deb、rpm、AppImage 全部构建通过。
+
+#### 问题 18: Runner Cache 配置缺失
+
+**现象**: 每次 job 日志中出现：
+```
+ERROR: Could not create cache adapter
+error=cache factory not found: factory for cache adapter "" was not registered
+```
+
+**根因**: `config.toml` 的 `[runners.cache]` 部分缺少 `Type = "cache"` 字段，导致 GitLab Runner 无法初始化 cache adapter。
+
+**修复**: 在 `/etc/gitlab-runner/config.toml` 中添加：
+```toml
+[runners.cache]
+  Type = "cache"
+```
+
+**状态**: 已修复。
+
+#### 问题 19: /cache 目录缺失
+
+**现象**: `config.toml` 中配置了 `volumes = ["/cache"]`，但宿主机上 `/cache` 目录不存在，导致 Docker 容器启动时 cache 卷挂载失败。
+
+**修复**: 
+```bash
+sudo mkdir -p /cache
+sudo chown gitlab-runner:gitlab-runner /cache
+```
+
+**状态**: 已修复。
+
+### 10.4 当前 Runner 状态（3.42）
+
+| 项目 | 值 |
+|------|-----|
+| 服务状态 | `active (running)` |
+| 最后验证 | deb、rpm、AppImage 全部构建通过 |
+| 产物上传 | 成功（201 Created） |
+| 证书信任 | 已配置（`/etc/ssl/certs/gitlab.pem`） |
+| Cache 配置 | 已修复（Type = "cache" + /cache 目录） |
+| Docker 镜像 | `agent-scope-ci:node20-rust1.95` 可用 |
+| 磁盘空间 | 900GB，使用 4% |
+| 内存 | 32GB，可用 27GB |
+
+### 10.5 遗留事项
+
+| 事项 | 说明 | 优先级 |
+|------|------|--------|
+| `file` 命令预装到镜像 | 当前每次构建都需 `apt-get install file`，增加 30-60 秒 | 低 |
+| Cache 仅本地有效 | Runner 重启或容器重建后缓存丢失；当前可接受 | 低 |
+| 旧 Runner 离线状态 | 3.144 的旧 Runner 已从 GitLab 注销，但 UI 可能仍显示离线条目 | 低（可手动清理） |
+| 通用模式文档同步 | `docs/gitlab-runner-ci-pattern.md` 中的 Runner 地址已同步更新为 3.42 | 已完成 |
+
+### 10.6 运维命令速查（3.42）
+
+```bash
+# 快速连接
+sshpass -p znxt ssh znxt@192.168.3.42
+
+# 检查 Runner 状态
+sshpass -p znxt ssh znxt@192.168.3.42 'sudo systemctl status gitlab-runner --no-pager'
+
+# 查看 Runner 日志
+sshpass -p znxt ssh znxt@192.168.3.42 'sudo journalctl -u gitlab-runner --since "1 hour ago" --no-pager'
+
+# 查看 Runner 列表和连通性
+sshpass -p znxt ssh znxt@192.168.3.42 'sudo gitlab-runner list; sudo gitlab-runner verify'
+
+# 检查 Docker 状态
+sshpass -p znxt ssh znxt@192.168.3.42 'sudo docker info --format "{{.ServerVersion}}"'
+
+# 重启 Runner（确认无运行中 job）
+sshpass -p znxt ssh znxt@192.168.3.42 'sudo systemctl restart gitlab-runner'
+
+# 检查资源
+sshpass -p znxt ssh znxt@192.168.3.42 'free -h; df -h /'
+```
 
 ---
 

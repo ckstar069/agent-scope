@@ -9,7 +9,8 @@
 | 角色 | 地址 | 用户名 | 密码 | 职责 |
 |------|------|--------|------|------|
 | GitLab 服务器 | `192.168.3.100` | `yufei` | `yufei` | 托管代码、项目、CI 配置、流水线状态、Job 日志、Container Registry |
-| GitLab Runner 服务器 | `192.168.3.144` | `yufei` | `yufei` | 拉取 GitLab job，使用 Docker executor 在容器中执行 CI |
+| GitLab Runner 服务器（Linux） | `192.168.3.42` | `znxt` | `znxt` | 拉取 GitLab job，使用 Docker executor 在容器中执行 CI |
+| GitLab Runner 服务器（Windows） | `192.168.3.10` | `yufei` | `yufei` | 拉取 GitLab job，使用 Shell executor 执行 Windows 桌面应用构建 |
 | 项目仓库 | GitLab 项目路径 | 按项目权限配置 | 按项目权限配置 | 提供 `.gitlab-ci.yml`、源码、测试和构建脚本 |
 
 常用访问方式：
@@ -18,11 +19,11 @@
 # 登录 GitLab 服务器
 sshpass -p yufei ssh yufei@192.168.3.100
 
-# 登录 Runner 服务器
-sshpass -p yufei ssh yufei@192.168.3.144
+# 登录 Linux Runner 服务器
+sshpass -p znxt ssh znxt@192.168.3.42
 
 # 只读检查 Runner 服务和 Docker 状态
-sshpass -p yufei ssh yufei@192.168.3.144 'hostname; gitlab-runner --version; gitlab-runner status; docker info --format "{{.ServerVersion}} {{.CgroupVersion}}"; free -h; df -h / /var/lib/docker'
+sshpass -p znxt ssh znxt@192.168.3.42 'hostname; gitlab-runner --version; sudo gitlab-runner status; sudo docker info --format "{{.ServerVersion}} {{.CgroupVersion}}"; free -h; df -h / /var/lib/docker'
 ```
 
 ---
@@ -61,28 +62,28 @@ Runner 主机需要稳定运行：
 - 到 GitLab 服务器的网络访问
 - 到必要外部依赖源或内部镜像源的网络访问
 
-Runner 在 `192.168.3.144` 上应作为 systemd 常驻服务运行。它不是每个项目手动启动一次的临时命令，而是后台持续轮询 GitLab；只要 GitLab 上有匹配 tag 的 job，Runner 就会自动拉取并创建 Docker 容器执行。
+Runner 在 `192.168.3.42` 上应作为 systemd 常驻服务运行。它不是每个项目手动启动一次的临时命令，而是后台持续轮询 GitLab；只要 GitLab 上有匹配 tag 的 job，Runner 就会自动拉取并创建 Docker 容器执行。
 
 常用运维命令：
 
 ```bash
 # 查看 Runner 服务状态
-sshpass -p yufei ssh yufei@192.168.3.144 'sudo systemctl status gitlab-runner --no-pager'
+sshpass -p znxt ssh znxt@192.168.3.42 'sudo systemctl status gitlab-runner --no-pager'
 
 # 启动 Runner
-sshpass -p yufei ssh yufei@192.168.3.144 'sudo systemctl start gitlab-runner'
+sshpass -p znxt ssh znxt@192.168.3.42 'sudo systemctl start gitlab-runner'
 
 # 设置开机自启
-sshpass -p yufei ssh yufei@192.168.3.144 'sudo systemctl enable gitlab-runner'
+sshpass -p znxt ssh znxt@192.168.3.42 'sudo systemctl enable gitlab-runner'
 
 # 重启 Runner，仅在确认没有 job 正在运行时执行
-sshpass -p yufei ssh yufei@192.168.3.144 'sudo systemctl restart gitlab-runner'
+sshpass -p znxt ssh znxt@192.168.3.42 'sudo systemctl restart gitlab-runner'
 
 # 查看 Runner 注册与连通性
-sshpass -p yufei ssh yufei@192.168.3.144 'sudo gitlab-runner list; sudo gitlab-runner verify'
+sshpass -p znxt ssh znxt@192.168.3.42 'sudo gitlab-runner list; sudo gitlab-runner verify'
 
 # 查看 Runner 最近日志
-sshpass -p yufei ssh yufei@192.168.3.144 'sudo journalctl -u gitlab-runner --since "1 hour ago" --no-pager'
+sshpass -p znxt ssh znxt@192.168.3.42 'sudo journalctl -u gitlab-runner --since "1 hour ago" --no-pager'
 ```
 
 保持运行的检查点：
@@ -118,6 +119,14 @@ shutdown_timeout = 0
   name = "project-or-shared-runner"
   url = "https://192.168.3.100"
   executor = "docker"
+
+  [runners.cache]
+    Type = "cache"
+    MaxUploadedArchiveSize = 0
+    [runners.cache.s3]
+      AssumeRoleMaxConcurrency = 0
+    [runners.cache.gcs]
+    [runners.cache.azure]
 
   [runners.docker]
     image = "ubuntu:22.04"
@@ -181,7 +190,7 @@ git remote set-url origin https://192.168.3.100/<group>/<project>.git
 
 ### 4.2 Runner 注册
 
-在 Runner 主机 `192.168.3.144` 上注册 Runner。注册 token 从 GitLab 项目或 group 的 CI/CD Runner 页面获取。
+在 Runner 主机 `192.168.3.42` 上注册 Runner。注册 token 从 GitLab 项目或 group 的 CI/CD Runner 页面获取。
 
 ```bash
 sudo gitlab-runner register
@@ -435,7 +444,7 @@ df -h / /var/lib/docker
 | 资源 | 地址 | 用户名 | 密码 | 用途 |
 |------|------|--------|------|------|
 | GitLab 服务器 | `192.168.3.100` | `yufei` | `yufei` | GitLab 服务维护、项目与 CI 配置检查 |
-| Linux Runner | `192.168.3.144` | `yufei` | `yufei` | GitLab Runner（Docker executor）、CI job 执行 |
+| Linux Runner | `192.168.3.42` | `znxt` | `znxt` | GitLab Runner（Docker executor）、CI job 执行 |
 | Windows Runner | `192.168.3.10` | `yufei` | `yufei` | GitLab Runner（Shell executor）、Windows 桌面应用构建 |
 
 常用命令：
@@ -443,9 +452,9 @@ df -h / /var/lib/docker
 ```bash
 # Linux 基础设施
 sshpass -p yufei ssh yufei@192.168.3.100
-sshpass -p yufei ssh yufei@192.168.3.144
-sshpass -p yufei ssh yufei@192.168.3.144 'sudo gitlab-runner list'
-sshpass -p yufei ssh yufei@192.168.3.144 'sudo journalctl -u gitlab-runner --since "1 hour ago" --no-pager'
+sshpass -p znxt ssh znxt@192.168.3.42
+sshpass -p znxt ssh znxt@192.168.3.42 'sudo gitlab-runner list'
+sshpass -p znxt ssh znxt@192.168.3.42 'sudo journalctl -u gitlab-runner --since "1 hour ago" --no-pager'
 
 # Windows Runner（检查服务状态）
 sshpass -p yufei ssh yufei@192.168.3.10 'sc query gitlab-runner'
@@ -466,7 +475,7 @@ sshpass -p yufei ssh yufei@192.168.3.10 'C:\GitLab-Runner\gitlab-runner.exe --ve
 ## 10. 新项目接入检查表
 
 1. [ ] GitLab 项目已创建，remote 指向 `192.168.3.100`。
-2. [ ] Runner `192.168.3.144` 可访问 GitLab。
+2. [ ] Runner `192.168.3.42` 可访问 GitLab。
 3. [ ] Runner 已注册到项目或 group。
 4. [ ] Runner tags 与 `.gitlab-ci.yml` 匹配。
 5. [ ] `.gitlab-ci.yml` 使用固定镜像，不使用漂移的 `latest`。
