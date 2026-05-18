@@ -155,16 +155,15 @@ build:windows:
     - npm run build
     - |
       echo "=== 配置构建环境 ==="
-      $env:Path = "C:\PROGRA~2\NSIS\Bin;C:\Users\yufei\.cargo\bin;$env:Path"
+      $env:Path = "C:\Program Files (x86)\NSIS\Bin;C:\Users\yufei\.cargo\bin;$env:Path"
       Get-Command makensis | Select-Object Source
       makensis -VERSION
       echo "=== 构建 Windows 桌面应用 ==="
-      cd src-tauri
       cargo tauri build --target x86_64-pc-windows-msvc
       echo "=== 打包 Portable 免安装版 ==="
       $VERSION = $env:CI_COMMIT_TAG -replace '^v',''
       $TARGET = "x86_64-pc-windows-msvc"
-      $RELEASE_DIR = "target/$TARGET/release"
+      $RELEASE_DIR = "src-tauri/target/$TARGET/release"
       $ZIP_NAME = "AgentScope_${VERSION}_x64_portable.zip"
       $PORTABLE_DIR = "$RELEASE_DIR/bundle/portable"
       New-Item -ItemType Directory -Path $PORTABLE_DIR -Force | Out-Null
