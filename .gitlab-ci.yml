@@ -168,10 +168,17 @@ build:windows:
       $env:_bundlerPath = "$env:_bundlerDir\src\bundle\windows\nsis\mod.rs"
       Write-Host "Found tauri-bundler at: $env:_bundlerPath"
       if (Test-Path $env:_bundlerPath) {
-        $env:_content = Get-Content $env:_bundlerPath -Raw
-        $env:_content = $env:_content -replace 'dirs::cache_dir\(\)\.unwrap\(\)\.join\("tauri"\)', 'std::path::PathBuf::from(r"C:\Users\yufei\AppData\Local").join("tauri")'
-        Set-Content $env:_bundlerPath $env:_content -NoNewline
-        Write-Host "Patched tauri-bundler"
+        $content = Get-Content $env:_bundlerPath -Raw
+        # 使用简单字符串替换（非正则），避免转义问题
+        $old = 'dirs::cache_dir().unwrap().join("tauri")'
+        $new = 'std::path::PathBuf::from(r"C:\Users\yufei\AppData\Local").join("tauri")'
+        if ($content.Contains($old)) {
+          $content = $content.Replace($old, $new)
+          Set-Content -Path $env:_bundlerPath -Value $content -NoNewline
+          Write-Host "Patched tauri-bundler"
+        } else {
+          Write-Host "WARNING: Could not find target string in mod.rs"
+        }
       } else {
         Write-Host "WARNING: Could not find tauri-bundler nsis/mod.rs"
       }
