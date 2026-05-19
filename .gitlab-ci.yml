@@ -125,6 +125,11 @@ build:windows:
     GIT_COMMITTER_EMAIL: "ckstar@localhost"
     GIT_AUTHOR_NAME: "ckstar"
     GIT_AUTHOR_EMAIL: "ckstar@localhost"
+    # Tauri bundler 使用 dirs::cache_dir() 在 Windows 上读取 LOCALAPPDATA。
+    # GitLab Runner 以 LocalSystem 运行，默认指向 systemprofile 目录，
+    # 但 systemprofile 下的 NSIS 缓存因权限问题导致 makensis 无法读取 stubs。
+    # 强制使用 yufei 用户的缓存目录（已预装完整 NSIS toolset）。
+    LOCALAPPDATA: "C:\\Users\\yufei\\AppData\\Local"
   cache:
     key: ${CI_COMMIT_REF_SLUG}-windows
     paths:
