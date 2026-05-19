@@ -142,14 +142,10 @@ build:windows:
       # Tauri bundler 使用 dirs::cache_dir() 获取 NSIS 缓存路径。
       # LocalSystem 账户返回 systemprofile 目录，该目录下 NSIS 缓存权限不足。
       # 创建 junction 指向 yufei 用户已验证完整的 NSIS 缓存。
-      $systemCache = "C:\WINDOWS\system32\config\systemprofile\AppData\Local\tauri\NSIS"
-      $yufeiCache = "C:\Users\yufei\AppData\Local\tauri\NSIS"
-      if (Test-Path $systemCache) {
-        Remove-Item -Recurse -Force $systemCache
-      }
-      New-Item -ItemType Junction -Path $systemCache -Target $yufeiCache | Out-Null
-      Write-Host "Junction created: $systemCache -> $yufeiCache"
-      Test-Path "$systemCache\Bin\makensis.exe"
+      # 使用 cmd 避免 GitLab 变量替换导致 PowerShell 变量为空。
+      cmd /c "if exist C:\WINDOWS\system32\config\systemprofile\AppData\Local\tauri\NSIS rmdir /s /q C:\WINDOWS\system32\config\systemprofile\AppData\Local\tauri\NSIS"
+      cmd /c "mklink /J C:\WINDOWS\system32\config\systemprofile\AppData\Local\tauri\NSIS C:\Users\yufei\AppData\Local\tauri\NSIS"
+      Test-Path "C:\WINDOWS\system32\config\systemprofile\AppData\Local\tauri\NSIS\Bin\makensis.exe"
     - |
       echo "=== 配置环境变量 ==="
       $env:Path += ";C:\Users\yufei\.cargo\bin"
