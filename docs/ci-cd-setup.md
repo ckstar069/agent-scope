@@ -1118,7 +1118,76 @@ cargo tauri build --target x86_64-apple-darwin   # Intel（如需要）
 
 ---
 
-## 10. Runner 服务器迁移记录（2026-05-18）
+## 10. Windows 构建稳定性与风险记录（v0.2.11）
+
+### 10.1 问题背景
+
+Windows 桌面应用构建（`build:windows` job）在 v0.2.11 发布周期中多次失败，核心问题与 GitLab Runner 服务账户、Tauri bundler NSIS 缓存路径有关。
+
+### 10.2 失败根因
+
+GitLab Runner 在 Windows 上以 **LocalSystem** 账户运行。Tauri bundler 的 NSIS 安装器默认使用 `dirs::cache_dir()` 获取缓存目录，LocalSystem 的缓存路径指向：
+
+```
+C:\WINDOWS\system32\config\systemprofile\AppData\Local
+```
+
+该目录受 Windows 安全策略限制，makensis 无法从 systemprofile 下读取 stub 文件，导致 `CreateProcessW` 返回错误 **0x2**（文件未找到）。
+
+### 10.3 修复措施
+
+**修复 1：`useLocalToolsDir: true`**（`src-tauri/tauri.conf.json`）
+
+配置 `bundle.useLocalToolsDir: true` 后，Tauri bundler 将 NSIS 工具缓存到项目目录 `src-tauri/target/.tauri/NSIS/` 下，不再依赖 `dirs::cache_dir()`。此配置在 **v0.2.11-rc.40** 中首次验证通过。
+
+```json
+"bundle": {
+  "active": true,
+  "useLocalToolsDir": true,
+  "targets": ["deb", "appimage", "nsis"]
+}
+```
+
+**修复 2：严格错误检测与产物校验**
+
+`.gitlab-ci.yml` 中 `build:windows` job 已配置：
+
+- `$ErrorActionPreference = "Stop"` + 显式 `$LASTEXITCODE` 检查
+- NSIS `.exe` 产物强校验：找不到 installer 时立即 `exit 1`
+- Portable `.zip` 产物强校验：找不到 zip 时立即 `exit 1`
+
+**修复 3：固定 Tauri CLI 来源**
+
+Windows build 从 `cargo install tauri-cli --force`（无版本约束）改为使用 `npx tauri build`，利用 `package-lock.json` 锁定的 `@tauri-apps/cli` 版本（当前锁定 **2.11.0**），避免 crates.io 安装漂移。
+
+**安全网：LOCALAPPDATA workaround**
+
+`.gitlab-ci.yml` 中仍保留 `LOCALAPPDATA: "C:\\Users\\yufei\\AppData\\Local"` 环境变量，作为 `useLocalToolsDir` 失效时的备用缓存路径。该路径已预装完整 NSIS toolset。
+
+### 10.4 验证结果
+
+| Tag | Pipeline | 结果 | 说明 |
+|-----|----------|------|------|
+| v0.2.11-rc.39 | #213 | **失败** | `useLocalToolsDir` 未配置，NSIS error 0x2，job 正确失败（验证失败检测生效） |
+| v0.2.11-rc.40 | #215 | **成功** | `useLocalToolsDir: true` 配置后，NSIS exe + portable zip 均产出 |
+
+### 10.5 当前仍存风险
+
+1. **Runner 服务账户仍为 LocalSystem**：`sc qc gitlab-runner` 显示 `SERVICE_START_NAME: LocalSystem`。LocalSystem 账户是 NSIS 缓存问题的根本原因，当前仅通过 `useLocalToolsDir` 绕过，未根除。
+2. **LOCALAPPDATA workaround 只是安全网**：如果 `useLocalToolsDir` 因 Tauri 升级行为变更而失效，需依赖此 workaround。
+3. **需要连续 prerelease 验证**：单次成功（rc.40）不能证明稳定性，需至少再跑 1-2 个 prerelease tag（如 rc.41、rc.42），不改代码连续成功，才能确认流程稳定。
+
+### 10.6 推荐后续行动
+
+- **短期**：继续使用 LocalSystem + `useLocalToolsDir: true` + `LOCALAPPDATA` workaround 的组合
+- **中期**：将 GitLab Runner 服务账户从 LocalSystem 切换为 `yufei` 或专用 CI 用户，消除 systemprofile 限制
+  - 切换前需验证：GitLab 证书访问、git clone、Node/npm、Rust/cargo、MSVC、NSIS、WebView2 Runtime、gitlab-runner verify
+  - 切换后必须再跑 prerelease tag 验证
+- **长期**：监控 Tauri 版本升级对 `useLocalToolsDir` 行为的影响
+
+---
+
+## 11. Runner 服务器迁移记录（2026-05-18）
 
 ### 10.1 迁移背景
 

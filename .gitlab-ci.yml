@@ -164,26 +164,18 @@ build:windows:
       Write-Host "Updated src-tauri/Cargo.toml -> $VERSION"
     - echo "=== 安装前端依赖 ==="
     - npm ci
-    - |
-      $ErrorActionPreference = "Stop"
-      echo "=== 安装 cargo-tauri ==="
-      cargo install tauri-cli --force
-      if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
-      $env:Path = "$env:CARGO_HOME\bin;$env:Path"
-      Get-Command cargo-tauri | Select-Object Source
   script:
     - echo "=== 构建前端 ==="
     - npm run build
     - |
       $ErrorActionPreference = "Stop"
       echo "=== 配置构建环境 ==="
-      $env:Path = "C:\Program Files (x86)\NSIS\Bin;$env:CI_PROJECT_DIR\.cargo\bin;C:\Users\yufei\.cargo\bin;$env:Path"
+      $env:Path = "C:\Program Files (x86)\NSIS\Bin;$env:Path"
       Get-Command makensis | Select-Object Source
       makensis -VERSION
       if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
-      Get-Command cargo-tauri | Select-Object Source
-      echo "=== 构建 Windows 桌面应用 ==="
-      cargo tauri build --target x86_64-pc-windows-msvc
+      echo "=== 构建 Windows 桌面应用 (npx tauri, 使用 package-lock 锁定版本) ==="
+      npx tauri build --target x86_64-pc-windows-msvc
       if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
       echo "=== 校验 NSIS 安装包产物 ==="
       $NSIS = Get-ChildItem "src-tauri/target/x86_64-pc-windows-msvc/release/bundle/nsis/*.exe" -ErrorAction SilentlyContinue
