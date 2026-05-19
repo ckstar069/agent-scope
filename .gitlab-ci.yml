@@ -166,7 +166,7 @@ build:windows:
       echo "=== 修复 Tauri bundler NSIS 缓存路径 ==="
       # LocalSystem 账户的 systemprofile 目录因安全限制无法启动 makensis 子进程。
       # 修改 tauri-bundler 源代码，将 dirs::cache_dir() 硬编码为 yufei 用户目录。
-      $bundlerPath = Get-ChildItem -Path "$env:CARGO_HOME\registry\src" -Recurse -Filter "mod.rs" | Where-Object { $_.FullName -match "tauri-bundler.*nsis.*mod.rs" } | Select-Object -First 1 -ExpandProperty FullName
+      $bundlerPath = Get-ChildItem -Path "C:\Users\yufei\.cargo\registry\src" -Recurse -Filter "mod.rs" | Where-Object { $_.FullName -match "tauri-bundler.*nsis.*mod.rs" } | Select-Object -First 1 -ExpandProperty FullName
       if ($bundlerPath) {
         (Get-Content $bundlerPath -Raw) -replace 'dirs::cache_dir\(\)\.unwrap\(\)\.join\("tauri"\)', 'std::path::PathBuf::from(r"C:\Users\yufei\AppData\Local").join("tauri")' | Set-Content $bundlerPath -NoNewline
         Write-Host "Patched tauri-bundler: $bundlerPath"
