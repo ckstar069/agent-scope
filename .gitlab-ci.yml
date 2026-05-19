@@ -156,22 +156,29 @@ build:windows:
     - echo "=== 安装前端依赖 ==="
     - npm ci
     - |
+      echo "=== 安装 cargo-tauri ==="
+      cargo install tauri-cli --force
       echo "=== 修复 Tauri bundler NSIS 缓存路径 ==="
       # LocalSystem 账户的 systemprofile 目录因安全限制无法启动 makensis 子进程。
-      # 修改 tauri-bundler 源代码，将 dirs::cache_dir() 硬编码为 yufei 用户目录。
-      $$bundlerPath = "C:\Users\yufei\.cargo\registry\src\index.crates.io-1949cf8c6b5b557f\tauri-bundler-2.9.1\src\bundle\windows\nsis\mod.rs"
-      if (Test-Path $$bundlerPath) {
-        $$content = Get-Content $$bundlerPath -Raw
-        $$content = $$content -replace 'dirs::cache_dir\(\)\.unwrap\(\)\.join\("tauri"\)', 'std::path::PathBuf::from(r"C:\Users\yufei\AppData\Local").join("tauri")'
-        Set-Content $$bundlerPath $$content -NoNewline
-        Write-Host "Patched tauri-bundler: $$bundlerPath"
+      # cargo install 会下载最新版 tauri-bundler 到 $CARGO_HOME/registry/src 中。
+      # 找到实际路径并 patch 源代码，然后重新编译。
+      $env:_regSrc = "$env:CARGO_HOME\registry\src"
+      $env:_idx = (Get-ChildItem -Path $env:_regSrc -Directory | Select-Object -First 1 -ExpandProperty FullName)
+      $env:_bundlerDir = (Get-ChildItem -Path $env:_idx -Directory -Filter "tauri-bundler-*" | Select-Object -First 1 -ExpandProperty FullName)
+      $env:_bundlerPath = "$env:_bundlerDir\src\bundle\windows\nsis\mod.rs"
+      Write-Host "Found tauri-bundler at: $env:_bundlerPath"
+      if (Test-Path $env:_bundlerPath) {
+        $env:_content = Get-Content $env:_bundlerPath -Raw
+        $env:_content = $env:_content -replace 'dirs::cache_dir\(\)\.unwrap\(\)\.join\("tauri"\)', 'std::path::PathBuf::from(r"C:\Users\yufei\AppData\Local").join("tauri")'
+        Set-Content $env:_bundlerPath $env:_content -NoNewline
+        Write-Host "Patched tauri-bundler"
       } else {
-        Write-Host "WARNING: Could not find tauri-bundler nsis/mod.rs at $$bundlerPath"
+        Write-Host "WARNING: Could not find tauri-bundler nsis/mod.rs"
       }
       echo "=== 重新编译 cargo-tauri（使用 patch 后的 tauri-bundler）==="
       cargo install tauri-cli --force
       echo "=== 将新编译的 cargo-tauri 前置到 PATH ==="
-      $env:Path = "$env:CI_PROJECT_DIR\.cargo\bin;$env:Path"
+      $env:Path = "$env:CARGO_HOME\bin;$env:Path"
       Get-Command cargo-tauri | Select-Object Source
   script:
     - echo "=== 构建前端 ==="
