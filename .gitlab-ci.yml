@@ -162,19 +162,18 @@ build:windows:
       # LocalSystem 账户的 systemprofile 目录因安全限制无法启动 makensis 子进程。
       # cargo install 会下载最新版 tauri-bundler 到 $CARGO_HOME/registry/src 中。
       # 找到实际路径并 patch 源代码，然后重新编译。
-      $env:_regSrc = "$env:CARGO_HOME\registry\src"
-      $env:_idx = (Get-ChildItem -Path $env:_regSrc -Directory | Select-Object -First 1 -ExpandProperty FullName)
-      $env:_bundlerDir = (Get-ChildItem -Path $env:_idx -Directory -Filter "tauri-bundler-*" | Select-Object -First 1 -ExpandProperty FullName)
-      $env:_bundlerPath = "$env:_bundlerDir\src\bundle\windows\nsis\mod.rs"
-      Write-Host "Found tauri-bundler at: $env:_bundlerPath"
-      if (Test-Path $env:_bundlerPath) {
-        $content = Get-Content $env:_bundlerPath -Raw
+      # 使用递归搜索查找 nsis/mod.rs，避免目录结构假设
+      $modFile = Get-ChildItem -Path "$env:CARGO_HOME\registry\src" -Recurse -Filter "mod.rs" | Where-Object { $_.FullName -like "*nsis*" } | Select-Object -First 1
+      if ($modFile) {
+        $bundlerPath = $modFile.FullName
+        Write-Host "Found tauri-bundler at: $bundlerPath"
+        $content = Get-Content $bundlerPath -Raw
         # 使用简单字符串替换（非正则），避免转义问题
         $old = 'dirs::cache_dir().unwrap().join("tauri")'
         $new = 'std::path::PathBuf::from(r"C:\Users\yufei\AppData\Local").join("tauri")'
         if ($content.Contains($old)) {
           $content = $content.Replace($old, $new)
-          Set-Content -Path $env:_bundlerPath -Value $content -NoNewline
+          Set-Content -Path $bundlerPath -Value $content -NoNewline
           Write-Host "Patched tauri-bundler"
         } else {
           Write-Host "WARNING: Could not find target string in mod.rs"
