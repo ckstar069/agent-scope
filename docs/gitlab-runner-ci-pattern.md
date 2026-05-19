@@ -165,6 +165,10 @@ Windows Shell executor 特点：
 - 缓存路径使用 `\\` 分隔符
 - 需要预装构建工具链（MSVC、Node.js、Rust 等）
 
+⚠️ **重要限制**：GitLab Runner 18.x 的 PowerShell executor 在处理 annotated tag（含 `-a` / `-m` 的 tag）时，会将 tag message 注入到生成的 PowerShell 脚本中。若 tag message 包含中文字符或特殊符号，会导致 `get_sources` 阶段出现 `ParserError`（如"字符串缺少终止符"、"块语句中缺少右大括号"），job 在 `before_script` 之前即失败。
+
+**解决方案**：Windows CI 发布必须使用 **lightweight tag**（即 `git tag v0.2.1`，**禁止**使用 `git tag -a v0.2.1 -m "..."`）。
+
 建议：
 
 - 稳定期先用 `concurrent = 1`，避免多个重型 job 同时争抢 CPU、内存、磁盘和 Docker。
