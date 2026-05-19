@@ -177,6 +177,8 @@ build:windows:
         if ($content.Contains($old)) {
           $content = $content.Replace($old, $new)
           Set-Content -Path $bundlerPath -Value $content -NoNewline
+          # 修改文件时间戳，强制 Cargo 重新编译 tauri-bundler
+          (Get-Item $bundlerPath).LastWriteTime = Get-Date
           Write-Host "Patched tauri-bundler"
         } else {
           Write-Host "WARNING: Could not find target string in mod.rs"
