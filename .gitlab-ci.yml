@@ -141,75 +141,57 @@ build:windows:
       - .cargo/git/
   before_script:
     - |
+      $ErrorActionPreference = "Stop"
       echo "=== 配置环境变量 ==="
       $env:Path += ";C:\Users\yufei\.cargo\bin"
       rustup default stable
+      if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
       cargo --version
+      if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
       echo "=== 添加 NSIS 到 PATH ==="
       $env:Path = "C:\PROGRA~2\NSIS\Bin;$env:Path"
       Get-Command makensis | Select-Object Source
       makensis -VERSION
+      if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
     - echo "=== 同步版本号 ==="
     - |
+      $ErrorActionPreference = "Stop"
       $VERSION = $env:CI_COMMIT_TAG -replace '^v',''
       Write-Host "Tag: $env:CI_COMMIT_TAG -> Version: $VERSION"
       node -e "const fs=require('fs'); const f='package.json'; const p=JSON.parse(fs.readFileSync(f)); p.version='$VERSION'; fs.writeFileSync(f, JSON.stringify(p,null,2)+'\n'); console.log('Updated', f, '->', p.version);"
+      if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
       (Get-Content src-tauri/Cargo.toml -Raw) -replace '^version = ".*"', "version = `"$VERSION`"" | Set-Content src-tauri/Cargo.toml -NoNewline
       Write-Host "Updated src-tauri/Cargo.toml -> $VERSION"
     - echo "=== 安装前端依赖 ==="
     - npm ci
     - |
+      $ErrorActionPreference = "Stop"
       echo "=== 安装 cargo-tauri ==="
       cargo install tauri-cli --force
-      echo "=== 修复 Tauri bundler NSIS 缓存路径 ==="
-      # LocalSystem 账户的 systemprofile 目录因安全限制无法启动 makensis 子进程。
-      # cargo install 会下载最新版 tauri-bundler 到 $CARGO_HOME/registry/src 中。
-      # 找到实际路径并 patch 源代码，然后重新编译。
-      # 调试：列出 registry/src 结构
-      Write-Host "=== DEBUG: registry/src structure ==="
-      Get-ChildItem -Path "$env:CARGO_HOME\registry\src" -Recurse -Depth 2 | ForEach-Object { Write-Host $_.FullName }
-      # 方法1：使用 glob 模式直接定位（最可靠）
-      $modFile = Get-ChildItem -Path "$env:CARGO_HOME\registry\src" -Recurse -Filter "mod.rs" -ErrorAction SilentlyContinue | Where-Object { $_.FullName -like "*nsis*" } | Select-Object -First 1
-      # 方法2：如果方法1失败，尝试搜索包含目标字符串的任意 .rs 文件
-      if (-not $modFile) {
-        Write-Host "Method 1 failed, trying method 2 (content search)..."
-        $modFile = Get-ChildItem -Path "$env:CARGO_HOME\registry\src" -Recurse -Include "*.rs" -ErrorAction SilentlyContinue | Select-String -Pattern 'dirs::cache_dir\(\)\.unwrap\(\)\.join\("tauri"\)' | Select-Object -First 1 | ForEach-Object { Get-Item $_.Path }
-      }
-      if ($modFile) {
-        $bundlerPath = $modFile.FullName
-        Write-Host "Found tauri-bundler at: $bundlerPath"
-        $content = Get-Content $bundlerPath -Raw
-        # 使用简单字符串替换（非正则），避免转义问题
-        $old = 'dirs::cache_dir().unwrap().join("tauri")'
-        $new = 'std::path::PathBuf::from(r"C:\Users\yufei\AppData\Local").join("tauri")'
-        if ($content.Contains($old)) {
-          $content = $content.Replace($old, $new)
-          Set-Content -Path $bundlerPath -Value $content -NoNewline
-          # 修改文件时间戳，强制 Cargo 重新编译 tauri-bundler
-          (Get-Item $bundlerPath).LastWriteTime = Get-Date
-          Write-Host "Patched tauri-bundler"
-        } else {
-          Write-Host "WARNING: Could not find target string in mod.rs"
-        }
-      } else {
-        Write-Host "WARNING: Could not find tauri-bundler nsis/mod.rs"
-      }
-      echo "=== 重新编译 cargo-tauri（使用 patch 后的 tauri-bundler）==="
-      cargo install tauri-cli --force
-      echo "=== 将新编译的 cargo-tauri 前置到 PATH ==="
+      if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
       $env:Path = "$env:CARGO_HOME\bin;$env:Path"
       Get-Command cargo-tauri | Select-Object Source
   script:
     - echo "=== 构建前端 ==="
     - npm run build
     - |
+      $ErrorActionPreference = "Stop"
       echo "=== 配置构建环境 ==="
       $env:Path = "C:\Program Files (x86)\NSIS\Bin;$env:CI_PROJECT_DIR\.cargo\bin;C:\Users\yufei\.cargo\bin;$env:Path"
       Get-Command makensis | Select-Object Source
       makensis -VERSION
+      if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
       Get-Command cargo-tauri | Select-Object Source
       echo "=== 构建 Windows 桌面应用 ==="
       cargo tauri build --target x86_64-pc-windows-msvc
+      if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+      echo "=== 校验 NSIS 安装包产物 ==="
+      $NSIS = Get-ChildItem "src-tauri/target/x86_64-pc-windows-msvc/release/bundle/nsis/*.exe" -ErrorAction SilentlyContinue
+      if (-not $NSIS) {
+        Write-Error "NSIS installer not found; failing build"
+        exit 1
+      }
+      Write-Host "Found NSIS installer: $($NSIS.FullName)"
       echo "=== 打包 Portable 免安装版 ==="
       $VERSION = $env:CI_COMMIT_TAG -replace '^v',''
       $TARGET = "x86_64-pc-windows-msvc"
@@ -219,6 +201,13 @@ build:windows:
       New-Item -ItemType Directory -Path $PORTABLE_DIR -Force | Out-Null
       Compress-Archive -Path "$RELEASE_DIR/agent-scope.exe" -DestinationPath "$PORTABLE_DIR/$ZIP_NAME" -Force
       Write-Host "Created portable: $PORTABLE_DIR/$ZIP_NAME"
+      echo "=== 校验 Portable zip 产物 ==="
+      $ZIP = Get-ChildItem "src-tauri/target/x86_64-pc-windows-msvc/release/bundle/portable/*.zip" -ErrorAction SilentlyContinue
+      if (-not $ZIP) {
+        Write-Error "Portable zip not found; failing build"
+        exit 1
+      }
+      Write-Host "Found portable zip: $($ZIP.FullName)"
   artifacts:
     when: on_success
     paths:
@@ -259,6 +248,13 @@ release:
     - |
       VERSION=${CI_COMMIT_TAG#v}
       PKG_URL="${CI_API_V4_URL}/projects/${CI_PROJECT_ID}/packages/generic/agent-scope/${VERSION}"
+
+      missing=0
+      [ -z "$DEB" ] && echo "Missing Linux deb" && missing=1
+      [ -z "$APPIMAGE" ] && echo "Missing Linux AppImage" && missing=1
+      [ -z "$EXE" ] && echo "Missing Windows NSIS exe" && missing=1
+      [ -z "$ZIP" ] && echo "Missing Windows portable zip" && missing=1
+      [ "$missing" -ne 0 ] && echo "FATAL: one or more required artifacts missing" && exit 1
 
       upload_pkg() {
         local file="$1"
