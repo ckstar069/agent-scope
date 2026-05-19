@@ -165,8 +165,16 @@ build:windows:
       # LocalSystem 账户的 systemprofile 目录因安全限制无法启动 makensis 子进程。
       # cargo install 会下载最新版 tauri-bundler 到 $CARGO_HOME/registry/src 中。
       # 找到实际路径并 patch 源代码，然后重新编译。
-      # 使用递归搜索查找 nsis/mod.rs，避免目录结构假设
-      $modFile = Get-ChildItem -Path "$env:CARGO_HOME\registry\src" -Recurse -Filter "mod.rs" | Where-Object { $_.FullName -like "*nsis*" } | Select-Object -First 1
+      # 调试：列出 registry/src 结构
+      Write-Host "=== DEBUG: registry/src structure ==="
+      Get-ChildItem -Path "$env:CARGO_HOME\registry\src" -Recurse -Depth 2 | ForEach-Object { Write-Host $_.FullName }
+      # 方法1：使用 glob 模式直接定位（最可靠）
+      $modFile = Get-ChildItem -Path "$env:CARGO_HOME\registry\src" -Recurse -Filter "mod.rs" -ErrorAction SilentlyContinue | Where-Object { $_.FullName -like "*nsis*" } | Select-Object -First 1
+      # 方法2：如果方法1失败，尝试搜索包含目标字符串的任意 .rs 文件
+      if (-not $modFile) {
+        Write-Host "Method 1 failed, trying method 2 (content search)..."
+        $modFile = Get-ChildItem -Path "$env:CARGO_HOME\registry\src" -Recurse -Include "*.rs" -ErrorAction SilentlyContinue | Select-String -Pattern 'dirs::cache_dir\(\)\.unwrap\(\)\.join\("tauri"\)' | Select-Object -First 1 | ForEach-Object { Get-Item $_.Path }
+      }
       if ($modFile) {
         $bundlerPath = $modFile.FullName
         Write-Host "Found tauri-bundler at: $bundlerPath"
