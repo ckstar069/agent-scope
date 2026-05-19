@@ -120,6 +120,9 @@ build:windows:
     CARGO_HOME: "$CI_PROJECT_DIR\\.cargo"
     npm_config_cache: "$CI_PROJECT_DIR\\.npm"
     GIT_STRATEGY: clone
+    # 覆盖 commit 相关变量，避免 PowerShell executor 因多行 commit message 解析失败
+    CI_COMMIT_DESCRIPTION: ""
+    CI_COMMIT_MESSAGE: ""
     CI_COMMIT_AUTHOR: "ckstar"
     GIT_COMMITTER_NAME: "ckstar"
     GIT_COMMITTER_EMAIL: "ckstar@localhost"
