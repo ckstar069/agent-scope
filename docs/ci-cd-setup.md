@@ -1058,12 +1058,18 @@ stages:
    ```
 4. 推送测试 tag（pre-release tag，仅触发 build 不触发 release）：
    ```bash
-   git tag v0.2.1-test
-   git push origin v0.2.1-test
+   scripts/release-tag.sh v0.2.1-test
    ```
-   > **注意**：`.gitlab-ci.yml` 中 `release` job 的规则仅匹配严格三段式版本号（如 `v0.2.1`）。带后缀的 pre-release tag（如 `v0.2.1-test`）只会触发 `build:linux` 和 `build:windows`，**不会**创建 GitLab Release。如需测试完整 release 流程，应使用 `git tag v0.2.1 && git push origin v0.2.1`。
+   > **注意**：`.gitlab-ci.yml` 中 `release` job 的规则仅匹配严格三段式版本号（如 `v0.2.1`）。带后缀的 pre-release tag（如 `v0.2.1-test`）只会触发 `build:linux` 和 `build:windows`，**不会**创建 GitLab Release。
+   >
+   > `scripts/release-tag.sh` 只创建 **lightweight tag**，自动校验格式、检查本地/远端 tag 是否已存在，并避免误用 annotated tag 导致 Windows Runner PowerShell ParserError。
 5. 在 GitLab 查看流水线状态，确认 `build:linux` 和 `build:windows` 成功并产出 artifact
-6. 如需测试完整 release 流程，使用严格版本号 tag（如 `v0.2.11`）推送，确认 `release` job 成功并创建 GitLab Release
+6. 如需测试完整 release 流程，使用严格版本号 tag 推送，确认 `release` job 成功并创建 GitLab Release：
+   ```bash
+   scripts/release-tag.sh v0.2.15
+   # 或指定 commit
+   scripts/release-tag.sh v0.2.15 6bc23fa
+   ```
 7. 删除测试 tag：
    ```bash
    git push --delete origin v0.2.1-test
@@ -1191,9 +1197,10 @@ ParserError: UnexpectedToken
 
 **推荐（Windows CI 参与时）**：
 ```bash
-# lightweight tag — 必须用于 Windows 构建
-git tag v0.2.15 6bc23fa
-git push origin v0.2.15
+# 使用 release-tag.sh 脚本（自动校验格式、检查 tag 是否已存在、只创建 lightweight tag）
+scripts/release-tag.sh v0.2.15
+# 或指定 commit
+scripts/release-tag.sh v0.2.15 6bc23fa
 ```
 
 **禁止（Windows CI 参与时）**：

@@ -167,7 +167,26 @@ Windows Shell executor 特点：
 
 ⚠️ **重要限制**：GitLab Runner 18.x 的 PowerShell executor 在处理 annotated tag（含 `-a` / `-m` 的 tag）时，会将 tag message 注入到生成的 PowerShell 脚本中。若 tag message 包含中文字符或特殊符号，会导致 `get_sources` 阶段出现 `ParserError`（如"字符串缺少终止符"、"块语句中缺少右大括号"），job 在 `before_script` 之前即失败。
 
-**解决方案**：Windows CI 发布必须使用 **lightweight tag**（即 `git tag v0.2.1`，**禁止**使用 `git tag -a v0.2.1 -m "..."`）。
+**解决方案**：Windows CI 发布必须使用 **lightweight tag**。推荐使用项目提供的脚本：
+
+```bash
+# 自动校验格式、检查 tag 是否已存在、只创建 lightweight tag
+scripts/release-tag.sh v0.2.1
+# 或指定 commit
+scripts/release-tag.sh v0.2.1 6bc23fa
+```
+
+手动方式（仅作参考，不推荐）：
+```bash
+git tag v0.2.1 6bc23fa
+git push origin v0.2.1
+```
+
+**禁止使用** annotated tag：
+```bash
+# 错误：会导致 Windows Runner PowerShell ParserError
+git tag -a v0.2.1 -m "..."
+```
 
 建议：
 
