@@ -1,42 +1,61 @@
 import type { ReactNode } from "react";
 import { useState } from "react";
 
-import type { AppRoute } from "@/App";
+import type { AppDomain } from "@/App";
 import { ScrollArea } from "@/components/ui/scroll-area";
 import { cn } from "@/lib/utils";
 import { useTheme } from "@/hooks/useTheme";
 
 import { Sidebar } from "./Sidebar";
+import { TopNav } from "./TopNav";
 
 interface LayoutProps {
-  activeRoute: AppRoute;
+  activeDomain: AppDomain;
+  activePage: string;
+  selectedProject: string;
+  onDomainChange: (domain: AppDomain) => void;
+  onProjectPageChange: (page: string) => void;
+  onMonitoringPageChange: (page: string) => void;
+  onSettingsPageChange: (page: string) => void;
+  onSelectProject: (projectPath: string) => void;
   children: ReactNode;
-  onRouteChange: (route: AppRoute) => void;
 }
 
-export function Layout({ activeRoute, children, onRouteChange }: LayoutProps) {
+export function Layout({
+  activeDomain,
+  activePage,
+  selectedProject,
+  onDomainChange,
+  onProjectPageChange,
+  onMonitoringPageChange,
+  onSettingsPageChange,
+  onSelectProject,
+  children,
+}: LayoutProps) {
   const [isSidebarExpanded, setIsSidebarExpanded] = useState(true);
-  useTheme(); // 初始化主题（应用 localStorage 或系统偏好）
+  useTheme();
 
   return (
-    <div className="flex h-screen overflow-hidden bg-background text-foreground">
-      <Sidebar
-        activeRoute={activeRoute}
-        isExpanded={isSidebarExpanded}
-        onRouteChange={onRouteChange}
-        onToggle={() => setIsSidebarExpanded((current) => !current)}
-      />
-      <main className="flex min-w-0 flex-1 flex-col bg-background">
-        <ScrollArea className="h-full">
-          <div
-            className={cn(
-              "min-h-screen p-4 sm:p-6 lg:p-8",
-            )}
-          >
-            {children}
-          </div>
-        </ScrollArea>
-      </main>
+    <div className="flex h-screen flex-col overflow-hidden bg-background text-foreground">
+      <TopNav activeDomain={activeDomain} onDomainChange={onDomainChange} />
+      <div className="flex min-h-0 flex-1">
+        <Sidebar
+          activeDomain={activeDomain}
+          activePage={activePage}
+          selectedProject={selectedProject}
+          isExpanded={isSidebarExpanded}
+          onToggle={() => setIsSidebarExpanded((current) => !current)}
+          onProjectPageChange={onProjectPageChange}
+          onMonitoringPageChange={onMonitoringPageChange}
+          onSettingsPageChange={onSettingsPageChange}
+          onSelectProject={onSelectProject}
+        />
+        <main className="flex min-w-0 flex-1 flex-col bg-background">
+          <ScrollArea className="h-full">
+            <div className={cn("min-h-full p-4 sm:p-6 lg:p-8")}>{children}</div>
+          </ScrollArea>
+        </main>
+      </div>
     </div>
   );
 }

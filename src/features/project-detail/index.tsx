@@ -3,7 +3,6 @@ import { useEffect, useMemo, useRef, useState } from "react";
 import {
   AlertCircle,
   ArrowDown,
-  ArrowLeft,
   ArrowRight,
   BookOpen,
   CheckCircle2,
@@ -21,7 +20,6 @@ import {
   SlidersHorizontal,
 } from "lucide-react";
 
-import { Button } from "@/components/ui/button";
 import { Collapsible, CollapsibleContent } from "@/components/ui/collapsible";
 import { ProjectMemoryPanel } from "@/components/ProjectMemoryPanel";
 import { ScrollArea } from "@/components/ui/scroll-area";
@@ -199,7 +197,7 @@ function classifyGitError(message: string) {
   return { title: "Git 状态读取失败", tone: "destructive" as const };
 }
 
-export function ProjectDetail({ projectPath = "", onSelectProject, onBack }: ProjectDetailProps) {
+export function ProjectDetail({ projectPath = "", onSelectProject }: ProjectDetailProps) {
   const { invoke, listen } = useTauri();
   const [data, setData] = useState<TemplateDataPayload | null>(null);
   const [isLoading, setIsLoading] = useState(false);
@@ -297,14 +295,6 @@ export function ProjectDetail({ projectPath = "", onSelectProject, onBack }: Pro
     <section className="space-y-6">
       <div className="flex flex-col gap-4 lg:flex-row lg:items-end lg:justify-between">
         <div className="space-y-2">
-          <div className="flex items-center gap-2">
-            {onBack && (
-              <Button type="button" variant="ghost" size="sm" className="h-8 px-2 text-foreground/70" onClick={onBack}>
-                <ArrowLeft className="size-4" aria-hidden="true" />
-                返回仪表盘
-              </Button>
-            )}
-          </div>
           <h1 className="text-3xl font-semibold tracking-tight">项目详情</h1>
           <p className="max-w-3xl break-all text-sm text-foreground/70">{projectPath}</p>
         </div>

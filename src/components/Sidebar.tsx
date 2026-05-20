@@ -1,73 +1,115 @@
-import { Bot, History, LayoutDashboard, PanelLeftClose, PanelLeftOpen, Settings } from "lucide-react";
+import { useCallback, useEffect, useMemo, useState } from "react";
+import {
+  Bot,
+  FolderKanban,
+  History,
+  LayoutDashboard,
+  PanelLeftClose,
+  PanelLeftOpen,
+  Settings,
+} from "lucide-react";
 
-import type { AppRoute } from "@/App";
+import type { AppDomain } from "@/App";
 import { Button } from "@/components/ui/button";
-import { ThemeToggle } from "@/components/ThemeToggle";
+import { ScrollArea } from "@/components/ui/scroll-area";
+import { useTauri } from "@/hooks/useTauri";
 import { cn } from "@/lib/utils";
+import type { ProjectEntry } from "@/lib/types";
+
+import { ThemeToggle } from "./ThemeToggle";
 
 interface SidebarProps {
-  activeRoute: AppRoute;
+  activeDomain: AppDomain;
+  activePage: string;
+  selectedProject: string;
   isExpanded: boolean;
-  onRouteChange: (route: AppRoute) => void;
   onToggle: () => void;
+  onProjectPageChange: (page: string) => void;
+  onMonitoringPageChange: (page: string) => void;
+  onSettingsPageChange: (page: string) => void;
+  onSelectProject: (projectPath: string) => void;
 }
 
-const navigationItems: Array<{
-  icon: typeof LayoutDashboard;
-  label: string;
-  route: AppRoute;
-}> = [
-  { icon: LayoutDashboard, label: "仪表盘", route: "dashboard" },
-  { icon: Bot, label: "代理监控", route: "agents" },
-  { icon: History, label: "会话管理", route: "claude-history" },
-  { icon: Settings, label: "设置", route: "settings" },
-];
+const collator = new Intl.Collator("zh-CN", { numeric: true, sensitivity: "base" });
 
-export function Sidebar({ activeRoute, isExpanded, onRouteChange, onToggle }: SidebarProps) {
+export function Sidebar({
+  activeDomain,
+  activePage,
+  selectedProject,
+  isExpanded,
+  onToggle,
+  onProjectPageChange,
+  onMonitoringPageChange,
+  onSettingsPageChange,
+  onSelectProject,
+}: SidebarProps) {
+  const { invoke } = useTauri();
+  const [projects, setProjects] = useState<ProjectEntry[]>([]);
+
+  const loadProjects = useCallback(async () => {
+    try {
+      const entries = await invoke<ProjectEntry[]>("list_projects");
+      setProjects(entries);
+    } catch {
+      // 静默失败，侧边栏不阻断主流程
+    }
+  }, [invoke]);
+
+  useEffect(() => {
+    loadProjects();
+    const interval = setInterval(loadProjects, 10_000);
+    return () => clearInterval(interval);
+  }, [loadProjects]);
+
+  const sortedProjects = useMemo(() => [...projects].sort((a, b) => collator.compare(a.path, b.path)), [projects]);
+
   return (
     <aside
       className={cn(
-        "flex h-screen shrink-0 flex-col border-r border-sidebar-border bg-sidebar text-sidebar-foreground transition-[width] duration-200",
+        "flex h-full shrink-0 flex-col border-r border-sidebar-border bg-sidebar text-sidebar-foreground transition-[width] duration-200",
         isExpanded ? "w-[var(--sidebar-width-expanded)]" : "w-[var(--sidebar-width-collapsed)]",
       )}
     >
-      <div className="flex h-14 items-center gap-3 border-b border-sidebar-border px-3">
-        <div className="flex size-8 shrink-0 items-center justify-center rounded-md bg-primary text-primary-foreground">
-          <LayoutDashboard className="size-4" aria-hidden="true" />
-        </div>
+      {/* 域标识 */}
+      <div className="flex h-10 items-center gap-2 border-b border-sidebar-border px-3">
         {isExpanded && (
-          <div className="min-w-0">
-            <p className="truncate text-sm font-semibold">AgentScope</p>
-          </div>
+          <p className="truncate text-xs font-medium text-sidebar-foreground/60">
+            {activeDomain === "projects" && "项目监控"}
+            {activeDomain === "monitoring" && "通用监控"}
+            {activeDomain === "settings" && "设置"}
+          </p>
         )}
       </div>
 
-      <nav className="flex flex-1 flex-col gap-0.5 p-2" aria-label="主导航">
-        {navigationItems.map((item) => {
-          const Icon = item.icon;
-          const isActive = activeRoute === item.route;
-
-          return (
-            <Button
-              key={item.route}
-              type="button"
-              variant="ghost"
-              className={cn(
-                "h-9 justify-start gap-3 rounded-md px-3 text-sidebar-foreground/80 hover:bg-sidebar-accent hover:text-sidebar-foreground",
-                !isExpanded && "justify-center px-0",
-                isActive && "bg-sidebar-accent text-sidebar-accent-foreground font-medium",
-              )}
-              aria-current={isActive ? "page" : undefined}
-              title={!isExpanded ? item.label : undefined}
-              onClick={() => onRouteChange(item.route)}
-            >
-              <Icon className="size-4 shrink-0" aria-hidden="true" />
-              {isExpanded && <span className="text-sm">{item.label}</span>}
-            </Button>
-          );
-        })}
+      {/* 子导航内容 */}
+      <nav className="flex flex-1 flex-col gap-0.5 overflow-hidden p-2" aria-label="子导航">
+        {activeDomain === "projects" && (
+          <ProjectSidebarContent
+            isExpanded={isExpanded}
+            activePage={activePage}
+            selectedProject={selectedProject}
+            projects={sortedProjects}
+            onPageChange={onProjectPageChange}
+            onSelectProject={onSelectProject}
+          />
+        )}
+        {activeDomain === "monitoring" && (
+          <MonitoringSidebarContent
+            isExpanded={isExpanded}
+            activePage={activePage}
+            onPageChange={onMonitoringPageChange}
+          />
+        )}
+        {activeDomain === "settings" && (
+          <SettingsSidebarContent
+            isExpanded={isExpanded}
+            activePage={activePage}
+            onPageChange={onSettingsPageChange}
+          />
+        )}
       </nav>
 
+      {/* 底部工具 */}
       <div className="border-t border-sidebar-border p-2">
         <div className={cn("flex items-center gap-1", !isExpanded && "justify-center")}>
           <ThemeToggle />
@@ -95,4 +137,168 @@ export function Sidebar({ activeRoute, isExpanded, onRouteChange, onToggle }: Si
       </div>
     </aside>
   );
+}
+
+/* ─── 项目监控域侧边栏 ─── */
+function ProjectSidebarContent({
+  isExpanded,
+  activePage,
+  selectedProject,
+  projects,
+  onPageChange,
+  onSelectProject,
+}: {
+  isExpanded: boolean;
+  activePage: string;
+  selectedProject: string;
+  projects: ProjectEntry[];
+  onPageChange: (page: string) => void;
+  onSelectProject: (path: string) => void;
+}) {
+  const isOverview = activePage === "overview";
+
+  return (
+    <>
+      <SidebarButton
+        icon={LayoutDashboard}
+        label="项目概览"
+        isExpanded={isExpanded}
+        isActive={isOverview}
+        onClick={() => onPageChange("overview")}
+      />
+
+      {isExpanded && projects.length > 0 && (
+        <div className="my-1 h-px bg-sidebar-border/50" />
+      )}
+
+      {isExpanded && projects.length > 0 && (
+        <ScrollArea className="flex-1">
+          <div className="space-y-0.5">
+            {projects.map((project) => {
+              const isActive = activePage === "detail" && selectedProject === project.path;
+              const name = getProjectName(project.path);
+              return (
+                <button
+                  key={project.path}
+                  type="button"
+                  onClick={() => {
+                    onSelectProject(project.path);
+                  }}
+                  className={cn(
+                    "flex w-full items-center gap-2 rounded-md px-3 py-1.5 text-left text-sm transition-colors",
+                    isActive
+                      ? "bg-sidebar-accent text-sidebar-accent-foreground font-medium"
+                      : "text-sidebar-foreground/70 hover:bg-sidebar-accent/50 hover:text-sidebar-foreground",
+                  )}
+                  title={project.path}
+                >
+                  <FolderKanban className="size-3.5 shrink-0" aria-hidden="true" />
+                  <span className="truncate">{name}</span>
+                </button>
+              );
+            })}
+          </div>
+        </ScrollArea>
+      )}
+    </>
+  );
+}
+
+/* ─── 通用监控域侧边栏 ─── */
+function MonitoringSidebarContent({
+  isExpanded,
+  activePage,
+  onPageChange,
+}: {
+  isExpanded: boolean;
+  activePage: string;
+  onPageChange: (page: string) => void;
+}) {
+  const items = [
+    { id: "agents", label: "Agent 监控", icon: Bot },
+    { id: "claude-history", label: "会话管理", icon: History },
+  ] as const;
+
+  return (
+    <>
+      {items.map((item) => (
+        <SidebarButton
+          key={item.id}
+          icon={item.icon}
+          label={item.label}
+          isExpanded={isExpanded}
+          isActive={activePage === item.id}
+          onClick={() => onPageChange(item.id)}
+        />
+      ))}
+    </>
+  );
+}
+
+/* ─── 设置域侧边栏 ─── */
+function SettingsSidebarContent({
+  isExpanded,
+  activePage,
+  onPageChange,
+}: {
+  isExpanded: boolean;
+  activePage: string;
+  onPageChange: (page: string) => void;
+}) {
+  const items = [
+    { id: "project", label: "项目设置", icon: FolderKanban },
+    { id: "general", label: "通用设置", icon: Settings },
+  ] as const;
+
+  return (
+    <>
+      {items.map((item) => (
+        <SidebarButton
+          key={item.id}
+          icon={item.icon}
+          label={item.label}
+          isExpanded={isExpanded}
+          isActive={activePage === item.id}
+          onClick={() => onPageChange(item.id)}
+        />
+      ))}
+    </>
+  );
+}
+
+/* ─── 通用侧边栏按钮 ─── */
+function SidebarButton({
+  icon: Icon,
+  label,
+  isExpanded,
+  isActive,
+  onClick,
+}: {
+  icon: typeof LayoutDashboard;
+  label: string;
+  isExpanded: boolean;
+  isActive: boolean;
+  onClick: () => void;
+}) {
+  return (
+    <Button
+      type="button"
+      variant="ghost"
+      className={cn(
+        "h-9 justify-start gap-3 rounded-md px-3 text-sidebar-foreground/80 hover:bg-sidebar-accent hover:text-sidebar-foreground",
+        !isExpanded && "justify-center px-0",
+        isActive && "bg-sidebar-accent text-sidebar-accent-foreground font-medium",
+      )}
+      title={!isExpanded ? label : undefined}
+      onClick={onClick}
+    >
+      <Icon className="size-4 shrink-0" aria-hidden="true" />
+      {isExpanded && <span className="text-sm">{label}</span>}
+    </Button>
+  );
+}
+
+function getProjectName(path: string) {
+  const segments = path.split(/[\\/]/).filter(Boolean);
+  return segments[segments.length - 1] ?? path;
 }

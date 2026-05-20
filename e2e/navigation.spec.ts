@@ -3,8 +3,8 @@ import { test, expect } from "@playwright/test";
 /**
  * Navigation E2E 测试
  *
- * 测试侧边栏导航切换路由功能。
- * 验证四个面板都能正确渲染。
+ * 测试顶部大域导航 + 侧边栏子导航的切换功能。
+ * 验证三个大域及子页面都能正确渲染。
  */
 
 test.describe("Navigation", () => {
@@ -12,53 +12,59 @@ test.describe("Navigation", () => {
     await page.goto("/");
   });
 
-  test("默认路由为仪表盘", async ({ page }) => {
+  test("默认路由为项目监控域的项目概览", async ({ page }) => {
     await expect(page.getByRole("heading", { name: "项目仪表盘" })).toBeVisible();
   });
 
-  test("侧边栏四个导航按钮都存在", async ({ page }) => {
-    const nav = page.locator('nav[aria-label="主导航"]');
-    await expect(nav.getByRole("button", { name: "仪表盘" })).toBeVisible();
-    await expect(nav.getByRole("button", { name: "代理监控" })).toBeVisible();
-    await expect(nav.getByRole("button", { name: "会话管理" })).toBeVisible();
-    await expect(nav.getByRole("button", { name: "设置" })).toBeVisible();
+  test("顶部三个大域导航按钮都存在", async ({ page }) => {
+    const topNav = page.locator('nav[aria-label="大域导航"]');
+    await expect(topNav.getByRole("button", { name: "项目监控" })).toBeVisible();
+    await expect(topNav.getByRole("button", { name: "通用监控" })).toBeVisible();
+    await expect(topNav.getByRole("button", { name: "设置" })).toBeVisible();
   });
 
-  test("导航到仪表盘显示正确内容", async ({ page }) => {
-    // 先切到其他路由再切回
-    await page.locator('nav[aria-label="主导航"]').getByRole("button", { name: "设置" }).click();
-    await page.locator('nav[aria-label="主导航"]').getByRole("button", { name: "仪表盘" }).click();
-
-    await expect(page.getByRole("heading", { name: "项目仪表盘" })).toBeVisible();
+  test("项目监控域侧边栏显示项目概览和项目列表", async ({ page }) => {
+    const subNav = page.locator('nav[aria-label="子导航"]');
+    await expect(subNav.getByRole("button", { name: "项目概览" })).toBeVisible();
   });
 
-  test("导航到代理监控显示正确内容", async ({ page }) => {
-    await page.locator('nav[aria-label="主导航"]').getByRole("button", { name: "代理监控" }).click();
+  test("切换到通用监控域显示 Agent 监控", async ({ page }) => {
+    await page.locator('nav[aria-label="大域导航"]').getByRole("button", { name: "通用监控" }).click();
 
+    // 侧边栏应显示子导航项
+    const subNav = page.locator('nav[aria-label="子导航"]');
+    await expect(subNav.getByRole("button", { name: "Agent 监控" })).toBeVisible();
+    await expect(subNav.getByRole("button", { name: "会话管理" })).toBeVisible();
+
+    // 默认显示 Agent 监控内容
     await expect(page.getByRole("heading", { name: "Agent 监控" })).toBeVisible();
   });
 
-  test("导航到会话管理显示正确内容", async ({ page }) => {
-    await page.locator('nav[aria-label="主导航"]').getByRole("button", { name: "会话管理" }).click();
+  test("通用监控域可切换到会话管理", async ({ page }) => {
+    await page.locator('nav[aria-label="大域导航"]').getByRole("button", { name: "通用监控" }).click();
+    await page.locator('nav[aria-label="子导航"]').getByRole("button", { name: "会话管理" }).click();
 
     await expect(page.getByRole("heading", { name: "会话管理" })).toBeVisible();
   });
 
-  test("导航到设置显示正确内容", async ({ page }) => {
-    await page.locator('nav[aria-label="主导航"]').getByRole("button", { name: "设置" }).click();
+  test("切换到设置域显示项目设置", async ({ page }) => {
+    await page.locator('nav[aria-label="大域导航"]').getByRole("button", { name: "设置" }).click();
 
+    // 侧边栏应显示子导航项
+    const subNav = page.locator('nav[aria-label="子导航"]');
+    await expect(subNav.getByRole("button", { name: "项目设置" })).toBeVisible();
+    await expect(subNav.getByRole("button", { name: "通用设置" })).toBeVisible();
+
+    // 默认显示项目设置内容
     await expect(page.getByRole("heading", { name: "设置" })).toBeVisible();
   });
 
-  test("活动路由按钮有 aria-current='page'", async ({ page }) => {
-    const nav = page.locator('nav[aria-label="主导航"]');
+  test("设置域可切换到通用设置", async ({ page }) => {
+    await page.locator('nav[aria-label="大域导航"]').getByRole("button", { name: "设置" }).click();
+    await page.locator('nav[aria-label="子导航"]').getByRole("button", { name: "通用设置" }).click();
 
-    // 仪表盘默认激活
-    await expect(nav.getByRole("button", { name: "仪表盘" })).toHaveAttribute("aria-current", "page");
-
-    await nav.getByRole("button", { name: "设置" }).click();
-    await expect(nav.getByRole("button", { name: "设置" })).toHaveAttribute("aria-current", "page");
-    await expect(nav.getByRole("button", { name: "仪表盘" })).not.toHaveAttribute("aria-current", "page");
+    await expect(page.getByText("界面字号")).toBeVisible();
+    await expect(page.getByText("界面主题")).toBeVisible();
   });
 
   test("侧边栏折叠/展开按钮存在", async ({ page }) => {

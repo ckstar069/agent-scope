@@ -1,6 +1,6 @@
 import type { CSSProperties } from "react";
 import { useEffect, useMemo, useState } from "react";
-import { Activity, AlertTriangle, Bot, CheckCircle2, ChevronRight, Clock, FileWarning, FolderKanban, FolderPlus, GitBranch, Loader2, Plus, TrendingUp, Zap } from "lucide-react";
+import { Activity, AlertTriangle, Bot, CheckCircle2, Clock, FileWarning, FolderKanban, FolderPlus, GitBranch, Loader2, Plus, TrendingUp, Zap } from "lucide-react";
 
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
@@ -24,7 +24,7 @@ const stageTokenPairs = [
 
 const collator = new Intl.Collator("zh-CN", { numeric: true, sensitivity: "base" });
 
-export function Dashboard({ onSelectProject, onNavigateSettings }: DashboardProps) {
+export function Dashboard({ onNavigateSettings }: DashboardProps) {
   const { invoke, listen } = useTauri();
   const [projects, setProjects] = useState<ProjectEntry[]>([]);
   const [projectData, setProjectData] = useState<Record<string, TemplateDataPayload>>({});
@@ -201,7 +201,7 @@ export function Dashboard({ onSelectProject, onNavigateSettings }: DashboardProp
       ) : (
         <div className="grid gap-4 xl:grid-cols-2">
           {dashboardProjects.map((project) => (
-            <ProjectCard key={project.path} project={project} onOpen={() => onSelectProject(project.path)} />
+            <ProjectCard key={project.path} project={project} />
           ))}
         </div>
       )}
@@ -218,10 +218,9 @@ interface ProjectCardProps {
     totalChanges: number;
     recentMs: number;
   };
-  onOpen: () => void;
 }
 
-function ProjectCard({ project, onOpen }: ProjectCardProps) {
+function ProjectCard({ project }: ProjectCardProps) {
   const stage = project.data?.stage;
   const stageOrdinal = stage?.ordinal ?? null;
   const stageVisual = getStageVisual(stageOrdinal);
@@ -230,16 +229,7 @@ function ProjectCard({ project, onOpen }: ProjectCardProps) {
 
   return (
     <Card
-      role="button"
-      tabIndex={0}
       className="group overflow-hidden transition-all hover:border-primary/40"
-      onClick={onOpen}
-      onKeyDown={(event) => {
-        if (event.key === "Enter" || event.key === " ") {
-          event.preventDefault();
-          onOpen();
-        }
-      }}
     >
       <div className="h-1" style={stageVisual.bar} />
       <CardHeader className="flex-row items-start justify-between gap-4">
@@ -254,7 +244,6 @@ function ProjectCard({ project, onOpen }: ProjectCardProps) {
             </div>
           </div>
         </div>
-        <ChevronRight className="mt-2 size-4 shrink-0 text-muted-foreground transition-transform group-hover:translate-x-1" aria-hidden="true" />
       </CardHeader>
       <CardContent className="space-y-4">
         <div className="flex flex-wrap items-center gap-2">
@@ -285,12 +274,9 @@ function ProjectCard({ project, onOpen }: ProjectCardProps) {
           <StatusTile icon={Clock} label="最近活动" value={formatRelativeTime(project.recentMs)} detail={formatDateTime(project.recentMs)} />
         </div>
 
-        <div className="flex items-center justify-between border-t border-border pt-4 text-xs text-muted-foreground">
-          <span className="inline-flex items-center gap-1.5">
-            <Activity className="size-3.5" aria-hidden="true" />
-            {project.data?.git.is_clean ? "工作区干净" : `${project.totalChanges} 个文件状态变化`}
-          </span>
-          <span>查看详情</span>
+        <div className="flex items-center gap-1.5 border-t border-border pt-4 text-xs text-muted-foreground">
+          <Activity className="size-3.5" aria-hidden="true" />
+          {project.data?.git.is_clean ? "工作区干净" : `${project.totalChanges} 个文件状态变化`}
         </div>
       </CardContent>
     </Card>

@@ -11,7 +11,7 @@ test.describe("Settings", () => {
   test.beforeEach(async ({ page }) => {
     await page.goto("/");
     // 导航到设置
-    await page.locator('nav[aria-label="主导航"]').getByRole("button", { name: "设置" }).click();
+    await page.locator('nav[aria-label="大域导航"]').getByRole("button", { name: "设置" }).click();
     await expect(page.getByRole("heading", { name: "设置" })).toBeVisible();
   });
 

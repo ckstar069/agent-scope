@@ -3,42 +3,38 @@ import { test, expect } from "@playwright/test";
 /**
  * ProjectDetail E2E 测试
  *
- * ProjectDetail 通过 localStorage 持久化的项目路径加载。
- * 在 E2E 浏览器环境中 Tauri API 不可用，页面会显示错误状态。
+ * 项目详情现在通过侧边栏项目列表进入。
+ * 在 E2E 浏览器环境中，侧边栏项目列表依赖后端 list_projects，
+ * 因此仅测试页面结构渲染和导航交互。
  */
 
 test.describe("ProjectDetail", () => {
-  test("通过 localStorage 进入项目详情显示页面结构", async ({ page }) => {
-    await page.context().addInitScript(() => {
-      localStorage.setItem("agent-scope:current-project", "/tmp/test-project");
-    });
+  test("项目监控域显示项目概览", async ({ page }) => {
     await page.goto("/");
 
-    // 页面应渲染项目详情框架（即使数据加载失败）
-    await expect(page.getByRole("heading", { name: "项目详情" })).toBeVisible();
-    await expect(page.getByText("/tmp/test-project")).toBeVisible();
-  });
-
-  test("返回仪表盘按钮清除项目路径", async ({ page }) => {
-    await page.context().addInitScript(() => {
-      localStorage.setItem("agent-scope:current-project", "/tmp/test-project");
-    });
-    await page.goto("/");
-
-    // 点击返回仪表盘
-    await page.getByRole("button", { name: "返回仪表盘" }).click();
-
-    // 应返回 Dashboard
+    // 默认显示项目仪表盘
     await expect(page.getByRole("heading", { name: "项目仪表盘" })).toBeVisible();
   });
 
-  test("Settings 和项目详情是独立路由", async ({ page }) => {
+  test("localStorage 项目路径保留后项目监控域仍显示概览", async ({ page }) => {
+    await page.context().addInitScript(() => {
+      localStorage.setItem("agent-scope:current-project", "/tmp/test-project");
+    });
     await page.goto("/");
-    await page.locator('nav[aria-label="主导航"]').getByRole("button", { name: "设置" }).click();
+
+    // 有项目路径但默认 page 是 overview，显示 Dashboard
+    await expect(page.getByRole("heading", { name: "项目仪表盘" })).toBeVisible();
+  });
+
+  test("设置与项目监控域可正常切换", async ({ page }) => {
+    await page.goto("/");
+
+    // 切换到设置域
+    await page.locator('nav[aria-label="大域导航"]').getByRole("button", { name: "设置" }).click();
     await expect(page.getByRole("heading", { name: "设置" })).toBeVisible();
 
-    // 回到仪表盘（无项目路径）
-    await page.locator('nav[aria-label="主导航"]').getByRole("button", { name: "仪表盘" }).click();
+    // 回到项目监控域
+    await page.locator('nav[aria-label="大域导航"]').getByRole("button", { name: "项目监控" }).click();
     await expect(page.getByRole("heading", { name: "项目仪表盘" })).toBeVisible();
   });
 });

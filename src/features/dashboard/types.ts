@@ -3,7 +3,6 @@ import type { ProjectEntry, StageInfo, GitStatus, ProjectConfig, ProjectAgents, 
 export type { ProjectEntry, StageInfo, GitStatus, ProjectConfig, ProjectAgents, AgentUpdatePayload };
 
 export interface DashboardProps {
-  onSelectProject: (projectPath: string) => void;
   onNavigateSettings: () => void;
 }
 

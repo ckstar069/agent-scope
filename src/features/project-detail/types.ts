@@ -6,7 +6,6 @@ export type { ProjectEntry };
 export interface ProjectDetailProps {
   projectPath?: string;
   onSelectProject?: (projectPath: string) => void;
-  onBack?: () => void;
 }
 
 export interface SerStage {
