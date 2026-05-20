@@ -351,15 +351,20 @@ fn detect_token_rollback(
     }
 }
 
-/// 从采样窗口计算 burn rate，窗口不足时回退到 session average
+/// 从采样窗口计算 burn rate，使用固定窗口分母。
+///
+/// 固定窗口 burn rate = 窗口内 token_delta / window_seconds（如 60 或 300）。
+/// 这样即使实际采样跨度短于窗口，也不会把一次 token 跳变放大成极高 rate。
+///
+/// 当样本不足（少于 2 个点）或有效跨度太短（小于 min_span）时，
+/// 回退到 session average，并返回回退原因。
 fn calc_window_rate(
     samples: &[(Instant, u64)],
     now: Instant,
     window: Duration,
     min_span: Duration,
     session_rate: f64,
-) -> f64 {
-    // 筛选窗口内的采样点
+) -> (f64, &'static str) {
     let window_samples: Vec<_> = samples
         .iter()
         .filter(|(t, _)| now.duration_since(*t) <= window)
@@ -367,8 +372,7 @@ fn calc_window_rate(
         .collect();
 
     if window_samples.len() < 2 {
-        // 采样点不足，回退到 session average
-        return session_rate;
+        return (session_rate, "insufficient_samples");
     }
 
     let first = window_samples[0];
@@ -376,16 +380,73 @@ fn calc_window_rate(
     let span = last.0.duration_since(first.0);
 
     if span < min_span {
-        // 窗口有效跨度太短，回退到 session average
-        return session_rate;
+        return (session_rate, "short_span");
     }
 
     let delta_tokens = last.1.saturating_sub(first.1);
-    let delta_secs = span.as_secs_f64();
-    if delta_secs > 0.0 {
-        delta_tokens as f64 / delta_secs
+    let window_secs = window.as_secs_f64();
+    if window_secs > 0.0 {
+        (delta_tokens as f64 / window_secs, "fixed_window")
     } else {
-        session_rate
+        (session_rate, "zero_window")
+    }
+}
+
+/// 计算活跃段 burn rate：只使用窗口内 token 连续增长的子段。
+///
+/// 从窗口末尾向前扫描，找到 token 连续增长（或持平）的最长子段，
+/// 用该子段的 delta / span 计算速率。这样可以排除 Idle 时段对 burn rate 的稀释，
+/// 更准确地反映"当前工作强度"。
+///
+/// 当没有找到合适的活跃段时返回 None。
+fn calc_active_segment_rate(
+    samples: &[(Instant, u64)],
+    now: Instant,
+    window: Duration,
+    min_span: Duration,
+) -> Option<f64> {
+    let window_samples: Vec<_> = samples
+        .iter()
+        .filter(|(t, _)| now.duration_since(*t) <= window)
+        .copied()
+        .collect();
+
+    if window_samples.len() < 2 {
+        return None;
+    }
+
+    let last = window_samples[window_samples.len() - 1];
+
+    // 从后往前扫描，找到连续增长/持平段的起始点
+    let mut start_idx = window_samples.len() - 1;
+    for i in (0..window_samples.len() - 1).rev() {
+        if window_samples[i].1 <= window_samples[i + 1].1 {
+            // token 持平或增长，继续向前扩展活跃段
+            start_idx = i;
+        } else {
+            // 遇到下降/回退边界，停止
+            break;
+        }
+    }
+
+    // 如果起始点就是最后一个点，说明无增长
+    if start_idx >= window_samples.len() - 1 {
+        return None;
+    }
+
+    let first = window_samples[start_idx];
+    let span = last.0.duration_since(first.0);
+
+    if span < min_span {
+        return None;
+    }
+
+    let delta = last.1.saturating_sub(first.1);
+    let secs = span.as_secs_f64();
+    if secs > 0.0 {
+        Some(delta as f64 / secs)
+    } else {
+        None
     }
 }
 
@@ -428,7 +489,7 @@ fn session_to_info(
     };
 
     // 更新 token 历史采样（保留最近 5 分钟）
-    let (token_rate_1m, token_rate_5m) = {
+    let (token_rate_1m, token_rate_5m, _, _) = {
         let mut history = token_history_samples.lock().unwrap();
         let samples = history.entry(session.session_id.clone()).or_default();
         samples.push((now, active_tokens));
@@ -445,8 +506,8 @@ fn session_to_info(
             0.0
         };
 
-        // 1 分钟 burn rate：窗口不足 10 秒回退到 session average
-        let rate_1m = calc_window_rate(
+        // 1 分钟 burn rate：固定分母 60 秒，窗口不足 10 秒回退到 session average
+        let (rate_1m_fixed, reason_1m) = calc_window_rate(
             samples,
             now,
             Duration::from_secs(60),
@@ -454,8 +515,8 @@ fn session_to_info(
             session_rate,
         );
 
-        // 5 分钟 burn rate：窗口不足 30 秒回退到 session average
-        let rate_5m = calc_window_rate(
+        // 5 分钟 burn rate：固定分母 300 秒，窗口不足 30 秒回退到 session average
+        let (rate_5m_fixed, reason_5m) = calc_window_rate(
             samples,
             now,
             Duration::from_secs(300),
@@ -463,10 +524,29 @@ fn session_to_info(
             session_rate,
         );
 
-        (rate_1m, rate_5m)
+        // 活跃段速率：只计算 token 连续增长的子段，排除 Idle 时段稀释
+        // 注：当前仅用于 debug 输出，不替换固定窗口值，避免 actual_span 放大问题
+        let _active_1m = calc_active_segment_rate(
+            samples,
+            now,
+            Duration::from_secs(60),
+            Duration::from_secs(5),
+        );
+        let _active_5m = calc_active_segment_rate(
+            samples,
+            now,
+            Duration::from_secs(300),
+            Duration::from_secs(10),
+        );
+
+        // 固定窗口 burn rate：始终使用固定分母，不受活跃段影响
+        let rate_1m = rate_1m_fixed;
+        let rate_5m = rate_5m_fixed;
+
+        (rate_1m, rate_5m, reason_1m, reason_5m)
     };
 
-    // 全程速率
+    // 全程速率（session average）
     let elapsed_secs = session.elapsed().as_secs_f64();
     let token_rate_total = if elapsed_secs > 0.0 {
         active_tokens as f64 / elapsed_secs
