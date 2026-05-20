@@ -109,6 +109,8 @@ pub struct AgentInfo {
     pub token_rate: f64,
     /// 最近 1 分钟平均 Token 速率（token/秒）
     pub token_rate_1m: f64,
+    /// 最近 5 分钟平均 burn rate（token/秒）
+    pub token_rate_5m: f64,
     /// 会话开始至今平均 Token 速率（token/秒）
     pub token_rate_total: f64,
     /// 进程 PID
@@ -203,7 +205,7 @@ pub struct AgentCollector {
     /// 上一次各 session 的 active_tokens，用于计算 token_rate
     last_tokens: Arc<Mutex<HashMap<String, (u64, Instant)>>>,
     /// 每个 session 的 token 历史采样：[(timestamp, total_tokens), ...]
-    /// 保留最近 1 分钟的采样（30 个点，每 2 秒一个）
+    /// 保留最近 5 分钟的采样（150 个点，每 2 秒一个）
     token_history_samples: TokenHistorySamples,
 }
 
@@ -329,6 +331,64 @@ impl Default for AgentCollector {
 // ============================================================================
 
 /// 将 AgentSession 转换为可序列化的 AgentInfo
+/// 检测 token 计数是否回退（session 重启/切换/缓存污染），若回退则清理历史采样
+fn detect_token_rollback(
+    session_id: &str,
+    active_tokens: u64,
+    last_tokens: &Arc<Mutex<HashMap<String, (u64, Instant)>>>,
+    token_history_samples: &TokenHistorySamples,
+) {
+    let mut map = last_tokens.lock().unwrap();
+    if let Some((last_count, _)) = map.get(session_id) {
+        if active_tokens < *last_count {
+            // Token 计数回退，说明 session 可能重启或数据被重置
+            // 清理该 session 的所有历史采样，重新开始统计
+            map.remove(session_id);
+            drop(map);
+            let mut history = token_history_samples.lock().unwrap();
+            history.remove(session_id);
+        }
+    }
+}
+
+/// 从采样窗口计算 burn rate，窗口不足时回退到 session average
+fn calc_window_rate(
+    samples: &[(Instant, u64)],
+    now: Instant,
+    window: Duration,
+    min_span: Duration,
+    session_rate: f64,
+) -> f64 {
+    // 筛选窗口内的采样点
+    let window_samples: Vec<_> = samples
+        .iter()
+        .filter(|(t, _)| now.duration_since(*t) <= window)
+        .copied()
+        .collect();
+
+    if window_samples.len() < 2 {
+        // 采样点不足，回退到 session average
+        return session_rate;
+    }
+
+    let first = window_samples[0];
+    let last = window_samples[window_samples.len() - 1];
+    let span = last.0.duration_since(first.0);
+
+    if span < min_span {
+        // 窗口有效跨度太短，回退到 session average
+        return session_rate;
+    }
+
+    let delta_tokens = last.1.saturating_sub(first.1);
+    let delta_secs = span.as_secs_f64();
+    if delta_secs > 0.0 {
+        delta_tokens as f64 / delta_secs
+    } else {
+        session_rate
+    }
+}
+
 fn session_to_info(
     session: &AgentSession,
     last_tokens: &Arc<Mutex<HashMap<String, (u64, Instant)>>>,
@@ -337,7 +397,15 @@ fn session_to_info(
     let now = Instant::now();
     let active_tokens = session.active_tokens();
 
-    // 计算 token_rate（token/秒）
+    // Token 回退检测与清理
+    detect_token_rollback(
+        &session.session_id,
+        active_tokens,
+        last_tokens,
+        token_history_samples,
+    );
+
+    // 计算 token_rate（2 秒瞬时速率，保留兼容）
     let token_rate = {
         let mut map = last_tokens.lock().unwrap();
         match map.get(&session.session_id) {
@@ -359,33 +427,46 @@ fn session_to_info(
         }
     };
 
-    // 更新 token 历史采样，计算 1 分钟速率
-    let token_rate_1m = {
+    // 更新 token 历史采样（保留最近 5 分钟）
+    let (token_rate_1m, token_rate_5m) = {
         let mut history = token_history_samples.lock().unwrap();
         let samples = history.entry(session.session_id.clone()).or_default();
         samples.push((now, active_tokens));
 
-        // 清理超过 1 分钟的旧采样点
-        let one_minute = Duration::from_secs(60);
-        samples.retain(|(t, _)| now.duration_since(*t) <= one_minute);
+        // 清理超过 5 分钟的旧采样点
+        let five_minutes = Duration::from_secs(300);
+        samples.retain(|(t, _)| now.duration_since(*t) <= five_minutes);
 
-        // 计算 1 分钟速率：窗口内 token 增量 / 时间差
-        if samples.len() >= 2 {
-            let first = samples[0];
-            let last = samples[samples.len() - 1];
-            let delta_tokens = last.1.saturating_sub(first.1);
-            let delta_secs = last.0.duration_since(first.0).as_secs_f64();
-            if delta_secs > 0.0 {
-                delta_tokens as f64 / delta_secs
-            } else {
-                0.0
-            }
+        // 全程速率（session average），作为回退基准
+        let elapsed_secs = session.elapsed().as_secs_f64();
+        let session_rate = if elapsed_secs > 0.0 {
+            active_tokens as f64 / elapsed_secs
         } else {
             0.0
-        }
+        };
+
+        // 1 分钟 burn rate：窗口不足 10 秒回退到 session average
+        let rate_1m = calc_window_rate(
+            samples,
+            now,
+            Duration::from_secs(60),
+            Duration::from_secs(10),
+            session_rate,
+        );
+
+        // 5 分钟 burn rate：窗口不足 30 秒回退到 session average
+        let rate_5m = calc_window_rate(
+            samples,
+            now,
+            Duration::from_secs(300),
+            Duration::from_secs(30),
+            session_rate,
+        );
+
+        (rate_1m, rate_5m)
     };
 
-    // 全程速率：基于会话总 token 数 / 会话持续时间
+    // 全程速率
     let elapsed_secs = session.elapsed().as_secs_f64();
     let token_rate_total = if elapsed_secs > 0.0 {
         active_tokens as f64 / elapsed_secs
@@ -429,6 +510,7 @@ fn session_to_info(
         first_assistant_text: session.first_assistant_text.clone(),
         token_rate,
         token_rate_1m,
+        token_rate_5m,
         token_rate_total,
         pid: session.pid,
         version: session.version.clone(),
@@ -653,8 +735,18 @@ mod tests {
         assert_eq!(info.pid, 1234);
         assert_eq!(info.status, SerializableStatus::Thinking);
         assert_eq!(info.token_rate, 0.0); // 首次采集，无历史记录
-        assert_eq!(info.token_rate_1m, 0.0);
-        // started_at 为 0 时 elapsed() 返回从 epoch 至今的时长，导致 token_rate_total 为极小的正数
+                                          // 首次采集时只有一个采样点，1m/5m 窗口不足，回退到 session average
+                                          // started_at 为 0 时 elapsed() 返回从 epoch 至今的时长，session_rate 为极小的正数
+        assert!(
+            info.token_rate_1m < 1e-5,
+            "token_rate_1m expected near-zero, got {}",
+            info.token_rate_1m
+        );
+        assert!(
+            info.token_rate_5m < 1e-5,
+            "token_rate_5m expected near-zero, got {}",
+            info.token_rate_5m
+        );
         assert!(
             info.token_rate_total < 1e-5,
             "token_rate_total expected near-zero, got {}",
@@ -1085,5 +1177,154 @@ mod tests {
         assert!(info.file_accesses.is_empty());
         assert_eq!(info.pending_since_ms, 0);
         assert_eq!(info.thinking_since_ms, 0);
+    }
+
+    // =========================================================================
+    // Token 速率相关测试
+    // =========================================================================
+
+    #[test]
+    fn test_token_rate_5m_basic_calculation() {
+        let last_tokens = Arc::new(Mutex::new(HashMap::new()));
+        let token_history_samples = Arc::new(Mutex::new(HashMap::new()));
+        let mut session = make_test_session(1000, 500, 0, 0);
+        session.session_id = "s-5m-test".to_string();
+        session.started_at = current_epoch_ms() - 300_000; // 5 分钟前启动
+
+        // 第一次采集：建立基线
+        let _info = session_to_info(&session, &last_tokens, &token_history_samples);
+
+        // 模拟 60 秒后 token 增加到 3000
+        session.total_input_tokens = 2000;
+        session.total_output_tokens = 1000;
+        std::thread::sleep(Duration::from_millis(100));
+        let info = session_to_info(&session, &last_tokens, &token_history_samples);
+
+        // 5m 窗口应有足够跨度（约 100ms，但 < 30s 回退阈值），
+        // 所以应回退到 session average
+        let elapsed = session.elapsed().as_secs_f64();
+        let expected_session_rate = session.active_tokens() as f64 / elapsed;
+        assert!(
+            (info.token_rate_5m - expected_session_rate).abs() < 1.0,
+            "窗口不足时应回退到 session average: expected ~{}, got {}",
+            expected_session_rate,
+            info.token_rate_5m
+        );
+    }
+
+    #[test]
+    fn test_window_insufficient_fallback() {
+        let last_tokens = Arc::new(Mutex::new(HashMap::new()));
+        let token_history_samples = Arc::new(Mutex::new(HashMap::new()));
+        let mut session = make_test_session(100, 50, 0, 0);
+        session.session_id = "s-fallback".to_string();
+        session.started_at = current_epoch_ms() - 10_000; // 10 秒前启动
+
+        // 第一次采集
+        let _info = session_to_info(&session, &last_tokens, &token_history_samples);
+        // 极短时间内第二次采集（窗口跨度 << 10s）
+        let info = session_to_info(&session, &last_tokens, &token_history_samples);
+
+        let elapsed = session.elapsed().as_secs_f64();
+        let expected = session.active_tokens() as f64 / elapsed;
+
+        // 1m 窗口跨度太短，应回退到 session average
+        assert!(
+            (info.token_rate_1m - expected).abs() < 1.0,
+            "1m 窗口不足时应回退到 session average: expected ~{}, got {}",
+            expected,
+            info.token_rate_1m
+        );
+        // 5m 窗口同样不足，也应回退
+        assert!(
+            (info.token_rate_5m - expected).abs() < 1.0,
+            "5m 窗口不足时应回退到 session average: expected ~{}, got {}",
+            expected,
+            info.token_rate_5m
+        );
+    }
+
+    #[test]
+    fn test_token_rollback_clears_history() {
+        let last_tokens = Arc::new(Mutex::new(HashMap::new()));
+        let token_history_samples = Arc::new(Mutex::new(HashMap::new()));
+        let mut session = make_test_session(10000, 5000, 0, 0);
+        session.session_id = "s-rollback".to_string();
+        session.started_at = current_epoch_ms() - 300_000; // 5 分钟前
+
+        // 第一次采集：累计 15000 token
+        let _info = session_to_info(&session, &last_tokens, &token_history_samples);
+
+        // 第二次：token 回退到 500（session 重启/重置）
+        session.total_input_tokens = 300;
+        session.total_output_tokens = 200;
+        let info = session_to_info(&session, &last_tokens, &token_history_samples);
+
+        // 回退后，last_tokens 和 token_history_samples 应被清理，
+        // 所以 2s 瞬时速率应为 0（首次采集）
+        assert_eq!(info.token_rate, 0.0, "token 回退后 2s 速率应为 0");
+
+        // 1m / 5m 因采样被清空，只有 1 个采样点，回退到 session average
+        let elapsed = session.elapsed().as_secs_f64();
+        let expected = session.active_tokens() as f64 / elapsed;
+        assert!(
+            (info.token_rate_1m - expected).abs() < 1.0,
+            "token 回退后 1m 应回退到 session average: expected ~{}, got {}",
+            expected,
+            info.token_rate_1m
+        );
+    }
+
+    // 辅助函数
+    fn current_epoch_ms() -> u64 {
+        std::time::SystemTime::now()
+            .duration_since(std::time::UNIX_EPOCH)
+            .unwrap()
+            .as_millis() as u64
+    }
+
+    fn make_test_session(
+        input: u64,
+        output: u64,
+        cache_read: u64,
+        cache_create: u64,
+    ) -> AgentSession {
+        AgentSession {
+            agent_cli: "claude",
+            pid: 1,
+            session_id: String::new(),
+            cwd: "/tmp".to_string(),
+            project_name: "test".to_string(),
+            started_at: current_epoch_ms(),
+            status: SessionStatus::Thinking,
+            model: "claude".to_string(),
+            effort: "".to_string(),
+            context_percent: 0.0,
+            total_input_tokens: input,
+            total_output_tokens: output,
+            total_cache_read: cache_read,
+            total_cache_create: cache_create,
+            turn_count: 1,
+            current_tasks: vec![],
+            mem_mb: 0,
+            version: "".to_string(),
+            git_branch: "".to_string(),
+            git_added: 0,
+            git_modified: 0,
+            token_history: vec![],
+            context_history: vec![],
+            compaction_count: 0,
+            context_window: 0,
+            subagents: vec![],
+            mem_file_count: 0,
+            mem_line_count: 0,
+            children: vec![],
+            initial_prompt: "".to_string(),
+            first_assistant_text: "".to_string(),
+            tool_calls: vec![],
+            pending_since_ms: 0,
+            thinking_since_ms: 0,
+            file_accesses: vec![],
+        }
     }
 }

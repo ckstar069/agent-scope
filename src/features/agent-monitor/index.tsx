@@ -44,8 +44,8 @@ export function AgentMonitor() {
   const { listen } = useTauri();
   const [snapshot, setSnapshot] = useState<AgentUpdatePayload | null>(null);
   const [listenError, setListenError] = useState<string | null>(null);
-  const [rateUnit, setRateUnit] = useState<TokenRateUnit>("second");
-  const [rateType, setRateType] = useState<RateType>("1min");
+  const [rateUnit, setRateUnit] = useState<TokenRateUnit>("minute");
+  const [rateType, setRateType] = useState<RateType>("5min");
   const [filterText, setFilterText] = useState("");
   const [expandedSessionId, setExpandedSessionId] = useState<string | null>(null);
   const [now, setNow] = useState(() => Date.now());
@@ -134,7 +134,7 @@ export function AgentMonitor() {
           <p className="text-sm font-medium text-muted-foreground">Agents</p>
           <h1 className="text-3xl font-semibold tracking-tight">Agent 监控</h1>
           <p className="max-w-2xl text-sm text-muted-foreground">
-            通过 Tauri 事件流展示实时 Token 速率、上下文窗口占用和会话在线状态。
+            通过 Tauri 事件流展示 Token 消耗速率（burn rate）、上下文窗口占用和会话在线状态。
           </p>
           <div className="flex max-w-2xl items-center gap-2">
             <Search className="size-4 shrink-0 text-muted-foreground" aria-hidden="true" />
@@ -156,7 +156,7 @@ export function AgentMonitor() {
         <div className="flex flex-wrap items-center gap-3">
           <div className="flex items-center gap-1">
             <span className="text-xs font-medium text-muted-foreground mr-1">速率类型</span>
-            {(["realtime", "1min", "total"] as RateType[]).map((type) => (
+            {(["5min", "1min", "total", "realtime"] as RateType[]).map((type) => (
               <Button
                 key={type}
                 type="button"
@@ -165,7 +165,7 @@ export function AgentMonitor() {
                 className="h-8 px-2.5 text-xs"
                 onClick={() => setRateType(type)}
               >
-                {type === "realtime" ? "实时" : type === "1min" ? "1分钟" : "全程"}
+                {type === "5min" ? "5分钟" : type === "1min" ? "1分钟" : type === "total" ? "全程" : "瞬时"}
               </Button>
             ))}
           </div>
@@ -375,7 +375,11 @@ interface AgentSessionRowProps {
 function AgentSessionRow({ agent, maxRate, rateUnit, rateType, isExpanded, onToggle }: AgentSessionRowProps) {
   const [activeTab, setActiveTab] = useState<AgentDetailTab>("timeline");
   const displayStatus = toDisplayStatus(agent.status);
-  const displayRate = getDisplayRate(agent, rateType, rateUnit);
+  const isIdle = displayStatus === "Idle" || displayStatus === "Offline";
+
+  // Idle 状态使用 session average 显示，避免展示 0 rate
+  const effectiveRateType: RateType = isIdle && rateType !== "total" ? "total" : rateType;
+  const displayRate = getDisplayRate(agent, effectiveRateType, rateUnit);
   const ratePercent = clamp((displayRate / maxRate) * 100, 0, 100);
   const context = getContextUsage(agent);
   const rateStyle = { "--rate-fill": `${ratePercent}%` } as React.CSSProperties;
@@ -417,8 +421,16 @@ function AgentSessionRow({ agent, maxRate, rateUnit, rateType, isExpanded, onTog
         <div className="mt-4 grid gap-4 lg:grid-cols-[minmax(0,1fr)_minmax(0,1fr)]">
           <div className="space-y-2">
             <div className="flex items-center justify-between gap-3 text-xs">
-              <span className="text-muted-foreground">Token 速率</span>
-              <span className="font-mono font-semibold text-foreground">{formatRate(displayRate)} {rateUnit === "second" ? "token/s" : "token/min"}</span>
+              <span className="text-muted-foreground">Token 消耗速率</span>
+              <span className="font-mono font-semibold text-foreground">
+                {isIdle ? (
+                  <>
+                    Idle · {formatRate(displayRate)} {rateUnit === "second" ? "token/s" : "token/min"}
+                  </>
+                ) : (
+                  <>{formatRate(displayRate)} {rateUnit === "second" ? "token/s" : "token/min"}</>
+                )}
+              </span>
             </div>
             <div className="h-2 overflow-hidden rounded-full bg-muted">
               <div className="h-full w-[var(--rate-fill)] rounded-full bg-gradient-to-r from-stage-l0 via-stage-l2 to-stage-l4 transition-[width] duration-500" style={rateStyle} />
@@ -567,6 +579,9 @@ function getDisplayRate(agent: AgentInfo, rateType: RateType, unit: TokenRateUni
       break;
     case "1min":
       baseRate = agent.token_rate_1m;
+      break;
+    case "5min":
+      baseRate = agent.token_rate_5m;
       break;
     case "total":
       baseRate = agent.token_rate_total;

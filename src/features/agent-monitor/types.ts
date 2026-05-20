@@ -1,7 +1,7 @@
 export type RawAgentStatus = "Thinking" | "Executing" | "Waiting" | "RateLimited" | "Done";
 export type DisplayStatus = "Active" | "Idle" | "Offline";
 export type TokenRateUnit = "second" | "minute";
-export type RateType = "realtime" | "1min" | "total";
+export type RateType = "realtime" | "1min" | "5min" | "total";
 export type AgentDetailTab = "timeline" | "subagents" | "fileaudit";
 
 export interface AgentInfo {
@@ -28,6 +28,7 @@ export interface AgentInfo {
   compaction_count: number;
   token_rate: number;
   token_rate_1m: number;
+  token_rate_5m: number;
   token_rate_total: number;
   pid: number;
   version: string;
