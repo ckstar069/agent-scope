@@ -1,10 +1,11 @@
 import type { CSSProperties } from "react";
 import { useEffect, useMemo, useState } from "react";
-import { Activity, AlertTriangle, Bot, ChevronRight, Clock, FolderKanban, FolderPlus, GitBranch, Loader2, Plus } from "lucide-react";
+import { Activity, AlertTriangle, Bot, CheckCircle2, ChevronRight, Clock, FileWarning, FolderKanban, FolderPlus, GitBranch, Loader2, Plus, TrendingUp, Zap } from "lucide-react";
 
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { useTauri } from "@/hooks/useTauri";
+import { cn } from "@/lib/utils";
 import type {
   DashboardProps,
   TemplateDataPayload,
@@ -122,6 +123,17 @@ export function Dashboard({ onSelectProject, onNavigateSettings }: DashboardProp
     [agentCounts, projectData, projects],
   );
 
+  const summaryStats = useMemo(() => {
+    const totalAgents = Object.values(agentCounts).reduce((sum, count) => sum + count, 0);
+    const totalChanges = dashboardProjects.reduce((sum, p) => sum + p.totalChanges, 0);
+    const alertCount = dashboardProjects.filter(
+      (p) => (p.data?.git.conflict_count ?? 0) > 0 || p.data?.stage_error,
+    ).length;
+    const cleanCount = dashboardProjects.filter((p) => p.data?.git.is_clean).length;
+
+    return { totalAgents, totalChanges, alertCount, cleanCount };
+  }, [agentCounts, dashboardProjects]);
+
   return (
     <section className="space-y-6">
       <div className="flex flex-col gap-4 lg:flex-row lg:items-end lg:justify-between">
@@ -145,6 +157,21 @@ export function Dashboard({ onSelectProject, onNavigateSettings }: DashboardProp
             项目列表加载失败：{error}
           </CardContent>
         </Card>
+      )}
+
+      {!isLoading && dashboardProjects.length > 0 && (
+        <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-4">
+          <SummaryTile icon={FolderKanban} label="项目总数" value={`${dashboardProjects.length}`} detail="已注册项目" color="text-primary" />
+          <SummaryTile icon={Bot} label="活跃 Agent" value={`${summaryStats.totalAgents}`} detail="实时会话总数" color="text-stage-l1" />
+          <SummaryTile icon={GitBranch} label="未提交变更" value={`${summaryStats.totalChanges}`} detail="所有项目累计" color="text-stage-l3" />
+          <SummaryTile
+            icon={summaryStats.alertCount > 0 ? FileWarning : CheckCircle2}
+            label="项目状态"
+            value={summaryStats.alertCount > 0 ? `${summaryStats.alertCount} 个告警` : `${summaryStats.cleanCount} 个干净`}
+            detail={summaryStats.alertCount > 0 ? "Git 冲突或 Stage 错误" : "工作区无异常"}
+            color={summaryStats.alertCount > 0 ? "text-destructive" : "text-stage-l5"}
+          />
+        </div>
       )}
 
       {isLoading ? (
@@ -199,6 +226,7 @@ function ProjectCard({ project, onOpen }: ProjectCardProps) {
   const stageOrdinal = stage?.ordinal ?? null;
   const stageVisual = getStageVisual(stageOrdinal);
   const branch = project.data?.git.branch || "未知分支";
+  const activity = getActivityScore(project);
 
   return (
     <Card
@@ -229,11 +257,26 @@ function ProjectCard({ project, onOpen }: ProjectCardProps) {
         <ChevronRight className="mt-2 size-4 shrink-0 text-muted-foreground transition-transform group-hover:translate-x-1" aria-hidden="true" />
       </CardHeader>
       <CardContent className="space-y-4">
-        <div className="flex flex-wrap gap-2">
+        <div className="flex flex-wrap items-center gap-2">
           <span className="inline-flex items-center rounded-full border px-2.5 py-1 text-xs font-medium" style={stageVisual.badge}>
             {stage ? stage.name : "Stage 未知"}
           </span>
-          {project.data?.stage_error && <span className="text-xs text-destructive">Stage 读取失败</span>}
+          <span className={cn("inline-flex items-center gap-1 rounded-full border px-2 py-0.5 text-xs font-medium", activity.style)}>
+            {activity.icon}
+            {activity.label}
+          </span>
+          {project.data?.git.conflict_count ? (
+            <span className="inline-flex items-center gap-1 rounded-full border border-destructive/50 bg-destructive/10 px-2 py-0.5 text-xs font-medium text-destructive">
+              <AlertTriangle className="size-3" />
+              {project.data.git.conflict_count} 个冲突
+            </span>
+          ) : null}
+          {project.data?.stage_error ? (
+            <span className="inline-flex items-center gap-1 rounded-full border border-stage-l3/50 bg-stage-l3/10 px-2 py-0.5 text-xs font-medium text-stage-l3">
+              <FileWarning className="size-3" />
+              Stage 异常
+            </span>
+          ) : null}
         </div>
 
         <div className="grid gap-3 sm:grid-cols-3">
@@ -272,6 +315,68 @@ function StatusTile({ icon: Icon, label, value, detail }: StatusTileProps) {
       <p className="mt-1 truncate text-xs text-muted-foreground">{detail}</p>
     </div>
   );
+}
+
+interface SummaryTileProps {
+  icon: typeof GitBranch;
+  label: string;
+  value: string;
+  detail: string;
+  color: string;
+}
+
+function SummaryTile({ icon: Icon, label, value, detail, color }: SummaryTileProps) {
+  return (
+    <Card>
+      <CardContent className="p-4">
+        <div className="mb-3 flex items-center gap-2 text-xs text-muted-foreground">
+          <Icon className={cn("size-3.5", color)} aria-hidden="true" />
+          {label}
+        </div>
+        <p className={cn("text-2xl font-semibold tracking-tight", color)}>{value}</p>
+        <p className="mt-1 text-xs text-muted-foreground">{detail}</p>
+      </CardContent>
+    </Card>
+  );
+}
+
+function getActivityScore(project: ProjectCardProps["project"]): { label: string; style: string; icon: React.ReactNode } {
+  const agentScore = Math.min(project.agentCount * 30, 60);
+  const changeScore = Math.min(project.totalChanges * 5, 25);
+  const now = Date.now();
+  const diffHours = (now - project.recentMs) / (1000 * 60 * 60);
+  const recencyScore = diffHours < 1 ? 15 : diffHours < 24 ? 10 : diffHours < 72 ? 5 : 0;
+  const score = agentScore + changeScore + recencyScore;
+
+  if (score >= 60) {
+    return {
+      label: "活跃",
+      style: "border-stage-l1/50 bg-stage-l1/10 text-stage-l1",
+      icon: <Zap className="size-3" />,
+    };
+  }
+
+  if (score >= 35) {
+    return {
+      label: "进行中",
+      style: "border-stage-l3/50 bg-stage-l3/10 text-stage-l3",
+      icon: <TrendingUp className="size-3" />,
+    };
+  }
+
+  if (score >= 15) {
+    return {
+      label: "低活跃",
+      style: "border-stage-l5/50 bg-stage-l5/10 text-stage-l5",
+      icon: <Clock className="size-3" />,
+    };
+  }
+
+  return {
+    label: "闲置",
+    style: "border-border bg-muted/50 text-muted-foreground",
+    icon: <Clock className="size-3" />,
+  };
 }
 
 function getProjectName(path: string) {
