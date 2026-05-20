@@ -47,3 +47,14 @@ export interface SessionTimelineProps {
   onPreview: (sessionId: string) => Promise<SessionPreview | null>;
   previewCache: Record<string, SessionPreview>;
 }
+
+export interface ToolCallStat {
+  name: string;
+  count: number;
+  details: string[];
+}
+
+export interface FileReference {
+  path: string;
+  count: number;
+}

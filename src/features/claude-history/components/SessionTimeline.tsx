@@ -1,9 +1,9 @@
 import { useEffect, useRef, useState } from "react";
-import { Circle, Download, Trash2, ChevronDown, ChevronUp } from "lucide-react";
+import { Circle, Download, Trash2, ChevronDown, ChevronUp, Wrench, FileCode } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { cn } from "@/lib/utils";
 
-import type { SessionTimelineProps, SessionPreview } from "../types";
+import type { SessionTimelineProps, SessionPreview, ToolCallStat, FileReference } from "../types";
 
 function formatDate(timestamp: number | null): string {
   if (!timestamp) return "未知时间";
@@ -210,7 +210,10 @@ export function SessionTimeline({ sessions, onDelete, onExport, onPreview, previ
 
             {/* 预览面板 */}
             {isExpanded && preview && (
-              <PreviewPanel preview={preview} />
+              <>
+                <PreviewPanel preview={preview} />
+                <SessionAnalysisPanel preview={preview} />
+              </>
             )}
             {isExpanded && !preview && (
               <div className="mt-2 rounded-md border bg-muted/30 p-3">
@@ -220,6 +223,97 @@ export function SessionTimeline({ sessions, onDelete, onExport, onPreview, previ
           </div>
         );
       })}
+    </div>
+  );
+}
+
+function extractToolStats(preview: SessionPreview): ToolCallStat[] {
+  const counts = new Map<string, { count: number; details: string[] }>();
+
+  for (const msg of preview.messages) {
+    if (msg.role === "tool" && msg.content.startsWith("调用工具:")) {
+      const match = msg.content.match(/^调用工具:\s*(\S+)(?:\s*\((.*)\))?$/);
+      if (match) {
+        const name = match[1];
+        const detail = match[2] || "";
+        const existing = counts.get(name);
+        if (existing) {
+          existing.count++;
+          if (detail) existing.details.push(detail);
+        } else {
+          counts.set(name, { count: 1, details: detail ? [detail] : [] });
+        }
+      }
+    }
+  }
+
+  return Array.from(counts.entries())
+    .map(([name, data]) => ({ name, count: data.count, details: data.details.slice(0, 3) }))
+    .sort((a, b) => b.count - a.count);
+}
+
+function extractFileReferences(preview: SessionPreview): FileReference[] {
+  const counts = new Map<string, number>();
+  const filePattern = /(?:[\w-]+\/)*[\w-]+\.(?:rs|ts|tsx|js|jsx|py|md|json|toml|yaml|yml|css|html|go|java|c|cpp|h|hpp)/gi;
+
+  for (const msg of preview.messages) {
+    const matches = msg.content.match(filePattern);
+    if (matches) {
+      for (const match of matches) {
+        const normalized = match.toLowerCase();
+        counts.set(normalized, (counts.get(normalized) ?? 0) + 1);
+      }
+    }
+  }
+
+  return Array.from(counts.entries())
+    .map(([path, count]) => ({ path, count }))
+    .sort((a, b) => b.count - a.count)
+    .slice(0, 8);
+}
+
+function SessionAnalysisPanel({ preview }: { preview: SessionPreview }) {
+  const toolStats = extractToolStats(preview);
+  const fileRefs = extractFileReferences(preview);
+
+  if (toolStats.length === 0 && fileRefs.length === 0) {
+    return null;
+  }
+
+  return (
+    <div className="mt-3 grid gap-3 sm:grid-cols-2">
+      {toolStats.length > 0 && (
+        <div className="rounded-md border bg-muted/20 p-3">
+          <div className="mb-2 flex items-center gap-1.5 text-xs font-medium text-muted-foreground">
+            <Wrench className="size-3.5" />
+            工具调用 ({toolStats.reduce((s, t) => s + t.count, 0)} 次)
+          </div>
+          <div className="space-y-1.5">
+            {toolStats.map((tool) => (
+              <div key={tool.name} className="flex items-center justify-between text-xs">
+                <span className="truncate font-medium">{tool.name}</span>
+                <span className="shrink-0 rounded-full bg-primary/10 px-1.5 py-0.5 font-mono text-[10px] text-primary">{tool.count}</span>
+              </div>
+            ))}
+          </div>
+        </div>
+      )}
+      {fileRefs.length > 0 && (
+        <div className="rounded-md border bg-muted/20 p-3">
+          <div className="mb-2 flex items-center gap-1.5 text-xs font-medium text-muted-foreground">
+            <FileCode className="size-3.5" />
+            热点文件
+          </div>
+          <div className="space-y-1.5">
+            {fileRefs.map((file) => (
+              <div key={file.path} className="flex items-center justify-between text-xs">
+                <span className="truncate font-mono text-muted-foreground">{file.path}</span>
+                <span className="shrink-0 rounded-full bg-stage-l3/10 px-1.5 py-0.5 font-mono text-[10px] text-stage-l3">{file.count}</span>
+              </div>
+            ))}
+          </div>
+        </div>
+      )}
     </div>
   );
 }
