@@ -328,6 +328,8 @@ mod tests {
     fn test_env() -> (PathBuf, PathBuf) {
         let id = COUNTER.fetch_add(1, Ordering::SeqCst);
         let dir = std::env::temp_dir().join(format!("agent-scope-registry-test-{}", id));
+        // 清理之前测试运行可能遗留的目录，避免目录冲突导致测试失败
+        let _ = fs::remove_dir_all(&dir);
         let _ = fs::create_dir_all(&dir);
         let json_path = dir.join("projects.json");
         (dir, json_path)
