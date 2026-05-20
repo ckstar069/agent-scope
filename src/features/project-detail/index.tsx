@@ -497,19 +497,30 @@ function StageTimeline({ currentStageIndex, stageError }: { currentStageIndex: n
       return;
     }
 
+    let rafId: number;
+
     const updateItemsPerRow = () => {
-      const rootFontSize = parseFloat(getComputedStyle(document.documentElement).fontSize);
-      const itemMinWidth = rootFontSize * 8.5;
-      const nextItemsPerRow = Math.max(1, Math.min(5, Math.floor(container.clientWidth / itemMinWidth)));
-      setItemsPerRow(nextItemsPerRow);
+      cancelAnimationFrame(rafId);
+      rafId = requestAnimationFrame(() => {
+        const rootFontSize = parseFloat(getComputedStyle(document.documentElement).fontSize);
+        const itemMinWidth = rootFontSize * 8.5;
+        // 减 1px 避免浮点精度导致误判
+        const nextItemsPerRow = Math.max(1, Math.min(5, Math.floor((container.clientWidth - 1) / itemMinWidth)));
+        setItemsPerRow(nextItemsPerRow);
+      });
     };
 
-    updateItemsPerRow();
+    // 延迟首次计算：等待 Collapsible 展开动画完成，确保宽度稳定
+    const timer = setTimeout(updateItemsPerRow, 100);
 
     const resizeObserver = new ResizeObserver(updateItemsPerRow);
     resizeObserver.observe(container);
 
-    return () => resizeObserver.disconnect();
+    return () => {
+      clearTimeout(timer);
+      cancelAnimationFrame(rafId);
+      resizeObserver.disconnect();
+    };
   }, []);
 
   if (stageError) {
@@ -524,7 +535,7 @@ function StageTimeline({ currentStageIndex, stageError }: { currentStageIndex: n
   }
 
   return (
-    <div ref={containerRef} className="space-y-5 pb-2">
+    <div ref={containerRef} className="w-full space-y-5 pb-2">
       {rows.map((row, rowIndex) => {
         const isReversedRow = rowIndex % 2 === 1;
         const displayRow = isReversedRow ? [...row].reverse() : row;
