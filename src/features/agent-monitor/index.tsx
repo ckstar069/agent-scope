@@ -123,6 +123,19 @@ export function AgentMonitor() {
   const totalCount = allAgents.length;
   const matchedCount = filteredProjects.reduce((sum, project) => sum + project.agents.length, 0) + filteredUnmappedAgents.length;
 
+  // Token 用量统计
+  const tokenStats = useMemo(() => {
+    return allAgents.reduce(
+      (acc, agent) => ({
+        input: acc.input + (agent.total_input_tokens ?? 0),
+        output: acc.output + (agent.total_output_tokens ?? 0),
+        cacheRead: acc.cacheRead + (agent.total_cache_read ?? 0),
+        cacheCreate: acc.cacheCreate + (agent.total_cache_create ?? 0),
+      }),
+      { input: 0, output: 0, cacheRead: 0, cacheCreate: 0 },
+    );
+  }, [allAgents]);
+
   function handleToggle(sessionId: string) {
     setExpandedSessionId((previous) => (previous === sessionId ? null : sessionId));
   }
@@ -209,6 +222,15 @@ export function AgentMonitor() {
         <SummaryTile icon={Clock} label="刷新时间" value={snapshot ? formatRelativeTime(snapshot.timestamp_ms, now) : "等待中"} detail={snapshot ? formatDateTime(snapshot.timestamp_ms) : "每 2 秒同步"} />
       </div>
 
+      {totalCount > 0 && (
+        <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-4">
+          <TokenStatTile label="Input Tokens" value={tokenStats.input} color="text-stage-l1" />
+          <TokenStatTile label="Output Tokens" value={tokenStats.output} color="text-stage-l3" />
+          <TokenStatTile label="Cache Read" value={tokenStats.cacheRead} color="text-stage-l5" />
+          <TokenStatTile label="Cache Create" value={tokenStats.cacheCreate} color="text-primary" />
+        </div>
+      )}
+
       {totalSessions === 0 ? (
         <Card className="relative flex min-h-72 overflow-hidden border-dashed">
           <div className="absolute inset-x-8 top-0 h-px bg-gradient-to-r from-transparent via-primary/30 to-transparent" />
@@ -287,6 +309,24 @@ function SummaryTile({ icon: Icon, label, value, detail }: SummaryTileProps) {
         </div>
         <p className="text-2xl font-semibold tracking-tight">{value}</p>
         <p className="mt-1 text-xs text-muted-foreground">{detail}</p>
+      </CardContent>
+    </Card>
+  );
+}
+
+interface TokenStatTileProps {
+  label: string;
+  value: number;
+  color: string;
+}
+
+function TokenStatTile({ label, value, color }: TokenStatTileProps) {
+  return (
+    <Card>
+      <CardContent className="p-4">
+        <div className="mb-3 text-xs text-muted-foreground">{label}</div>
+        <p className={cn("text-2xl font-semibold tracking-tight", color)}>{formatTokens(value)}</p>
+        <p className="mt-1 text-xs text-muted-foreground">累计消耗</p>
       </CardContent>
     </Card>
   );
@@ -464,6 +504,12 @@ function AgentSessionRow({ agent, maxRate, rateUnit, rateType, isExpanded, onTog
           <div className="mb-4">
             <TokenTrendSparkline tokenHistory={agent.token_history} />
           </div>
+          <div className="mb-4 grid gap-3 sm:grid-cols-2 lg:grid-cols-4">
+            <DetailMetric label="Input Tokens" value={formatTokens(agent.total_input_tokens)} />
+            <DetailMetric label="Output Tokens" value={formatTokens(agent.total_output_tokens)} />
+            <DetailMetric label="Cache Read" value={formatTokens(agent.total_cache_read)} />
+            <DetailMetric label="Cache Create" value={formatTokens(agent.total_cache_create)} />
+          </div>
           <div className="mb-3 flex gap-1 border-b border-border pb-2">
             <DetailTabButton active={activeTab === "timeline"} onClick={() => setActiveTab("timeline")}>
               工具调用
@@ -503,6 +549,20 @@ interface DetailTabButtonProps {
   active: boolean;
   children: React.ReactNode;
   onClick: () => void;
+}
+
+interface DetailMetricProps {
+  label: string;
+  value: string;
+}
+
+function DetailMetric({ label, value }: DetailMetricProps) {
+  return (
+    <div className="rounded-lg border border-border bg-muted/20 p-3">
+      <div className="text-xs text-muted-foreground">{label}</div>
+      <div className="mt-1 font-mono text-sm font-semibold">{value}</div>
+    </div>
+  );
 }
 
 function DetailTabButton({ active, children, onClick }: DetailTabButtonProps) {
