@@ -35,16 +35,16 @@ test.describe("AgentMonitor", () => {
     await expect(page.getByRole("button", { name: "token/s" })).toBeVisible();
     await expect(page.getByRole("button", { name: "token/min" })).toBeVisible();
 
-    // 默认 token/s 应该处于激活样式（secondary variant has bg-secondary class）
-    const defaultActive = page.getByRole("button", { name: "token/s" });
+    // 默认 token/min 应该处于激活样式（secondary variant has bg-secondary class）
+    const defaultActive = page.getByRole("button", { name: "token/min" });
     await expect(defaultActive).toHaveClass(/bg-secondary/);
 
-    // 点击 token/min 切换
-    await page.getByRole("button", { name: "token/min" }).click();
+    // 点击 token/s 切换
+    await page.getByRole("button", { name: "token/s" }).click();
 
-    // 点击后 token/min 应该获得激活样式，token/s 失去激活样式
+    // 点击后 token/s 应该获得激活样式，token/min 失去激活样式
     await expect(defaultActive).not.toHaveClass(/bg-secondary/);
-    await expect(page.getByRole("button", { name: "token/min" })).toHaveClass(/bg-secondary/);
+    await expect(page.getByRole("button", { name: "token/s" })).toHaveClass(/bg-secondary/);
   });
 
   test("搜索输入框存在且可交互", async ({ page }) => {
