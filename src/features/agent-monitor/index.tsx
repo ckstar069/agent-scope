@@ -378,8 +378,9 @@ function AgentSessionRow({ agent, maxRate, rateUnit, rateType, isExpanded, onTog
   const isIdle = displayStatus === "Idle" || displayStatus === "Offline";
 
   // Idle 状态使用 session average 显示，避免展示 0 rate
+  // Idle 固定使用 token/min，不受全局 unit 切换影响
   const effectiveRateType: RateType = isIdle && rateType !== "total" ? "total" : rateType;
-  const displayRate = getDisplayRate(agent, effectiveRateType, rateUnit);
+  const displayRate = getDisplayRate(agent, effectiveRateType, isIdle ? "minute" : rateUnit);
   const ratePercent = clamp((displayRate / maxRate) * 100, 0, 100);
   const context = getContextUsage(agent);
   const rateStyle = { "--rate-fill": `${ratePercent}%` } as React.CSSProperties;
@@ -425,7 +426,7 @@ function AgentSessionRow({ agent, maxRate, rateUnit, rateType, isExpanded, onTog
               <span className="font-mono font-semibold text-foreground">
                 {isIdle ? (
                   <>
-                    Idle · {formatRate(displayRate)} {rateUnit === "second" ? "token/s" : "token/min"}
+                    Idle · {formatRate(displayRate)} token/min
                   </>
                 ) : (
                   <>{formatRate(displayRate)} {rateUnit === "second" ? "token/s" : "token/min"}</>
