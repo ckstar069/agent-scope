@@ -1212,7 +1212,30 @@ git push origin v0.2.15
 
 > 如果仅 Linux 构建（无 Windows job），annotated tag 不受影响。
 
-### 10.6 v0.2.14 正式发布记录
+### 10.6 额外规则：不要重建已触发过 pipeline 的 tag
+
+**问题**：删除并重建同名 tag（如 `v0.2.1`）后，`build:windows` 在 `get_sources` 阶段报 `ParserError`。
+
+**根因**：GitLab Runner 18.11.3 PowerShell executor 对首次创建和重建 tag 走不同脚本路径。重建时生成的 PowerShell 脚本中会混入 `${CI_SHARED_ENVIRONMENT}="true"` 这类 Bash 语法，导致解析失败。
+
+**验证对比**：
+
+| Tag | 操作 | Pipeline | build:windows | 结果 |
+|-----|------|----------|---------------|------|
+| v0.2.1 | 首次创建（annotated） | #237 | 成功 | ✅ |
+| v0.2.1 | 删除后重建（lightweight） | #240 | get_sources ParserError | ❌ |
+| v0.2.1 | 再次重建（lightweight，清理工作目录） | #245 | get_sources ParserError | ❌ |
+| v0.2.2-rc.1 | 首次创建（lightweight） | #246 | 成功 | ✅ |
+| v0.2.2 | 首次创建（lightweight） | #247 | 成功 | ✅ |
+
+**结论**：
+- 与 annotated vs lightweight 无关（首次创建的 annotated tag 也能成功）
+- 与 Runner 工作目录残留无关（清理后仍失败）
+- **唯一成功的情况都是首次创建该 tag 名**
+
+**规则**：tag 一旦推送并触发过 pipeline，无论成败，都不要删除重建。如需重新发布，必须使用新的版本号。
+
+### 10.7 v0.2.14 正式发布记录
 
 | 项目 | 值 |
 |------|-----|
@@ -1235,14 +1258,14 @@ git push origin v0.2.15
 - 不指向 `artifacts/raw`
 - 全部可下载（HTTP 200）
 
-### 10.7 当前仍存风险
+### 10.8 当前仍存风险
 
 1. **Runner 服务账户仍为 LocalSystem**：`sc qc gitlab-runner` 显示 `SERVICE_START_NAME: LocalSystem`。LocalSystem 账户是 NSIS 缓存问题的根本原因，当前仅通过 `useLocalToolsDir` 绕过，未根除。
 2. **LOCALAPPDATA workaround 只是安全网**：如果 `useLocalToolsDir` 因 Tauri 升级行为变更而失效，需依赖此 workaround。
 3. **Annotated tag 中文兼容性**：GitLab Runner 18.11.3 PowerShell executor 已确认存在缺陷，必须使用 lightweight tag 规避。
 4. **Linux npm ECONNRESET**：偶发网络问题，rc.41 曾遇到，属 Runner 网络环境波动。
 
-### 10.8 推荐后续行动
+### 10.9 推荐后续行动
 
 - **短期**：继续使用 LocalSystem + `useLocalToolsDir: true` + `LOCALAPPDATA` workaround + **lightweight tag** 的组合
 - **中期**：将 GitLab Runner 服务账户从 LocalSystem 切换为 `yufei` 或专用 CI 用户，消除 systemprofile 限制

@@ -272,6 +272,18 @@ job 在 `before_script` 之前即失败，没有任何用户代码被执行。
 | 最终解决 | 当前可接受，未做优化。后续可缩小 cache 范围，仅保留 `.cargo/registry/cache/` 和 `.cargo/registry/src/` 的必要子集。 |
 | 经验教训 | cache 不是越快越好，需要评估压缩/解压/上传总耗时与重新下载的对比。 |
 
+### 5.10 不要重建已触发过 pipeline 的 release tag
+
+| 字段 | 内容 |
+|------|------|
+| 问题 | 重建已存在的 tag 后 Windows build 在 get_sources 阶段 ParserError |
+| 错误现象 | `ParserError: UnexpectedToken`、`${CI_SHARED_ENVIRONMENT}="true"` 等 Bash 语法出现在 PowerShell 错误中 |
+| 发生阶段 | build:windows job 的 get_sources 阶段 |
+| 根因 | GitLab Runner 18.11.3 PowerShell executor 在 tag 首次创建和重建时走不同的脚本生成路径。首次创建时成功，但删除后重建同一名称的 tag 时，Runner 生成的 `get_sources` 脚本中会混入 `${CI_SHARED_ENVIRONMENT}="true"` 这类 Bash 语法，在 PowerShell 中非法。 |
+| 错误尝试 | 最初以为是 annotated vs lightweight tag 类型问题；尝试清理 Windows Runner 工作目录残留，均不解决 |
+| 最终解决 | 废弃已有 tag，使用全新 tag 名（如从 `v0.2.1` 改为 `v0.2.2`）。首次创建的新 tag 不会触发此问题。 |
+| 经验教训 | **发布 tag 一旦推送并触发了 pipeline，即使 pipeline 失败，也不要删除重建同名 tag。** 如需重新发布，必须使用新的版本号（如 `v0.2.2` 替代 `v0.2.1`）。`scripts/release-tag.sh` 已内置本地/远端 tag 存在性检查，防止误覆盖。 |
+
 ---
 
 ## 6. 推荐的标准实施步骤

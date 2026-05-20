@@ -48,9 +48,9 @@ if ! git remote get-url origin > /dev/null 2>&1; then
     exit 1
 fi
 
-# 验证 tag 格式: 必须是 strict semver vX.Y.Z
-if [[ ! "$TAG" =~ ^v[0-9]+\.[0-9]+\.[0-9]+$ ]]; then
-    echo "错误: tag 格式无效 '$TAG'，必须是 vX.Y.Z 格式（例如 v0.2.15）" >&2
+# 验证 tag 格式: 必须是 semver vX.Y.Z 或 vX.Y.Z-prerelease
+if [[ ! "$TAG" =~ ^v[0-9]+\.[0-9]+\.[0-9]+(-[0-9A-Za-z.-]+)?$ ]]; then
+    echo "错误: tag 格式无效 '$TAG'，必须是 vX.Y.Z 或 vX.Y.Z-prerelease 格式（例如 v0.2.15, v0.2.2-rc.1）" >&2
     exit 1
 fi
 
