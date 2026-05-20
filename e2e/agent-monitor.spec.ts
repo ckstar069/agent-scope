@@ -15,7 +15,7 @@ test.describe("AgentMonitor", () => {
 
   test("显示页面标题和副标题", async ({ page }) => {
     await expect(page.getByRole("heading", { name: "Agent 监控" })).toBeVisible();
-    await expect(page.getByText("通过 Tauri 事件流展示实时 Token 速率、上下文窗口占用和会话在线状态")).toBeVisible();
+    await expect(page.getByText("通过 Tauri 事件流展示 Token 消耗速率（burn rate）、上下文窗口占用和会话在线状态。")).toBeVisible();
   });
 
   test("无 Agent 时显示空状态", async ({ page }) => {
