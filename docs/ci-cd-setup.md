@@ -1044,6 +1044,46 @@ stages:
 2. 确保 `CI_JOB_TOKEN` 允许访问 **Release API** 和 **Package Registry**（`write_package_registry`）
 3. 或创建 Project Access Token（`api` + `write_repository` + `write_package_registry` 权限）并设为 `GITLAB_TOKEN` 变量
 
+### 9.7.1 Artifact 生命周期管理
+
+**关键区分**：CI job artifact ≠ 软件发布产物。
+
+| 类型 | 存储位置 | 有效期 | 用途 |
+|------|---------|--------|------|
+| Build job artifacts | GitLab job artifacts | `1 day` | **临时产物**，仅用于传递给下游 `release` job |
+| Release 产物 | GitLab Generic Package Registry | 永久 | **正式发布产物**，外部系统应从此处获取 |
+
+**`.gitlab-ci.yml` 配置**：
+
+```yaml
+build:linux:
+  artifacts:
+    expire_in: 1 day  # 仅保留 1 天，足够 release job 下载
+
+build:windows:
+  artifacts:
+    expire_in: 1 day
+
+release:
+  # release job 的 artifacts 可选，因为产物已上传至 Package Registry
+  artifacts:
+    expire_in: 1 week  # 仅用于调试，不长于 1 周
+```
+
+**为什么 build job 的 artifact 不能长期保留？**
+
+1. **存储膨胀**：每个 tag push 产生 2-4 个 artifact 文件，长期累积可达数百个文件（实测曾达 119 个文件）
+2. **外部系统误用**：如果外部系统通过 Jobs API 查询 artifact，会拿到大量历史构建版本（包括 rc、测试版本），与 Releases 页面严重不一致
+3. **语义混淆**：CI job artifact 是"构建产物"，不是"发布版本"
+
+**外部系统查询规范**：
+
+- ✅ **正确**：查询 GitLab Releases API (`GET /projects/:id/releases`) 获取正式发布的版本列表
+- ✅ **正确**：查询 Package Registry (`GET /projects/:id/packages`) 获取具体文件
+- ❌ **错误**：查询 Jobs API (`GET /projects/:id/jobs`) 获取软件发布列表
+
+详见「问题 5.11」。
+
 ### 9.8 首次发布测试步骤
 
 1. 确认 Windows Runner 已注册并 online

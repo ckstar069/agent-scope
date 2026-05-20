@@ -284,6 +284,18 @@ job 在 `before_script` 之前即失败，没有任何用户代码被执行。
 | 最终解决 | 废弃已有 tag，使用全新 tag 名（如从 `v0.2.1` 改为 `v0.2.2`）。首次创建的新 tag 不会触发此问题。 |
 | 经验教训 | **发布 tag 一旦推送并触发了 pipeline，即使 pipeline 失败，也不要删除重建同名 tag。** 如需重新发布，必须使用新的版本号（如 `v0.2.2` 替代 `v0.2.1`）。`scripts/release-tag.sh` 已内置本地/远端 tag 存在性检查，防止误覆盖。 |
 
+### 5.11 CI job artifact 无限堆积影响外部系统
+
+| 字段 | 内容 |
+|------|------|
+| 问题 | 外部软件发布页项目通过 GitLab Jobs API 查询 artifact，获取到了 71 个 job 的数百个文件 |
+| 错误现象 | 发布页展示了大量历史构建版本（包括测试版本 `99.99.99`），与 GitLab Releases 页面显示的 5 个 release 严重不一致 |
+| 发生阶段 | 外部系统调用 `GET /projects/:id/jobs?scope=success&per_page=100` 时 |
+| 根因 | 1. `build:linux` / `build:windows` job 的 `artifacts.expire_in` 设为 `1 month`，历史构建产物长期保留；2. 外部系统误用 Jobs API 查询"软件发布"，而 CI job artifact 不等于 release |
+| 错误尝试 | 外部系统尝试按版本号过滤、按文件名去重，均无法根本解决 |
+| 最终解决 | **两层修复**：① `.gitlab-ci.yml` 中 build job 的 `expire_in` 从 `1 month` 缩短为 `1 day`（release job 保持较长或不设置，因为它负责向 Package Registry 上传永久产物）；② 文档明确规范：外部系统应查询 **GitLab Releases API** 或 **Package Registry API** 获取软件发布，不应直接查询 Jobs API |
+| 经验教训 | **CI job artifact 是临时构建产物，不是发布产物。** 长期存储应走 Package Registry，查询应走 Releases API。Build job 的 artifact 保留期应尽可能短（仅够 release job 下载即可），避免服务器存储无限增长和外部系统误用。 |
+
 ---
 
 ## 6. 推荐的标准实施步骤
