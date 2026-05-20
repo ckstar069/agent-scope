@@ -136,6 +136,16 @@ export function AgentMonitor() {
     );
   }, [allAgents]);
 
+  // Agent 类型分布统计
+  const agentTypeStats = useMemo(() => {
+    const counts = new Map<string, number>();
+    for (const agent of allAgents) {
+      const type = agent.agent_type || "unknown";
+      counts.set(type, (counts.get(type) ?? 0) + 1);
+    }
+    return counts;
+  }, [allAgents]);
+
   function handleToggle(sessionId: string) {
     setExpandedSessionId((previous) => (previous === sessionId ? null : sessionId));
   }
@@ -223,12 +233,30 @@ export function AgentMonitor() {
       </div>
 
       {totalCount > 0 && (
-        <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-4">
-          <TokenStatTile label="Input Tokens" value={tokenStats.input} color="text-stage-l1" />
-          <TokenStatTile label="Output Tokens" value={tokenStats.output} color="text-stage-l3" />
-          <TokenStatTile label="Cache Read" value={tokenStats.cacheRead} color="text-stage-l5" />
-          <TokenStatTile label="Cache Create" value={tokenStats.cacheCreate} color="text-primary" />
-        </div>
+        <>
+          <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-4">
+            <TokenStatTile label="Input Tokens" value={tokenStats.input} color="text-stage-l1" />
+            <TokenStatTile label="Output Tokens" value={tokenStats.output} color="text-stage-l3" />
+            <TokenStatTile label="Cache Read" value={tokenStats.cacheRead} color="text-stage-l5" />
+            <TokenStatTile label="Cache Create" value={tokenStats.cacheCreate} color="text-primary" />
+          </div>
+          {agentTypeStats.size > 0 && (
+            <div className="flex flex-wrap items-center gap-2">
+              <span className="text-xs text-muted-foreground">Agent 类型分布:</span>
+              {Array.from(agentTypeStats.entries()).map(([type, count]) => (
+                <span
+                  key={type}
+                  className={cn(
+                    "inline-flex items-center gap-1 rounded-full border px-2.5 py-0.5 text-xs font-medium",
+                    getAgentTypeStyle(type),
+                  )}
+                >
+                  {type} <span className="font-mono opacity-70">{count}</span>
+                </span>
+              ))}
+            </div>
+          )}
+        </>
       )}
 
       {totalSessions === 0 ? (
@@ -444,7 +472,7 @@ function AgentSessionRow({ agent, maxRate, rateUnit, rateType, isExpanded, onTog
                 <ChevronRight className="size-4 shrink-0 text-muted-foreground" aria-hidden="true" />
               )}
               <span className="font-mono text-sm font-semibold tracking-tight">{shortSessionId(agent.session_id)}</span>
-              <span className="rounded-full border border-border bg-background px-2 py-0.5 text-xs text-muted-foreground">
+              <span className={cn("rounded-full border px-2 py-0.5 text-xs font-medium", getAgentTypeStyle(agent.agent_type))}>
                 {agent.agent_type || "unknown"}
               </span>
               <StatusBadge status={displayStatus} rawStatus={agent.status} />
@@ -713,8 +741,22 @@ function matchesAgentFilter(agent: AgentInfo, filter: string): boolean {
     agent.project_name.toLowerCase().includes(lower) ||
     agent.model.toLowerCase().includes(lower) ||
     agent.status.toLowerCase().includes(lower) ||
-    agent.cwd.toLowerCase().includes(lower)
+    agent.cwd.toLowerCase().includes(lower) ||
+    agent.agent_type.toLowerCase().includes(lower)
   );
+}
+
+function getAgentTypeStyle(agentType: string): string {
+  switch (agentType.toLowerCase()) {
+    case "claude":
+      return "border-stage-l1/50 bg-stage-l1/10 text-stage-l1";
+    case "codex":
+      return "border-stage-l3/50 bg-stage-l3/10 text-stage-l3";
+    case "mcp":
+      return "border-stage-l5/50 bg-stage-l5/10 text-stage-l5";
+    default:
+      return "border-border bg-muted/50 text-muted-foreground";
+  }
 }
 
 function TokenTrendSparkline({ tokenHistory }: { tokenHistory: number[] }) {
