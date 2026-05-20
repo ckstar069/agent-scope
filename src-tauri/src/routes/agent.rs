@@ -4,7 +4,7 @@ use crate::app_state::AppState;
 use crate::models::project::{SerSessionSummary, SerTranscript};
 use crate::services::agent_service;
 
-#[tauri::command]
+#[tauri::command(rename = "start_watching")]
 pub fn start_watching_cmd(
     path: String,
     app_handle: AppHandle,
@@ -13,27 +13,27 @@ pub fn start_watching_cmd(
     agent_service::start_watching(path, app_handle, &state)
 }
 
-#[tauri::command]
+#[tauri::command(rename = "stop_watching")]
 pub fn stop_watching_cmd(path: String, state: State<'_, AppState>) -> Result<(), String> {
     agent_service::stop_watching(path, &state)
 }
 
-#[tauri::command]
+#[tauri::command(rename = "get_latest_session")]
 pub fn get_latest_session_cmd(path: String) -> Result<Option<SerTranscript>, String> {
     agent_service::get_latest_session(path)
 }
 
-#[tauri::command]
+#[tauri::command(rename = "list_project_sessions")]
 pub fn list_project_sessions_cmd(path: String) -> Result<Vec<SerSessionSummary>, String> {
     agent_service::list_project_sessions(path)
 }
 
-#[tauri::command]
+#[tauri::command(rename = "search_sessions")]
 pub fn search_sessions_cmd(path: String, query: String) -> Result<Vec<SerSessionSummary>, String> {
     agent_service::search_sessions(path, query)
 }
 
-#[tauri::command]
+#[tauri::command(rename = "get_session_transcript")]
 pub fn get_session_transcript_cmd(
     path: String,
     session_id: String,
