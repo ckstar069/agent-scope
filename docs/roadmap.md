@@ -211,8 +211,8 @@ src-tauri/src/
 |--------|------|------|------|
 | ~~P1~~ | ~~**Token 用量统计**~~ | ~~依赖 abtop-collector 已有数据，前端统计卡片 + Agent 详情 Token 展示~~ | ~~高~~ | ✅ 已完成 |
 | ~~P2~~ | ~~**多 Agent 支持**~~ | ~~abtop-collector 已有 Codex/MCP 采集器；依赖 Phase 2 的 Collector Trait 和前端 feature 结构~~ | ~~高~~ | ✅ 已完成 |
-| P3 | **Dashboard 增强** | 活跃度评分、异常告警、跨项目对比；依赖 Token 统计和 Agent 数据 | 中 |
-| P4 | **会话历史深度分析** | 热点文件识别、工具调用频率；依赖 Phase 2 的 history_service 模块化 | 中 |
+| ~~P3~~ | ~~**Dashboard 增强**~~ | ~~活跃度评分、异常告警、跨项目对比；依赖 Token 统计和 Agent 数据~~ | ~~中~~ | ✅ 已完成 |
+| ~~P4~~ | ~~**会话历史深度分析**~~ | ~~热点文件识别、工具调用频率；依赖 Phase 2 的 history_service 模块化~~ | ~~中~~ | ✅ 已完成 |
 
 ---
 
