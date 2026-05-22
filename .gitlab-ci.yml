@@ -37,7 +37,7 @@ verify:
     # 稳定 crash（"Exit handler never called!"），branch pipeline 不受影响。
     # 用脚本块显式检查退出码并重试，避免 shell || 语法在 CI 中不可靠。
     # 长期应在 Dockerfile 中固定 npm 稳定版本。见 docs/desktop-ci-cd-lessons.md §5.12
-    - npm install --no-audit --no-fund; npm install --no-audit --no-fund
+    - bash scripts/ci-npm-install.sh --no-audit --no-fund
     - echo "=== 安装 Playwright 浏览器 ==="
     - npx playwright install chromium
   script:
@@ -102,8 +102,8 @@ build:linux:
     - echo "=== 同步版本号 ==="
     - *sync-version-script
     - echo "=== 安装前端依赖 ==="
-    # Workaround: 串联重试 npm install（同 verify job，见 §5.12）
-    - npm install --no-audit --no-fund; npm install --no-audit --no-fund
+    # Workaround: 脚本重试 npm install（同 verify job，见 §5.12）
+    - bash scripts/ci-npm-install.sh --no-audit --no-fund
   script:
     - echo "=== 构建前端 ==="
     - npm run build
