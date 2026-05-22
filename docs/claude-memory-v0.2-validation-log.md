@@ -406,7 +406,7 @@ Open auto-memory folder
    - 原假设（`encode_cwd_path(cwd)` 精确匹配）**被挑战**
    - Claude 官方文档说明：git repo 内 Auto Memory 按 repository 派生，同一 repo 的子目录与 worktree 共享 auto memory
    - **普通 git repo 子目录**：当前实现已修正为向上查找 `.git` 目录定位 repo root，再用 repo root 编码匹配 ✅
-   - **git worktree**：当前实现只检查 `.git` 目录，worktree 的 `.git` 是文件，因此会返回 worktree 自身路径，**不保证**与主 repo 共享 Auto Memory ⚠️ P1 limitation
+   - **git worktree**：P1 不解析 `.git` 文件以恢复主 repo identity，也不做 cwd-encoded 近似匹配（避免误展示）；返回 `auto_memory_worktree_unsupported` warning。worktree 共享 Auto Memory 语义留后续实现 ⚠️ P1 limitation
    - **非 git 目录**：回退到 cwd 编码路径匹配
 
 3. **E3 验证项重新定义**：
@@ -430,8 +430,231 @@ Open auto-memory folder
 - [x] 补充 worktree 场景 Rust 测试：验证不加载、不返回 `not_found`、返回 limitation warning
 - [x] 清理 requirements 残留旧口径（FR-02、启动链、v0.3 Project identity）
 
-##### 待执行（需用户配合）
+##### 待执行状态（Round 7.1 更新）
 
-- [ ] 重新执行真实对照验证（使用修正后的 AgentScope 版本）
-- [ ] 在至少 2 个 cwd（项目根目录 + 深层子目录）对比 Claude `/memory` 与 AgentScope 模拟结果
-- [ ] 验证 Auto Memory 匹配：同一 git repo 的不同子目录是否共享同一 Auto Memory
+- [x] 重新执行真实对照验证（使用修正后的 AgentScope 版本）→ **已由 Round 7.1 Linux 人工回归覆盖，见后文记录**
+- [x] 在至少 2 个 cwd（项目根目录 + 深层子目录）对比 Claude `/memory` 与 AgentScope 模拟结果 → **已覆盖**：`/home/yufei/Repo/fpga_project_agc`（根目录）和 `/home/yufei/Repo/fpga_project_agc/src/python_model/L3_pipeline`（深层子目录）
+- [ ] 验证 Auto Memory 匹配：同一 git repo 的不同子目录是否共享同一 Auto Memory → **仍待验证**：需确认磁盘上存在 `MEMORY.md` 且模拟器正确匹配。当前样本中 `auto_memory_not_found` 未独立核查磁盘事实，暂不作为 P1 阻塞项
+
+---
+
+## 验证记录 2026-05-22（Linux 非 git 空 cwd 观察）
+
+> **状态**：补充观察 / 空资产场景 / 不计入 P1 正向验收样本
+>
+> **说明**：该用例 cwd 无任何 Claude 资产，Claude `/memory` UI 仍显示 Auto-memory on、User memory、Project memory 入口，这属于 UI 默认展示行为，不能推断对应文件存在。AgentScope 输出与磁盘事实一致。
+
+### 环境
+
+- Claude Code 版本: v2.1.x
+- AgentScope 版本: v0.2.0（Linux AppImage）
+- 操作系统: Linux 3.50
+- 测试 cwd: `/home/yufei/Repo/demo`
+
+### 磁盘事实（只读核查）
+
+| 检查项 | 结果 |
+|--------|------|
+| 是否为 git repo | 否（无 `.git`） |
+| `CLAUDE.md` | 不存在 |
+| `.claude/CLAUDE.md` | 不存在 |
+| `CLAUDE.local.md` | 不存在 |
+| `.claude/rules/` | 不存在 |
+| `~/.claude/CLAUDE.md` | 不存在 |
+| `~/.claude/projects/*/memory/MEMORY.md` | 未发现 |
+
+### Claude Code `/memory` 输出（用户截图观察）
+
+- Auto-memory: on
+- User memory: ~/.claude/CLAUDE.md
+- Project memory: ./CLAUDE.md
+- Open auto-memory folder
+
+**解读**：
+- `Auto-memory: on`：功能开关状态，不推断文件存在（见首组观察记录修正）
+- `User memory: ~/.claude/CLAUDE.md`：UI 入口/管理项，不等同于该文件在磁盘上存在
+- `Project memory: ./CLAUDE.md`：UI 入口/管理项，不等同于当前 cwd 存在该文件
+- 该 cwd 无任何 Claude 资产，`/memory` 的 User/Project memory 项应理解为**可配置的入口占位**，而非**已加载的资产**
+
+### AgentScope 加载链模拟器输出
+
+- A 区域（启动链）：0 步
+- B 区域（path-scoped rules）：0 条
+- Warnings：`auto_memory_not_found`
+- Host profile：Linux / home_dir=/home/yufei / claude_config_dir=~/.claude
+
+### 对照结论
+
+| 对比项 | 结果 | 说明 |
+|--------|------|------|
+| 文件存在性对照 | ✅ 一致 | AgentScope A 区域 0 步与磁盘事实一致（无 CLAUDE.md、无 rules） |
+| Auto Memory | ✅ 一致 | AgentScope `auto_memory_not_found` 与磁盘事实一致（无 MEMORY.md） |
+| `/memory` UI 展示 | ⚠️ 需正确理解 | UI 显示 User/Project memory 入口，但该 cwd 和 `~/.claude` 均无对应文件 |
+
+### 差异说明
+
+无实质性差异。AgentScope 输出与磁盘事实一致。
+
+### 验收样本判定
+
+**该用例不计入 P1 正向资产加载验收样本**。原因：
+1. 正向验收样本应覆盖"有资产时是否正确加载"的核心场景
+2. 空资产场景只能验证"无资产时不误加载"，属于边界安全校验
+3. 推荐在以下 cwd 进行正向验收：
+   - `/home/yufei/Repo/fpga_project_agc`（git 项目根目录，应有 CLAUDE.md 和 rules）
+   - `/home/yufei/Repo/fpga_project_agc/src/python_model/L3_pipeline`（同一 git repo 的深层子目录，验证 Auto Memory 共享语义）
+
+### 假设更新
+
+无更新。空资产场景与当前实现预期一致。
+
+---
+
+## 验证记录 2026-05-22（Round 7：3 项修复 + 回归测试）
+
+> **状态**：代码修复完成 / 回归测试通过 / 待重新打包 Linux AppImage 后交付验证
+>
+> **触发原因**：在 Linux 3.50 真机验证 fpga_project_agc 时发现 3 个问题
+
+### 环境
+
+- Claude Code 版本: v2.1.x
+- AgentScope 版本: v0.2.0 + Round 7 补丁
+- 操作系统: Linux 3.50 / macOS（开发环境）
+
+### 问题 1：~ 路径展开未实现
+
+#### 现象
+在模拟器输入框输入 `~/Repo/fpga_project_agc`，点击模拟后报错 "目录不存在"。
+
+#### 根因
+`simulate_load_chain_service` 直接 `PathBuf::from(&cwd)`，未处理 `~` 展开。Shell 风格的 `~/` 在 UI 输入中非常常见。
+
+#### 修复
+- **落点**：`src-tauri/src/services/claude_memory_service.rs`
+- 新增 `expand_tilde_path` helper：支持 `~` 和 `~/...`，不支持 `~user`
+- home 无法解析时返回清晰错误 "无法获取用户主目录"
+- 输出结果中的 `cwd` 字段显示实际解析后的绝对路径
+
+#### 回归测试
+- Rust 单元测试：`test_expand_tilde_path_with_home_injected`（注入 fake home，不修改进程级 HOME）
+- Rust 单元测试：`test_expand_tilde_path_unchanged`（绝对路径、相对路径、`~user` 不展开）
+- Rust 单元测试：`test_simulate_service_absolute_path`（service 层透传验证）
+- E2E 测试：`~ 路径输入发送到后端`（验证前端将 ~ 路径原样传给后端）
+
+### 问题 2：失败后旧结果残留
+
+#### 现象
+第一次模拟成功，显示 A/B 区域结果。第二次输入错误路径模拟失败后，A/B 区域的上次结果仍然显示在页面上，与错误提示并存。
+
+#### 根因
+`useLoadChain.ts` 的 `simulate` 函数在请求前只 `setError(null)`，未 `setResult(null)`。错误状态下旧 `result` 未被清除。
+
+#### 修复
+- **落点**：`src/features/claude-memory/hooks/useLoadChain.ts`
+- 在 `simulate` 开始时增加 `setResult(null)`
+
+#### 回归测试
+- E2E 测试：`失败后清除旧结果`（先成功mock→验证结果显示→再失败mock→验证结果清除且错误显示）
+
+### 问题 3：深层 cwd 漏 repo root 的 rules 和 settings
+
+#### 现象
+在 `/home/yufei/Repo/fpga_project_agc/src/python_model/L3_pipeline`（git repo 深层子目录）启动模拟：
+- repo root 的 `.claude/rules/` 未被扫描
+- repo root 的 `.claude/settings.json`（含 claudeMdExcludes）未被读取
+
+#### 根因
+- project rules 扫描路径：`cwd.join(".claude").join("rules")`（用了 cwd 而非 repo root）
+- project/local settings 读取路径：`cwd.join(".claude").join("settings.json")`（同上）
+- 对于 git repo 子目录，Claude Code 的 project 级资产基准是 repo root，不是 cwd
+
+#### 修复
+- **落点 1**：`src-tauri/src/collectors/claude_memory/load_chain.rs`
+  - project rules 扫描前，先 `find_git_repo_root(cwd)`，若找到则使用 repo root，否则回退到 cwd
+- **落点 2**：`src-tauri/src/collectors/claude_memory/settings_reader.rs`
+  - project settings (`settings.json`) 和 local settings (`settings.local.json`) 同样使用 `find_git_repo_root(cwd)` 定位基准目录
+- **落点 3**：`src-tauri/src/collectors/claude_memory/path_resolver.rs`
+  - 将 `find_git_repo_root` 从 `load_chain.rs` 的私有函数提升为公共函数，供 `settings_reader.rs` 复用
+
+#### 行为一致性
+| 场景 | project rules | project settings | local settings |
+|------|---------------|------------------|----------------|
+| git repo 子目录 | repo root `.claude/rules/` | repo root `.claude/settings.json` | repo root `.claude/settings.local.json` |
+| 非 git 目录 | cwd `.claude/rules/` | cwd `.claude/settings.json` | cwd `.claude/settings.local.json` |
+
+#### 回归测试
+- Rust 单元测试：`test_deep_cwd_reads_repo_root_rules`（git repo 深层子目录读取 repo root rules → A 区域）
+- Rust 单元测试：`test_deep_cwd_reads_repo_root_settings`（git repo 深层子目录的 claudeMdExcludes 来自 repo root settings）
+- Rust 单元测试：`test_non_git_deep_cwd_uses_own_rules`（非 git 目录仍使用自身 cwd 的 rules）
+- Rust 单元测试：`test_deep_cwd_repo_root_path_scoped_rule_in_b_zone`（repo root 有 paths rule → B 区域，不进入 A 区域）
+- Rust 单元测试：`test_deep_cwd_reads_repo_root_local_settings`（repo root `settings.local.json` 排除生效，来源标注为 local）
+
+### 测试汇总
+
+| 测试类型 | 数量 | 结果 |
+|---------|------|------|
+| Rust 单元测试 | 186 | ✅ 全部通过 |
+| E2E 测试 | 73 | ✅ 全部通过 |
+| cargo fmt | - | ✅ 通过 |
+| cargo clippy | - | ✅ 通过 |
+| npm run build | - | ✅ 通过 |
+
+### Round 7.1 状态
+
+- [x] 重新打包 Linux 3.50 AppImage（2026-05-22 10:38 完成）
+- [x] 重构 `expand_tilde_path` 测试隔离（可注入 home，不修改进程级 HOME）
+- [x] 修正文档 A/B 区域口径
+- [x] 修正 `load_chain.rs` 顶部注释 drift
+- [x] 补 Rust 测试（deep cwd path-scoped rule + local settings）
+
+---
+
+## 验证记录 2026-05-22（Round 7.1：Linux 3.50 人工回归）
+
+> **状态**：四项验证全部通过 ✅
+>
+> **验证方式**：只读观察，未创建/修改/删除任何真实 Claude 资产
+>
+> **环境**：Linux 3.50 / AgentScope v0.2.0 + Round 7/7.1 补丁 / AppImage 构建时间 2026-05-22 10:38
+
+### 验证 1：~ 路径展开 ✅
+
+- **输入**：`~/Repo/fpga_project_agc`
+- **结果**：模拟成功
+- **CWD 显示**：`/home/yufei/Repo/fpga_project_agc`（已展开为绝对路径）
+- **结论**：通过。不再出现 "目录不存在: ~/..." 错误。
+
+### 验证 2：项目根目录模拟 ✅
+
+- **输入**：`/home/yufei/Repo/fpga_project_agc`
+- **结果**：
+  - A 区域：36 步，包含 root `CLAUDE.md` 和 repo root `.claude/rules/` 无条件 rules
+  - B 区域：0 条
+- **说明**：当前样本中已观察到的 rules 均无 `paths` frontmatter，属于无条件 rules，进入 A 区域是正确行为。B 区域 0 条不视为失败。
+
+### 验证 3：深层 cwd 使用 repo root project 资产 ✅
+
+- **输入**：`/home/yufei/Repo/fpga_project_agc/src/python_model/L3_pipeline`
+- **结果**：
+  - A 区域：仍为 36 步
+  - 仍显示 repo root `CLAUDE.md`（显示为 `ancestor instruction`，可接受）
+  - 仍显示 repo root `.claude/rules/` 无条件 rules
+  - B 区域：仍为 0 条
+- **关键验收点**：同一 repo root 的 project assets 未因 deep cwd 而丢失。通过与验证 2 对比，A 区域 project 级资产一致，确认 deep cwd 正确回退到 repo root 基准。
+
+### 验证 4：模拟失败后旧结果清空 ✅
+
+- **输入**：`/home/yufei/Repo/fpga_project_agc/src/python_mline`（不存在目录）
+- **结果**：
+  - 页面仅显示 "目录不存在" 错误
+  - 上一轮成功模拟的 HostProfile / warnings / A 区域 / B 区域结果不再残留
+- **结论**：通过。
+
+### 关于 Auto Memory
+
+本次样本中 `auto_memory_not_found` 出现。由于未独立核查磁盘上是否存在对应 `MEMORY.md`，**不作为 P1 阻塞项**。若后续确认磁盘存在 `MEMORY.md` 而模拟器未匹配到，再单独跟进。
+
+### 验证完成声明
+
+Round 7 / 7.1 修复的 3 项问题（~ 展开、失败清空、deep cwd repo root 基准）均通过 Linux 3.50 真机人工验证。

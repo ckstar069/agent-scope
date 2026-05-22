@@ -4,7 +4,7 @@ use std::path::{Path, PathBuf};
 use super::super::claude_history::path_codec::encode_cwd_path;
 use super::frontmatter::{extract_frontmatter, parse_list_field};
 use super::models::*;
-use super::path_resolver::{resolve_claude_config_dir, resolve_managed_dir};
+use super::path_resolver::{find_git_repo_root, resolve_claude_config_dir, resolve_managed_dir};
 use super::settings_reader::{is_excluded, read_claude_md_excludes};
 
 const MAX_AUTO_MEMORY_LINES: usize = 200;
@@ -18,10 +18,12 @@ const MAX_FILE_READ_BYTES: usize = 50 * 1024; // 50KB：超过此大小不读完
 /// 1. 从 cwd 向上遍历到根目录，发现每一层的 CLAUDE.md 和 CLAUDE.local.md
 /// 2. 读取 ~/.claude/CLAUDE.md（用户全局指令）
 /// 3. 读取 cwd 下的 CLAUDE.md、.claude/CLAUDE.md、CLAUDE.local.md
-/// 4. 读取 user 级 rules（~/.claude/rules/**/*.md，无 paths 的）
-/// 5. 读取 project 级 rules（cwd/.claude/rules/**/*.md，无 paths 的）
-/// 6. 读取 Auto Memory（若 cwd 是 git repo，匹配 ~/.claude/projects/<id>/memory/MEMORY.md）
-/// 7. 应用 claudeMdExcludes
+/// 4. 读取 user 级 rules（~/.claude/rules/**/*.md，无 paths 的 → A 区域）
+/// 5. 读取 project 级 rules：
+///    - git repo 子目录：repo_root/.claude/rules/**/*.md（无 paths 的 → A 区域）
+///    - 非 git 目录：cwd/.claude/rules/**/*.md
+/// 6. 读取 Auto Memory（普通 git repo 用 repo root 编码；非 git 用 cwd 编码；worktree 不近似匹配）
+/// 7. 应用 claudeMdExcludes（project/local 层同样以 repo root 为基准）
 pub fn simulate_load_chain(cwd: &Path) -> Result<SerLoadChain, String> {
     // 验证 cwd
     if !cwd.exists() {
@@ -122,8 +124,9 @@ pub fn simulate_load_chain(cwd: &Path) -> Result<SerLoadChain, String> {
         );
     }
 
-    // 5b. project 级 rules
-    let project_rules_dir = cwd.join(".claude").join("rules");
+    // 5b. project 级 rules（git repo 子目录应使用 repo root 的 .claude/rules）
+    let project_base = find_git_repo_root(cwd).unwrap_or_else(|| cwd.to_path_buf());
+    let project_rules_dir = project_base.join(".claude").join("rules");
     scan_rules_dir(
         &project_rules_dir,
         "project",
@@ -452,29 +455,6 @@ fn read_rule_paths(path: &Path) -> Result<Option<Vec<String>>, String> {
     } else {
         Ok(None)
     }
-}
-
-/// 从 cwd 向上查找 git 仓库根目录（只识别 `.git` 目录）
-///
-/// **行为**：
-/// - 普通 git repo 子目录：向上找到 `.git` 目录，返回该目录的父路径（repo root）
-/// - git worktree / submodule：`.git` 是文件而非目录，本函数不识别，返回 None
-/// - 非 git 目录：无 `.git` 目录，返回 None
-///
-/// worktree 的 `.git` 文件解析不在 P1 范围内，由调用方单独处理。
-///
-/// 返回：若找到 `.git` 目录则返回 repo root 路径；否则返回 None
-fn find_git_repo_root(cwd: &Path) -> Option<PathBuf> {
-    let mut current = Some(cwd.to_path_buf());
-    while let Some(path) = current {
-        let git_path = path.join(".git");
-        // 只识别 `.git` 目录（普通 repo），不识别 `.git` 文件（worktree / submodule）
-        if git_path.is_dir() {
-            return Some(path);
-        }
-        current = path.parent().map(|p| p.to_path_buf());
-    }
-    None
 }
 
 /// 查找并读取 Auto Memory（MEMORY.md）
@@ -1525,6 +1505,237 @@ mod tests {
 
         // warnings 应为空（文件可读）
         assert!(warnings.is_empty(), "可读文件不应产生 warning");
+
+        let _ = fs::remove_dir_all(&root);
+    }
+
+    /// 测试：git repo 深层子目录应读取 repo root 的 project rules
+    #[test]
+    fn test_deep_cwd_reads_repo_root_rules() {
+        let root = setup_test_dir();
+        let repo_root = root.join("my-repo");
+        let deep_dir = repo_root
+            .join("src")
+            .join("python_model")
+            .join("L3_pipeline");
+
+        // 创建 git repo 根目录
+        fs::create_dir_all(&repo_root).unwrap();
+        fs::create_dir_all(repo_root.join(".git")).unwrap();
+        fs::write(repo_root.join("CLAUDE.md"), "# Repo\n").unwrap();
+
+        // 在 repo root 创建 project rules
+        fs::create_dir_all(repo_root.join(".claude").join("rules")).unwrap();
+        fs::write(
+            repo_root.join(".claude").join("rules").join("style.md"),
+            "# Style\n",
+        )
+        .unwrap();
+
+        // 深层子目录（无 .claude/rules）
+        fs::create_dir_all(&deep_dir).unwrap();
+
+        let result = simulate_isolated(&deep_dir).expect("模拟应成功");
+
+        // 应找到 repo root 的 project rules
+        let rule_step = result
+            .startup_chain
+            .iter()
+            .find(|s| s.native_path.contains("style.md"));
+        assert!(
+            rule_step.is_some(),
+            "深层子目录应读取 repo root 的 .claude/rules/style.md"
+        );
+        assert_eq!(rule_step.unwrap().scope, "project");
+
+        let _ = fs::remove_dir_all(&root);
+    }
+
+    /// 测试：git repo 深层子目录应读取 repo root 的 project settings（claudeMdExcludes）
+    #[test]
+    fn test_deep_cwd_reads_repo_root_settings() {
+        let root = setup_test_dir();
+        let repo_root = root.join("my-repo");
+        let deep_dir = repo_root.join("src").join("deep");
+
+        // 创建 git repo 根目录
+        fs::create_dir_all(&repo_root).unwrap();
+        fs::create_dir_all(repo_root.join(".git")).unwrap();
+        fs::write(repo_root.join("CLAUDE.md"), "# Repo\n").unwrap();
+
+        // 在 repo root 创建 project settings，排除 repo_root/CLAUDE.md
+        fs::create_dir_all(repo_root.join(".claude")).unwrap();
+        fs::write(
+            repo_root.join(".claude").join("settings.json"),
+            format!(
+                "{{\"claudeMdExcludes\": [\"{}\"]}}",
+                repo_root
+                    .join("CLAUDE.md")
+                    .to_string_lossy()
+                    .replace('\\', "/")
+            ),
+        )
+        .unwrap();
+
+        // 深层子目录（无 .claude/settings.json）
+        fs::create_dir_all(&deep_dir).unwrap();
+
+        let result = simulate_isolated(&deep_dir).expect("模拟应成功");
+
+        // 启动链中不应有 CLAUDE.md（被 repo root 的 settings 排除）
+        assert!(
+            !result
+                .startup_chain
+                .iter()
+                .any(|s| s.asset_type == "project_claude_md"),
+            "深层子目录应使用 repo root 的 settings 排除 CLAUDE.md"
+        );
+
+        // 被排除列表中应有 CLAUDE.md
+        assert!(
+            result
+                .excluded_assets
+                .iter()
+                .any(|e| e.native_path.contains("CLAUDE.md")),
+            "被排除资产中应包含 CLAUDE.md"
+        );
+
+        let _ = fs::remove_dir_all(&root);
+    }
+
+    /// 测试：非 git 目录的深层路径仍使用 cwd 自身的 rules 和 settings
+    #[test]
+    fn test_non_git_deep_cwd_uses_own_rules() {
+        let root = setup_test_dir();
+        let cwd = root.join("no-git-project").join("src").join("deep");
+
+        fs::create_dir_all(&cwd).unwrap();
+        fs::write(cwd.join("CLAUDE.md"), "# Deep\n").unwrap();
+
+        // 在深层目录创建 project rules
+        fs::create_dir_all(cwd.join(".claude").join("rules")).unwrap();
+        fs::write(
+            cwd.join(".claude").join("rules").join("deep.md"),
+            "# Deep Rule\n",
+        )
+        .unwrap();
+
+        let result = simulate_isolated(&cwd).expect("模拟应成功");
+
+        // 应找到深层目录自身的 project rules
+        let rule_step = result
+            .startup_chain
+            .iter()
+            .find(|s| s.native_path.contains("deep.md"));
+        assert!(
+            rule_step.is_some(),
+            "非 git 目录的深层路径应读取自身的 .claude/rules"
+        );
+
+        let _ = fs::remove_dir_all(&root);
+    }
+
+    /// 测试：git repo 深层子目录的有 paths rule 进入 B 区域，不进入 A 区域
+    #[test]
+    fn test_deep_cwd_repo_root_path_scoped_rule_in_b_zone() {
+        let root = setup_test_dir();
+        let repo_root = root.join("my-repo");
+        let deep_dir = repo_root.join("src").join("deep");
+
+        // 创建 git repo 根目录
+        fs::create_dir_all(&repo_root).unwrap();
+        fs::create_dir_all(repo_root.join(".git")).unwrap();
+        fs::write(repo_root.join("CLAUDE.md"), "# Repo\n").unwrap();
+
+        // 在 repo root 创建有 paths 的 project rule
+        fs::create_dir_all(repo_root.join(".claude").join("rules")).unwrap();
+        fs::write(
+            repo_root.join(".claude").join("rules").join("api.md"),
+            "---\npaths:\n  - \"src/api/**\"\n---\n# API Rule\n",
+        )
+        .unwrap();
+
+        // 深层子目录
+        fs::create_dir_all(&deep_dir).unwrap();
+
+        let result = simulate_isolated(&deep_dir).expect("模拟应成功");
+
+        // A 区域不应有 api.md（有 paths → path-scoped → B 区域）
+        assert!(
+            !result
+                .startup_chain
+                .iter()
+                .any(|s| s.native_path.contains("api.md")),
+            "有 paths 的 rule 不应进入 A 区域"
+        );
+
+        // B 区域应有 api.md
+        let b_rule = result
+            .path_scoped_rules
+            .iter()
+            .find(|r| r.native_path.contains("api.md"));
+        assert!(
+            b_rule.is_some(),
+            "有 paths 的 repo root rule 应出现在 B 区域"
+        );
+        assert_eq!(b_rule.unwrap().scope, "project");
+        // frontmatter 解析保留原始引号格式
+        assert_eq!(b_rule.unwrap().paths, vec!["\"src/api/**\""]);
+
+        let _ = fs::remove_dir_all(&root);
+    }
+
+    /// 测试：git repo 深层子目录读取 repo root 的 settings.local.json 排除
+    #[test]
+    fn test_deep_cwd_reads_repo_root_local_settings() {
+        let root = setup_test_dir();
+        let repo_root = root.join("my-repo");
+        let deep_dir = repo_root.join("src").join("deep");
+
+        // 创建 git repo 根目录
+        fs::create_dir_all(&repo_root).unwrap();
+        fs::create_dir_all(repo_root.join(".git")).unwrap();
+        fs::write(repo_root.join("CLAUDE.md"), "# Repo\n").unwrap();
+
+        // 在 repo root 创建 local settings，排除 CLAUDE.md
+        fs::create_dir_all(repo_root.join(".claude")).unwrap();
+        fs::write(
+            repo_root.join(".claude").join("settings.local.json"),
+            format!(
+                "{{\"claudeMdExcludes\": [\"{}\"]}}",
+                repo_root
+                    .join("CLAUDE.md")
+                    .to_string_lossy()
+                    .replace('\\', "/")
+            ),
+        )
+        .unwrap();
+
+        // 深层子目录
+        fs::create_dir_all(&deep_dir).unwrap();
+
+        let result = simulate_isolated(&deep_dir).expect("模拟应成功");
+
+        // 启动链中不应有 CLAUDE.md（被 repo root 的 local settings 排除）
+        assert!(
+            !result
+                .startup_chain
+                .iter()
+                .any(|s| s.asset_type == "project_claude_md"),
+            "深层子目录应使用 repo root 的 local settings 排除 CLAUDE.md"
+        );
+
+        // 被排除资产中应有 CLAUDE.md，且来源为 local
+        let excluded = result
+            .excluded_assets
+            .iter()
+            .find(|e| e.native_path.contains("CLAUDE.md"));
+        assert!(excluded.is_some(), "被排除资产中应包含 CLAUDE.md");
+        assert_eq!(
+            excluded.unwrap().excluded_by,
+            "local",
+            "排除来源应为 local（来自 settings.local.json）"
+        );
 
         let _ = fs::remove_dir_all(&root);
     }

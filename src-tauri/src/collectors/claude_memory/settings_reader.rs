@@ -2,7 +2,7 @@ use std::fs;
 use std::path::{Path, PathBuf};
 
 use super::models::{ClaudeMdExcludesConfig, ExcludePattern};
-use super::path_resolver::resolve_managed_dir;
+use super::path_resolver::{find_git_repo_root, resolve_managed_dir};
 
 /// 读取多层 claudeMdExcludes 并合并
 ///
@@ -111,8 +111,9 @@ pub fn read_claude_md_excludes(cwd: &Path) -> Result<ClaudeMdExcludesConfig, Str
         }
     }
 
-    // 3. project 层
-    let project_settings = cwd.join(".claude").join("settings.json");
+    // 3. project 层（git repo 子目录应使用 repo root 的 .claude/settings.json）
+    let project_base = find_git_repo_root(cwd).unwrap_or_else(|| cwd.to_path_buf());
+    let project_settings = project_base.join(".claude").join("settings.json");
     if let Ok(p) = read_settings_excludes(&project_settings) {
         for pattern in p {
             patterns.push(ExcludePattern {
@@ -122,8 +123,8 @@ pub fn read_claude_md_excludes(cwd: &Path) -> Result<ClaudeMdExcludesConfig, Str
         }
     }
 
-    // 4. local 层
-    let local_settings = cwd.join(".claude").join("settings.local.json");
+    // 4. local 层（git repo 子目录应使用 repo root 的 .claude/settings.local.json）
+    let local_settings = project_base.join(".claude").join("settings.local.json");
     if let Ok(p) = read_settings_excludes(&local_settings) {
         for pattern in p {
             patterns.push(ExcludePattern {

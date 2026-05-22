@@ -157,7 +157,7 @@ async function mockLoadChainInvoke(page: Page) {
 
 async function openLoadChainSimulator(page: Page) {
   await page.goto("/");
-  await page.locator('nav[aria-label="大域导航"]').getByRole("button", { name: "Claude 记忆" }).click();
+  await page.locator('nav[aria-label="大域导航"]').getByRole("button", { name: "Claude Code" }).click();
   await page.locator('nav[aria-label="子导航"]').getByRole("button", { name: "加载链模拟器" }).click();
 }
 
@@ -253,5 +253,92 @@ test.describe("LoadChainSimulator", () => {
     await expect(
       page.locator(".border-destructive\\/30.bg-destructive\\/5").first(),
     ).toBeVisible({ timeout: 10000 });
+  });
+
+  test("失败后清除旧结果", async ({ page }) => {
+    // 第一步：注入成功 mock，模拟一次成功请求
+    await mockLoadChainInvoke(page);
+    await openLoadChainSimulator(page);
+
+    await page.getByPlaceholder("输入目录路径（留空使用当前目录）").fill("/Users/test/project");
+    await page.getByRole("button", { name: "模拟加载" }).click();
+
+    // 确认结果已显示
+    await expect(page.getByText("A 区域：启动链")).toBeVisible();
+    await expect(page.getByText("5 步")).toBeVisible();
+
+    // 第二步：覆盖为失败 mock（对已加载页面用 evaluate）
+    await page.evaluate(() => {
+      const win = window as unknown as {
+        __TAURI_INTERNALS__: {
+          invoke: (command: string, args?: Record<string, unknown>) => Promise<unknown>;
+        };
+      };
+      win.__TAURI_INTERNALS__ = {
+        invoke: (command: string) => {
+          if (command === "simulate_claude_memory_load_chain") {
+            return Promise.reject(new Error("模拟加载失败：目录不存在"));
+          }
+          return Promise.reject(new Error(`未模拟的 Tauri 命令: ${command}`));
+        },
+      };
+    });
+
+    // 再次点击模拟
+    await page.getByRole("button", { name: "模拟加载" }).click();
+
+    // 旧结果应被清除，错误应显示
+    await expect(page.getByText("A 区域：启动链")).not.toBeVisible();
+    await expect(page.locator(".border-destructive\\/30.bg-destructive\\/5").first()).toBeVisible({
+      timeout: 10000,
+    });
+    await expect(page.getByText("模拟加载失败：目录不存在")).toBeVisible();
+  });
+
+  test("~ 路径输入发送到后端", async ({ page }) => {
+    // 使用动态 mock 捕获前端发送的 cwd 参数
+    await page.addInitScript(() => {
+      const win = window as unknown as {
+        __TAURI_INTERNALS__: {
+          invoke: (command: string, args?: Record<string, unknown>) => Promise<unknown>;
+        };
+      };
+      win.__TAURI_INTERNALS__ = {
+        invoke: (command, args) => {
+          if (command === "simulate_claude_memory_load_chain") {
+            // 验证前端发送的 cwd 参数包含 ~（由后端展开）
+            const cwd = (args as { cwd?: string })?.cwd;
+            if (cwd && cwd.startsWith("~")) {
+              return Promise.resolve({
+                cwd: "/expanded/home/path",
+                host_profile: {
+                  host_id: "test",
+                  hostname: "test",
+                  os: "macos",
+                  home_dir: "/Users/test",
+                  claude_config_dir: "/Users/test/.claude",
+                  user_name: "test",
+                },
+                startup_chain: [],
+                path_scoped_rules: [],
+                excluded_assets: [],
+                warnings: [],
+              });
+            }
+            return Promise.reject(new Error("cwd 不以 ~ 开头"));
+          }
+          return Promise.reject(new Error(`未模拟的 Tauri 命令: ${command}`));
+        },
+      };
+    });
+
+    await openLoadChainSimulator(page);
+
+    await page.getByPlaceholder("输入目录路径（留空使用当前目录）").fill("~/my-project");
+    await page.getByRole("button", { name: "模拟加载" }).click();
+
+    // 应显示成功结果（startup_chain 为空但页面正常渲染）
+    await expect(page.getByText("CWD: /expanded/home/path")).toBeVisible({ timeout: 10000 });
+    await expect(page.getByText("无启动链步骤")).toBeVisible();
   });
 });

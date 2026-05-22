@@ -10,9 +10,39 @@ use crate::collectors::claude_memory::secret_scanner::SecretScanner;
 
 const MAX_FILE_READ_SIZE: u64 = 1_048_576; // 1 MiB
 
+/// 展开路径中的 `~` 为 home 目录
+///
+/// 支持：`~`、`~/...`
+/// 不支持：`~user`（用户切换语义，超出 P1 范围）
+///
+/// `home_override` 为测试注入用，None 时使用 `dirs::home_dir()`。
+fn expand_tilde_path_with_home(
+    input: &str,
+    home_override: Option<&Path>,
+) -> Result<PathBuf, String> {
+    let resolve_home = || {
+        home_override
+            .map(PathBuf::from)
+            .or_else(dirs::home_dir)
+            .ok_or_else(|| "无法获取用户主目录".to_string())
+    };
+
+    if input == "~" {
+        resolve_home()
+    } else if let Some(rest) = input.strip_prefix("~/") {
+        Ok(resolve_home()?.join(rest))
+    } else {
+        Ok(PathBuf::from(input))
+    }
+}
+
+fn expand_tilde_path(input: &str) -> Result<PathBuf, String> {
+    expand_tilde_path_with_home(input, None)
+}
+
 /// 模拟加载链
 pub fn simulate_load_chain_service(cwd: String) -> Result<SerLoadChain, String> {
-    let path = PathBuf::from(&cwd);
+    let path = expand_tilde_path(&cwd)?;
     simulate_load_chain(&path)
 }
 
@@ -282,5 +312,78 @@ mod tests {
             get_claude_memory_file_content_service("/tmp/test.txt".to_string(), None, &state);
         assert!(result.is_err());
         assert!(result.unwrap_err().contains("不支持的文件类型"));
+    }
+
+    /// 测试：expand_tilde_path_with_home 对注入的 home 正确展开
+    #[test]
+    fn test_expand_tilde_path_with_home_injected() {
+        let fake_home =
+            std::env::temp_dir().join(format!("agent-scope-tilde-injected-{}", std::process::id()));
+        let _ = fs::remove_dir_all(&fake_home);
+        fs::create_dir_all(&fake_home).unwrap();
+
+        // ~ → injected home
+        assert_eq!(
+            expand_tilde_path_with_home("~", Some(&fake_home)).unwrap(),
+            fake_home
+        );
+
+        // ~/foo → injected_home/foo
+        assert_eq!(
+            expand_tilde_path_with_home("~/foo/bar", Some(&fake_home)).unwrap(),
+            fake_home.join("foo/bar")
+        );
+
+        let _ = fs::remove_dir_all(&fake_home);
+    }
+
+    /// 测试：expand_tilde_path_with_home 不修改无 ~ 前缀的路径
+    #[test]
+    fn test_expand_tilde_path_unchanged() {
+        let fake_home = PathBuf::from("/fake/home");
+
+        // 绝对路径不变
+        assert_eq!(
+            expand_tilde_path_with_home("/absolute/path", Some(&fake_home)).unwrap(),
+            PathBuf::from("/absolute/path")
+        );
+
+        // 相对路径不变
+        assert_eq!(
+            expand_tilde_path_with_home("relative/path", Some(&fake_home)).unwrap(),
+            PathBuf::from("relative/path")
+        );
+
+        // ~user 不变（不支持用户切换）
+        assert_eq!(
+            expand_tilde_path_with_home("~otheruser/path", Some(&fake_home)).unwrap(),
+            PathBuf::from("~otheruser/path")
+        );
+    }
+
+    /// 测试：simulate_load_chain_service 对绝对路径正常工作
+    /// （~ 展开由 expand_tilde_path 覆盖，此处验证 service 层透传）
+    #[test]
+    fn test_simulate_service_absolute_path() {
+        let tmp_dir =
+            std::env::temp_dir().join(format!("agent-scope-svc-test-{}", std::process::id()));
+        let _ = fs::remove_dir_all(&tmp_dir);
+        fs::create_dir_all(&tmp_dir).unwrap();
+        fs::write(tmp_dir.join("CLAUDE.md"), "# Test\n").unwrap();
+
+        let result = simulate_load_chain_service(tmp_dir.to_string_lossy().to_string());
+
+        assert!(result.is_ok(), "绝对路径应正常模拟: {:?}", result.err());
+        let chain = result.unwrap();
+        assert_eq!(
+            chain.cwd,
+            std::fs::canonicalize(&tmp_dir)
+                .unwrap_or_else(|_| tmp_dir.clone())
+                .to_string_lossy()
+                .to_string(),
+            "输出中的 cwd 应与输入一致"
+        );
+
+        let _ = fs::remove_dir_all(&tmp_dir);
     }
 }

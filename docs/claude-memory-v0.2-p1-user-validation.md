@@ -170,3 +170,20 @@ claude
 4. AgentScope 版本号（显示在加载链模拟器页面）
 5. Claude Code 版本号（`claude --version`）
 6. 操作系统
+
+---
+
+## 附录：已完成的验证样本（Round 7.1）
+
+以下样本已在 Linux 3.50 通过 AgentScope v0.2.0 + Round 7/7.1 补丁完成只读人工回归验证：
+
+| # | cwd 路径 | 类型 | 验证结论 |
+|---|---------|------|---------|
+| 1 | `/home/yufei/Repo/fpga_project_agc` | git repo 根目录 | ✅ ~ 展开通过、根目录模拟通过（A 区域 36 步含 root CLAUDE.md 和 rules）、失败清空通过 |
+| 2 | `/home/yufei/Repo/fpga_project_agc/src/python_model/L3_pipeline` | git repo 深层子目录 | ✅ A 区域仍为 36 步，repo root 资产未丢失，确认 deep cwd 正确回退 repo root 基准 |
+| 3 | `/home/yufei/Repo/fpga_project_agc/src/python_mline` | 不存在路径 | ✅ 仅显示错误，不残留上一轮成功结果 |
+
+**补充说明**：
+- 当前样本中 rules 均无 `paths` frontmatter，B 区域为 0 条属于正确行为
+- `auto_memory_not_found` 在本次样本中未独立核查磁盘事实，不作为 P1 阻塞项
+- 全部验证均为**只读观察**，未创建/修改/删除任何真实 Claude 资产

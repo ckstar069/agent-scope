@@ -19,6 +19,7 @@ export function useLoadChain(): UseLoadChainResult {
   const simulate = useCallback(async (cwd: string) => {
     setIsLoading(true);
     setError(null);
+    setResult(null);
     try {
       const data = await simulateClaudeMemoryLoadChain<LoadChainResult>(cwd);
       setResult(data);

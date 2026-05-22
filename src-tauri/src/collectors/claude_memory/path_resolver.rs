@@ -29,6 +29,25 @@ pub(crate) mod test_helpers {
     }
 }
 
+/// 从 cwd 向上查找 git 仓库根目录（只识别 `.git` 目录）
+///
+/// **行为**：
+/// - 普通 git repo 子目录：向上找到 `.git` 目录，返回该目录的父路径（repo root）
+/// - git worktree / submodule：`.git` 是文件而非目录，本函数不识别，返回 None
+/// - 非 git 目录：无 `.git` 目录，返回 None
+pub fn find_git_repo_root(cwd: &Path) -> Option<PathBuf> {
+    let mut current = Some(cwd.to_path_buf());
+    while let Some(path) = current {
+        let git_path = path.join(".git");
+        // 只识别 `.git` 目录（普通 repo），不识别 `.git` 文件（worktree / submodule）
+        if git_path.is_dir() {
+            return Some(path);
+        }
+        current = path.parent().map(|p| p.to_path_buf());
+    }
+    None
+}
+
 /// 解析 Claude Code 配置根目录
 /// 优先级：CLAUDE_CONFIG_DIR > dirs::home_dir().join(".claude")
 pub fn resolve_claude_config_dir() -> Result<PathBuf, String> {
