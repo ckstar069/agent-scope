@@ -329,14 +329,18 @@ interface SummaryTileProps {
 
 function SummaryTile({ icon: Icon, label, value, detail }: SummaryTileProps) {
   return (
-    <Card>
-      <CardContent className="p-4">
-        <div className="mb-3 flex items-center gap-2 text-xs text-muted-foreground">
-          <Icon className="size-3.5" aria-hidden="true" />
-          {label}
+    <Card className="shadow-xs">
+      <CardContent className="flex min-h-32 flex-col justify-between p-4">
+        <div className="flex items-start justify-between gap-3">
+          <div className="space-y-1">
+            <p className="text-xs text-muted-foreground">{label}</p>
+            <p className="text-2xl font-semibold tracking-tight">{value}</p>
+          </div>
+          <span className="flex size-8 shrink-0 items-center justify-center rounded-md border border-border bg-tile text-muted-foreground">
+            <Icon className="size-4" aria-hidden="true" />
+          </span>
         </div>
-        <p className="text-2xl font-semibold tracking-tight">{value}</p>
-        <p className="mt-1 text-xs text-muted-foreground">{detail}</p>
+        <p className="text-xs text-muted-foreground">{detail}</p>
       </CardContent>
     </Card>
   );
@@ -350,11 +354,14 @@ interface TokenStatTileProps {
 
 function TokenStatTile({ label, value, color }: TokenStatTileProps) {
   return (
-    <Card>
-      <CardContent className="p-4">
-        <div className="mb-3 text-xs text-muted-foreground">{label}</div>
+    <Card className="shadow-xs">
+      <CardContent className="space-y-3 p-4">
+        <div className="flex items-center justify-between gap-3">
+          <p className="text-xs text-muted-foreground">{label}</p>
+          <span className={cn("size-1.5 rounded-full bg-current", color)} aria-hidden="true" />
+        </div>
         <p className={cn("text-2xl font-semibold tracking-tight", color)}>{formatTokens(value)}</p>
-        <p className="mt-1 text-xs text-muted-foreground">累计消耗</p>
+        <p className="text-xs text-muted-foreground">累计消耗</p>
       </CardContent>
     </Card>
   );

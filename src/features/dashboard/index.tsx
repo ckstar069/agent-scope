@@ -325,14 +325,18 @@ interface SummaryTileProps {
 
 function SummaryTile({ icon: Icon, label, value, detail, color }: SummaryTileProps) {
   return (
-    <Card>
-      <CardContent className="p-4">
-        <div className="mb-3 flex items-center gap-2 text-xs text-muted-foreground">
-          <Icon className={cn("size-3.5", color)} aria-hidden="true" />
-          {label}
+    <Card className="shadow-xs">
+      <CardContent className="flex min-h-32 flex-col justify-between p-4">
+        <div className="flex items-start justify-between gap-3">
+          <div className="space-y-1">
+            <p className="text-xs text-muted-foreground">{label}</p>
+            <p className={cn("text-2xl font-semibold tracking-tight", color)}>{value}</p>
+          </div>
+          <span className="flex size-8 shrink-0 items-center justify-center rounded-md border border-border bg-tile">
+            <Icon className={cn("size-4", color)} aria-hidden="true" />
+          </span>
         </div>
-        <p className={cn("text-2xl font-semibold tracking-tight", color)}>{value}</p>
-        <p className="mt-1 text-xs text-muted-foreground">{detail}</p>
+        <p className="text-xs text-muted-foreground">{detail}</p>
       </CardContent>
     </Card>
   );

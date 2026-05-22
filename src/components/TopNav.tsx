@@ -21,17 +21,18 @@ export function TopNav({ activeDomain, onDomainChange }: TopNavProps) {
   return (
     <header className="flex h-12 shrink-0 items-center border-b border-border bg-sidebar px-4">
       <div className="flex items-center gap-2.5 px-1">
-        <svg
-          width="20"
-          height="20"
-          viewBox="0 0 20 20"
-          fill="none"
-          className="text-foreground shrink-0"
-          aria-hidden="true"
-        >
-          <path d="M10 2a8 8 0 0 0 0 16v-16z" fill="currentColor" />
-          <path d="M10 2a8 8 0 0 1 0 16" stroke="currentColor" strokeWidth="2" strokeLinecap="round" />
-        </svg>
+        <span className="flex size-7 shrink-0 items-center justify-center rounded-md border border-primary/20 bg-primary/10 text-primary shadow-xs">
+          <svg
+            width="18"
+            height="18"
+            viewBox="0 0 20 20"
+            fill="none"
+            aria-hidden="true"
+          >
+            <path d="M10 2a8 8 0 0 0 0 16v-16z" fill="currentColor" />
+            <path d="M10 2a8 8 0 0 1 0 16" stroke="currentColor" strokeWidth="2" strokeLinecap="round" />
+          </svg>
+        </span>
         <span className="text-base font-bold tracking-tight text-foreground">AgentScope</span>
       </div>
 
