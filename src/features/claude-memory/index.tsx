@@ -158,8 +158,8 @@ function ClaudeMemoryAssets({ projectPath }: { projectPath?: string }) {
 
           {/* 主内容：资产树 + 详情 */}
           <div className="flex flex-1 gap-4 overflow-hidden">
-            <Card className="flex w-72 shrink-0 flex-col overflow-hidden">
-              <CardHeader className="flex flex-row items-center justify-between py-3">
+            <Card className="flex w-72 shrink-0 flex-col overflow-hidden shadow-xs">
+              <CardHeader className="flex flex-row items-center justify-between border-b border-border bg-tile/70 py-3">
                 <CardTitle className="text-sm font-medium">
                   记忆资产
                 </CardTitle>
@@ -181,7 +181,7 @@ function ClaudeMemoryAssets({ projectPath }: { projectPath?: string }) {
                 />
               </CardContent>
             </Card>
-            <Card className="flex flex-1 flex-col overflow-hidden">
+            <Card className="flex flex-1 flex-col overflow-hidden shadow-xs">
               <CardContent className="flex-1 overflow-auto p-0">
                 <MemoryAssetDetail
                   asset={selectedAsset}
@@ -211,25 +211,35 @@ function StatCard({
 }) {
   return (
     <div
-      className={`rounded-xl border p-4 ${
+      className={`rounded-xl border p-4 shadow-xs ${
         tone === "warning"
           ? "border-amber-200 bg-amber-50 dark:border-amber-900/50 dark:bg-amber-950/20"
           : "border-border bg-card"
       }`}
     >
-      <div className="flex items-center gap-2">
-        <Icon
-          className={`size-4 ${tone === "warning" ? "text-amber-600 dark:text-amber-400" : "text-muted-foreground"}`}
-          aria-hidden="true"
-        />
-        <span className="text-xs text-muted-foreground">{label}</span>
+      <div className="flex min-h-20 items-start justify-between gap-3">
+        <div className="min-w-0">
+          <span className="text-xs text-muted-foreground">{label}</span>
+          <p
+            data-stat={label}
+            className={`mt-2 truncate font-semibold tracking-tight ${isText ? "font-mono text-xs" : "text-2xl"} ${tone === "warning" ? "text-amber-700 dark:text-amber-400" : ""}`}
+          >
+            {value}
+          </p>
+        </div>
+        <span
+          className={`flex size-8 shrink-0 items-center justify-center rounded-md border ${
+            tone === "warning"
+              ? "border-amber-200 bg-amber-100/70 dark:border-amber-900/60 dark:bg-amber-950/40"
+              : "border-border bg-tile"
+          }`}
+        >
+          <Icon
+            className={`size-4 ${tone === "warning" ? "text-amber-600 dark:text-amber-400" : "text-muted-foreground"}`}
+            aria-hidden="true"
+          />
+        </span>
       </div>
-      <p
-        data-stat={label}
-        className={`mt-1 truncate font-semibold ${isText ? "font-mono text-xs" : "text-2xl"} ${tone === "warning" ? "text-amber-700 dark:text-amber-400" : ""}`}
-      >
-        {value}
-      </p>
     </div>
   );
 }

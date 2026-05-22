@@ -163,12 +163,12 @@ export function ProjectSettings() {
             管理 AgentScope 正在监控的项目目录。添加后，Dashboard 和 Agent 监控会自动读取这些注册路径。
           </p>
         </div>
-        <div className="rounded-xl border border-border bg-muted/40 px-4 py-3 text-sm text-muted-foreground">
+        <div className="rounded-xl border border-border bg-card px-4 py-3 text-sm text-muted-foreground shadow-xs">
           已注册 <span className="font-semibold text-foreground">{projects.length}</span> 个项目
         </div>
       </div>
 
-      <Card className="overflow-hidden">
+      <Card className="overflow-hidden shadow-xs">
         <div className="h-1 bg-gradient-to-r from-primary/80 via-muted-foreground/40 to-transparent" />
         <CardHeader>
           <div className="flex items-start gap-3">
@@ -220,7 +220,7 @@ export function ProjectSettings() {
         </CardContent>
       </Card>
 
-      <Card className="overflow-hidden">
+      <Card className="overflow-hidden shadow-xs">
         <div className="h-1 bg-gradient-to-r from-primary/80 via-muted-foreground/40 to-transparent" />
         <CardHeader>
           <div className="flex items-start gap-3">
@@ -268,7 +268,7 @@ export function ProjectSettings() {
         </CardContent>
       </Card>
 
-      <Card>
+      <Card className="shadow-xs">
         <CardHeader className="flex-row items-start justify-between gap-4">
           <div className="space-y-1.5">
             <CardTitle>已注册项目</CardTitle>

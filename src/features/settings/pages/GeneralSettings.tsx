@@ -31,7 +31,8 @@ export function GeneralSettings() {
         </p>
       </div>
 
-      <Card>
+      <Card className="overflow-hidden shadow-xs">
+        <div className="h-1 bg-gradient-to-r from-primary/80 via-primary/30 to-transparent" />
         <CardHeader>
           <div className="flex items-start gap-3">
             <div className="flex size-10 shrink-0 items-center justify-center rounded-lg bg-muted text-muted-foreground">
@@ -51,10 +52,10 @@ export function GeneralSettings() {
                 type="button"
                 onClick={() => setFontSize(option.value)}
                 className={cn(
-                  "relative flex flex-col items-start gap-1 rounded-xl border-2 p-4 text-left transition-all",
+                  "relative flex flex-col items-start gap-1 rounded-xl border p-4 text-left shadow-xs transition-all",
                   fontSize === option.value
-                    ? "border-primary bg-primary/5"
-                    : "border-border hover:border-primary/30 hover:bg-muted/40",
+                    ? "border-primary bg-primary/8"
+                    : "border-border bg-tile hover:border-primary/30 hover:bg-muted/40",
                 )}
               >
                 {fontSize === option.value && (
@@ -70,7 +71,8 @@ export function GeneralSettings() {
         </CardContent>
       </Card>
 
-      <Card>
+      <Card className="overflow-hidden shadow-xs">
+        <div className="h-1 bg-gradient-to-r from-primary/80 via-primary/30 to-transparent" />
         <CardHeader>
           <div className="flex items-start gap-3">
             <div className="flex size-10 shrink-0 items-center justify-center rounded-lg bg-muted text-muted-foreground">
@@ -103,10 +105,10 @@ function ThemeSelector() {
             type="button"
             onClick={() => setTheme(option.value)}
             className={cn(
-              "relative flex flex-col items-start gap-2 rounded-xl border-2 p-4 text-left transition-all",
+              "relative flex flex-col items-start gap-2 rounded-xl border p-4 text-left shadow-xs transition-all",
               theme === option.value
-                ? "border-primary bg-primary/5"
-                : "border-border hover:border-primary/30 hover:bg-muted/40",
+                ? "border-primary bg-primary/8"
+                : "border-border bg-tile hover:border-primary/30 hover:bg-muted/40",
             )}
           >
             {theme === option.value && (

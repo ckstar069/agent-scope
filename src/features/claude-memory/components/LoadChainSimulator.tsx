@@ -61,23 +61,26 @@ export function LoadChainSimulator() {
       </div>
 
       {/* 输入区 */}
-      <Card>
-        <CardContent className="flex items-center gap-3 pt-6">
-          <FolderOpen
-            className="size-4 shrink-0 text-muted-foreground"
-            aria-hidden="true"
-          />
-          <Input
-            placeholder="输入目录路径（留空使用当前目录）"
-            value={cwd}
-            onChange={(e) => setCwd(e.target.value)}
-            onKeyDown={(e) => {
-              if (e.key === "Enter") handleSimulate();
-            }}
-            className="flex-1"
-          />
+      <Card className="overflow-hidden shadow-xs">
+        <div className="h-1 bg-gradient-to-r from-primary/80 via-primary/30 to-transparent" />
+        <CardContent className="flex flex-col gap-4 p-5 lg:flex-row lg:items-center">
+          <div className="flex min-w-0 flex-1 items-center gap-3 rounded-xl border border-border bg-tile p-2">
+            <span className="flex size-9 shrink-0 items-center justify-center rounded-lg border border-border bg-card text-muted-foreground">
+              <FolderOpen className="size-4" aria-hidden="true" />
+            </span>
+            <Input
+              placeholder="输入目录路径（留空使用当前目录）"
+              value={cwd}
+              onChange={(e) => setCwd(e.target.value)}
+              onKeyDown={(e) => {
+                if (e.key === "Enter") handleSimulate();
+              }}
+              className="flex-1 border-0 bg-transparent shadow-none focus-visible:ring-0"
+            />
+          </div>
           <Button
             type="button"
+            className="shrink-0 lg:min-w-32"
             disabled={isLoading}
             onClick={handleSimulate}
           >
@@ -110,8 +113,8 @@ export function LoadChainSimulator() {
 
           <div className="grid flex-1 gap-4 lg:grid-cols-2">
             {/* A 区域：启动链 */}
-            <Card className="flex flex-col overflow-hidden">
-              <CardHeader className="py-3">
+            <Card className="flex flex-col overflow-hidden shadow-xs">
+              <CardHeader className="border-b border-border bg-tile/70 py-3">
                 <CardTitle className="flex items-center gap-2 text-sm font-medium">
                   <Route className="size-4 text-primary" aria-hidden="true" />
                   A 区域：启动链
@@ -137,8 +140,8 @@ export function LoadChainSimulator() {
             </Card>
 
             {/* B 区域：路径作用域规则 */}
-            <Card className="flex flex-col overflow-hidden">
-              <CardHeader className="py-3">
+            <Card className="flex flex-col overflow-hidden shadow-xs">
+              <CardHeader className="border-b border-border bg-tile/70 py-3">
                 <CardTitle className="flex items-center gap-2 text-sm font-medium">
                   <ShieldAlert
                     className="size-4 text-amber-500"
@@ -186,7 +189,7 @@ function HostProfileBar({
   cwd: string;
 }) {
   return (
-    <div className="flex flex-wrap items-center gap-x-4 gap-y-1 rounded-lg border bg-muted/50 px-4 py-2 text-xs text-muted-foreground">
+    <div className="flex flex-wrap items-center gap-x-4 gap-y-1 rounded-xl border border-border bg-card px-4 py-3 text-xs text-muted-foreground shadow-xs">
       <span>
         <span className="font-medium">OS:</span> {profile.os}
       </span>
@@ -259,7 +262,7 @@ function StepCard({ step }: { step: LoadChainStep }) {
 
   return (
     <Collapsible open={open} onOpenChange={setOpen}>
-      <div className="flex items-center gap-2 rounded-md border px-3 py-2 hover:bg-muted/50">
+      <div className="flex items-center gap-2 rounded-lg border border-border bg-card px-3 py-2 transition-colors hover:bg-tile">
         <span className="w-6 text-right text-xs text-muted-foreground">
           {step.order}
         </span>
@@ -302,7 +305,7 @@ function RuleCard({ rule }: { rule: PathScopedRule }) {
 
   return (
     <Collapsible open={open} onOpenChange={setOpen}>
-      <div className="flex items-center gap-2 rounded-md border px-3 py-2 hover:bg-muted/50">
+      <div className="flex items-center gap-2 rounded-lg border border-border bg-card px-3 py-2 transition-colors hover:bg-tile">
         <ShieldAlert
           className="size-3.5 shrink-0 text-amber-500"
           aria-hidden="true"
