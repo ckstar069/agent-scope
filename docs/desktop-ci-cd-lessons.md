@@ -304,9 +304,9 @@ job 在 `before_script` 之前即失败，没有任何用户代码被执行。
 | 错误现象 | `npm error Exit handler never called!` → node_modules 安装不完整 → 后续 `tsc: not found` |
 | 发生阶段 | verify / build:linux job 的 `npm ci` 步骤 |
 | 根因 | CI 镜像 `agent-scope-ci:node20-rust1.95` 中 Node 20 (NodeSource) 自带的 npm 版本存在信号处理竞争条件（race condition），在 Docker executor 环境下不稳定，与 §5.8 记录的 ECONNRESET 不是同一问题 |
-| 错误尝试 | 直接重试（verify pipeline 通过了，但 tag pipeline 的 build:linux 连续 2 次 crash），排除网络波动 |
-| 最终解决 | **不替换 `npm ci`**，而是在 `npm ci` 前执行 `npm install -g npm@latest` 升级 npm 到最新稳定版。该方案保留 `npm ci` 的锁定安装语义，仅修复 npm 自身的 bug，升级耗时约 3-5 秒 |
-| 经验教训 | 1. Docker 镜像中的 Node.js 预装 npm 版本不一定是稳定版本，CI 环境中应显式管理 npm 版本；2. "Exit handler never called!" 不是网络问题，不应重试或切换到 `npm install`；3. 长期应更新 Dockerfile 固定 npm 版本，避免在 CI 运行时升级 |
+| 错误尝试 | 1. 直接重试（verify pipeline 通过了，但 tag pipeline 的 build:linux 连续 2 次 crash），排除网络波动；2. 尝试 `npm install -g npm@latest` 升级 npm 版本，但 CI Runner 到 npm registry 的网络波动（ECONNRESET，§5.8）导致升级本身不可靠 |
+| 最终解决 | **临时 workaround**：Linux job（verify + build:linux）中 `npm ci` 替换为 `npm install --prefer-offline`。已验证该命令保留 package-lock.json 不变，且避免触发 npm 信号处理竞争条件。长期方案：更新 Dockerfile，在镜像构建时固定 npm 稳定版本，恢复 `npm ci` |
+| 经验教训 | 1. Docker 镜像中的 Node.js 预装 npm 版本不一定是稳定版本，CI 环境中应显式管理 npm 版本（在 Dockerfile 构建时固定，而非 CI 运行时升级）；2. "Exit handler never called!" 不是网络问题，不应重试；3. 网络环境不稳定时，`npm install -g` 本身可能因 ECONNRESET 失败，运行时升级方案不可靠；4. `npm install --prefer-offline` 是可靠的 fallback，但长期应通过更新 Docker 镜像恢复 `npm ci` |
 
 ---
 
