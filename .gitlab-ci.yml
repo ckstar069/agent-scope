@@ -32,13 +32,14 @@ verify:
     - linux
   before_script:
     - echo "=== 安装前端依赖 ==="
-    # Workaround: 用 npm install --prefer-offline 替代 npm ci
-    # 原因：agent-scope-ci:node20-rust1.95 镜像中 npm ci 稳定触发 "Exit handler never called!" crash
-    # （npm 信号处理竞争条件，非网络问题），且 npm install -g npm@latest 受 CI Runner 网络波动
-    #（ECONNRESET，见 §5.8）影响不可靠。npm install --prefer-offline 保留锁定安装语义，
-    # 已验证 package-lock.json 不被改写。长期应在 Dockerfile 中固定 npm 版本。
+    # Workaround: npm 重试安装
+    # 原因：agent-scope-ci:node20-rust1.95 镜像中 npm 存在信号处理竞争条件，
+    #  npm ci / npm install / npm install --prefer-offline 均在退出阶段稳定 crash
+    # （"Exit handler never called!"），与命令类型无关。
+    # 由于 crash 发生在 npm 退出阶段（安装本身已完成），第二次运行仅做增量校验，
+    # 耗时短、触发 crash 概率极低。长期应在 Dockerfile 中固定 npm 稳定版本。
     # 见 docs/desktop-ci-cd-lessons.md §5.12
-    - npm install --prefer-offline
+    - npm install --prefer-offline || npm install --prefer-offline
     - echo "=== 安装 Playwright 浏览器 ==="
     - npx playwright install chromium
   script:
@@ -103,8 +104,8 @@ build:linux:
     - echo "=== 同步版本号 ==="
     - *sync-version-script
     - echo "=== 安装前端依赖 ==="
-    # Workaround: npm install --prefer-offline 替代 npm ci（同 verify job，见 §5.12）
-    - npm install --prefer-offline
+    # Workaround: npm 重试安装（同 verify job，见 §5.12）
+    - npm install --prefer-offline || npm install --prefer-offline
   script:
     - echo "=== 构建前端 ==="
     - npm run build
