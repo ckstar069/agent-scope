@@ -97,8 +97,9 @@
 |---|--------|------|---------|------|
 | E1 | MEMORY.md 启动加载上限：200 行或 25KB | 官方文档 | 创建超大 MEMORY.md，/memory 观察截断位置 | ⬜ |
 | E2 | topic 文件（非 MEMORY.md）不自动加载 | 官方文档 | /memory 观察是否有 topic 文件 | ⬜ |
-| E3 | Auto Memory 是否与 AgentScope 当前 encode_cwd_path(cwd) 精确匹配结果一致 | 推断 | 在同一 cwd 下对比 /memory 与 AgentScope 模拟结果 | ⬜ |
+| E3 | Auto Memory 是否按 **repo identity / project root** 语义匹配（而非 cwd 精确匹配） | 官方文档 | 同一 git repo 的不同子目录下对比 `/memory` 与 AgentScope 模拟结果，确认共享同一 Auto Memory | ⚠️ 假设被挑战，需修复 |
 | E4 | 非 git 目录启动时 Auto Memory 是否尝试路径匹配（或标记为无项目） | 设计文档 §2.3 | 在纯目录（无 .git）启动，/memory 观察 | ⬜ |
+| E5 | `autoMemoryDirectory` 自定义路径是否被支持 | 官方文档 | 若用户设置了 `autoMemoryDirectory`，观察 AgentScope 是否能正确查找 | ⚠️ P1 limitation：不读取该设置，仅表现为默认路径 `auto_memory_not_found`，不是专门的 limitation warning |
 
 ---
 
@@ -146,7 +147,7 @@
 - B2-B4：paths 匹配行为（需实际 Claude Code 运行时验证）
 - C4-C6：managed policy 不可覆盖、file-based 载体验证
 - D1-D8：@import 行为（P2/P3/P4 范围）
-- E2-E4：Auto Memory 匹配语义
+- E2, E4-E5：Auto Memory 匹配语义（E3 假设已被挑战，需先修复代码再验证）
 
 #### 质量检查
 - `cargo fmt --check`：✅ 通过
@@ -336,3 +337,101 @@ claude
 - **A9**（祖先 `.claude/CLAUDE.md`）：当前实现不扫描，需验证 Claude Code 是否实际加载
 - **A11**（祖先 `CLAUDE.local.md`）：需祖先目录天然存在该文件。单元测试已覆盖（`test_ancestor_local_md_order`），语义验证为后续批次范围
 - **E4**（非 git 目录 Auto Memory）：若本批进行，必须使用临时隔离目录（如 `/tmp/test-no-git/`）；若不做，则标记"本批未覆盖"
+- **E5**（`autoMemoryDirectory` 自定义路径）：P1 不读取该设置。若用户设置了自定义路径，AgentScope 会显示 `auto_memory_not_found`，这是已知 limitation
+
+---
+
+## 验证记录 2026-05-22（首组真实观察）
+
+> **状态**：首组真实观察 / 尚不判定 P1 通过 / 暴露验证口径与 Auto Memory 身份假设需校正
+>
+> **重要**：本次观察**不**视为验证通过，也**不**视为已确认 bug。它暴露了 P1 验证口径和 Auto Memory 匹配策略需要校正，后续需重新设计验证方法后再做对照。
+
+### 环境
+
+- Claude Code 版本: v2.1.145
+- AgentScope 版本: v0.2.0（开发模式 `npm run tauri dev`）
+- 操作系统: macOS
+- 测试 cwd: `/Users/ckstar/Repo/agent-scope`
+
+### 用例: 已注册 git 项目根目录
+
+#### Claude Code `/memory` 输出（用户截图观察）
+
+```
+Auto-memory: on
+Project memory: ./CLAUDE.md
+User memory: ~/.claude/CLAUDE.md
+Open auto-memory folder
+```
+
+**观察要点**：
+1. `/memory` 输出为**交互式 UI 元素**，不是文本列表形式的"启动链顺序报告"
+2. 显示 "Auto-memory: on" — 仅表明 Auto Memory **功能处于开启状态**；不能单独证明当前 cwd 已有可加载的 `MEMORY.md`。是否存在 Auto Memory 内容，仍需结合磁盘实际路径 / Claude 后续可观察信息判断
+3. 显示 "Project memory: ./CLAUDE.md" — 确认项目级 CLAUDE.md 被识别
+4. 显示 "User memory: ~/.claude/CLAUDE.md" — 仅确认 `/memory` UI 展示了 user memory **入口**；该入口不等同于当前文件系统中 `~/.claude/CLAUDE.md` 必然存在。首组对照中 user memory 差异应归入"验证口径 / 文件存在性待核对"
+5. **未显示**启动链的逐条顺序（如 managed → user → ancestor → cwd → rules → auto）
+6. **未显示** path-scoped rules 的独立列表
+7. **未显示**各加载项的 scope 标注（user/project/local/auto 等）
+
+#### AgentScope 加载链模拟器输出
+
+- A 区域（启动链）：仅显示 `/Users/ckstar/Repo/agent-scope/CLAUDE.md`
+- B 区域（path-scoped rules）：无
+- Warnings：`auto_memory_not_found`
+
+#### 对照结果
+
+- [ ] 完全一致
+- [x] 有差异（差异说明: 见下方）
+- [ ] 无法验证
+
+#### 差异分类
+
+| 差异项 | AgentScope 输出 | Claude `/memory` | 分类 | 说明 |
+|--------|----------------|-----------------|------|------|
+| Auto Memory | `auto_memory_not_found` | "Auto-memory: on" | **假设待定→需校正** | AgentScope 用 `encode_cwd_path(cwd)` 匹配 `~/.claude/projects/<id>/memory/`，但 Claude 实际可能用 repo identity 或 project root 匹配。深层子目录可能共享同一 repo 的 auto memory |
+| 启动链展示形式 | 文本列表（A 区域逐条） | 交互式 UI（on/off 开关 + 文件路径） | **验证口径问题** | 不能直接将两者逐条对比，需校正验证方法 |
+| User memory | 未在 A 区域显示 | "User memory: ~/.claude/CLAUDE.md" | **验证口径 / 文件存在性待核对** | `/memory` 展示的是 user memory 入口，不等同于文件必然存在；AgentScope 在开发模式下读取同一文件系统，若真实 `~/.claude/CLAUDE.md` 存在则应显示，但首组观察未单独验证该文件存在性 |
+| Path-scoped rules | B 区域显示（若有） | `/memory` 未展示 rules | **验证口径问题** | `/memory` 可能不展示 rules，或展示方式不同 |
+
+#### 假设更新
+
+1. **验证口径校正**：`/memory` 是交互式 UI，不是文本化启动链报告。P1 验证不应强行逐条对比顺序，而应改为：
+   - **文件存在性/识别项对照**：Claude `/memory` 中显示的记忆项，AgentScope 是否也识别到？
+   - **顺序规则校验**：AgentScope 输出是否符合官方文档描述的加载规则？（独立校验，不直接对比 `/memory`）
+   - **差异项记录**：哪些是 `/memory` UI 不可观察但 AgentScope 可展示的（如 managed CLAUDE.md、祖先目录链）
+
+2. **Auto Memory 假设校正**：
+   - 原假设（`encode_cwd_path(cwd)` 精确匹配）**被挑战**
+   - Claude 官方文档说明：git repo 内 Auto Memory 按 repository 派生，同一 repo 的子目录与 worktree 共享 auto memory
+   - **普通 git repo 子目录**：当前实现已修正为向上查找 `.git` 目录定位 repo root，再用 repo root 编码匹配 ✅
+   - **git worktree**：当前实现只检查 `.git` 目录，worktree 的 `.git` 是文件，因此会返回 worktree 自身路径，**不保证**与主 repo 共享 Auto Memory ⚠️ P1 limitation
+   - **非 git 目录**：回退到 cwd 编码路径匹配
+
+3. **E3 验证项重新定义**：
+   - 原 E3："Auto Memory 是否与 AgentScope 当前 encode_cwd_path(cwd) 精确匹配结果一致"
+   - 新 E3："Auto Memory 是否按 repo identity / project root 语义匹配，而非 cwd 精确匹配"
+
+#### 后续动作
+
+##### 2026-05-22 第一轮校正（已完成）
+
+- [x] 校正所有文档中的 Auto Memory 匹配策略描述（requirements / design / validation log / P1 user validation）
+- [x] 校正 P1 验证口径（从"逐条对比"改为"存在性对照 + 规则独立校验"）
+- [x] 审计 `find_auto_memory()` 实现，给出最小修复方案（支持 git repo root 匹配）
+- [x] 明确 `autoMemoryDirectory` 设置项的处理策略（不读取，仅表现为默认路径 `auto_memory_not_found`，不是专门 limitation warning）
+
+##### 2026-05-22 第二轮安全收口（已完成）
+
+- [x] 修正首组观察记录中的过度判断（Auto-memory: on 不推断文件存在；user memory 入口不推断文件存在）
+- [x] 修正 worktree 支持声明：当前只认 `.git` 目录，worktree `.git` 文件返回 None
+- [x] 修正 worktree 安全行为：不静默回退到 cwd-encoded Auto Memory，返回 `auto_memory_worktree_unsupported` warning
+- [x] 补充 worktree 场景 Rust 测试：验证不加载、不返回 `not_found`、返回 limitation warning
+- [x] 清理 requirements 残留旧口径（FR-02、启动链、v0.3 Project identity）
+
+##### 待执行（需用户配合）
+
+- [ ] 重新执行真实对照验证（使用修正后的 AgentScope 版本）
+- [ ] 在至少 2 个 cwd（项目根目录 + 深层子目录）对比 Claude `/memory` 与 AgentScope 模拟结果
+- [ ] 验证 Auto Memory 匹配：同一 git repo 的不同子目录是否共享同一 Auto Memory

@@ -1,6 +1,7 @@
 # Claude 记忆 v0.2 P1 用户验证指引
 
 > 目标：在真实 Claude Code 环境中对比 AgentScope 加载链模拟器与 `/memory` 命令输出，验证 P1 实现正确性。
+> **重要校正**：`/memory` 命令输出为**交互式 UI**（on/off 开关 + 文件路径），不是文本列表形式的"启动链顺序报告"。验证不应强行逐条对比顺序，而应分三个层面：文件存在性/识别项对照、顺序规则独立校验、差异项记录。
 > 验证方式：纯观察，不改动任何文件。
 > 适用平台：Linux (AppImage) / macOS (开发模式)
 
@@ -30,10 +31,10 @@
 **Linux**（AppImage）：
 ```bash
 # 假设 AppImage 位于：
-# /home/yufei/Repo/agent-scope/src-tauri/target/release/bundle/appimage/agent-scope_0.2.0_amd64.AppImage
+# /home/yufei/Repo/agent-scope/src-tauri/target/release/bundle/appimage/AgentScope_0.2.0_amd64.AppImage
 
-chmod +x agent-scope_0.2.0_amd64.AppImage
-./agent-scope_0.2.0_amd64.AppImage
+chmod +x AgentScope_0.2.0_amd64.AppImage
+./AgentScope_0.2.0_amd64.AppImage
 ```
 
 **macOS**（开发模式）：
@@ -71,12 +72,14 @@ claude
 ```
 
 **请记录/截图的 `/memory` 输出内容**：
-1. 完整的加载顺序列表（从上到下）
-2. 每个加载项的 scope 标注（user / project / local / auto）
-3. path-scoped rules 的展示方式（是否单独列出？是否在启动链中？）
-4. Auto Memory 的展示（如果有）：行数、大小、是否截断
-5. 被排除的 assets（如果有）
-6. 任何 warnings 或 errors
+`/memory` 是交互式 UI，不是文本列表。请记录：
+1. **显示的记忆项**：如 "Project memory: ./CLAUDE.md"、"User memory: ~/.claude/CLAUDE.md" 等
+2. **Auto Memory 状态**：如 "Auto-memory: on" 或 "Auto-memory: off"
+3. **可交互元素**：如 "Open auto-memory folder" 按钮、开关状态等
+4. **path-scoped rules 的展示方式**（如果有）：是否在 UI 中单独列出？
+5. **任何 warnings 或 errors**
+
+**注意**：`/memory` **不会**显示完整的启动链顺序列表（如 managed → user → ancestor → cwd → rules → auto）。AgentScope 的 A 区域（启动链）展示的是基于官方文档的推断顺序，不应直接与 `/memory` UI 逐条对比。
 
 **不需要**为了验证而创建文件。只使用当前已有环境。
 
@@ -91,9 +94,10 @@ claude
 5. 点击 **模拟加载**
 6. 记录以下内容：
 
-**A 区域：启动链**（与 Claude `/memory` 的启动链对照）
-- 文件列表和顺序
+**A 区域：启动链**（独立校验，不直接与 `/memory` UI 逐条对比）
+- 文件列表和顺序（基于官方文档规则的推断顺序）
 - 每个文件的 scope 和 asset_type
+- **校验方法**：确认 AgentScope 展示的项是否在 `/memory` UI 中也有对应（如 User memory、Project memory、Auto-memory 状态）
 
 **B 区域：路径作用域规则**
 - 规则名称和 paths 模式
@@ -118,12 +122,12 @@ claude
 
 | 对比项 | 结果 | 说明 |
 |--------|------|------|
-| 启动链顺序 | 一致 / 差异 | 具体差异描述 |
-| scope 标注 | 一致 / 差异 | |
-| path-scoped rules | 一致 / 差异 | |
-| Auto Memory | 一致 / 差异 / 本批未覆盖 | |
+| **文件存在性对照** | 一致 / 差异 | Claude `/memory` 中显示的记忆项，AgentScope 是否也识别到？ |
+| Auto Memory 匹配 | 一致 / 差异 / 本批未覆盖 | 同一 git repo 的不同子目录是否共享同一 Auto Memory？ |
+| path-scoped rules | 一致 / 差异 | `/memory` 中是否展示？AgentScope B 区域是否列出？ |
 | excluded assets | 一致 / 差异 / 环境中不存在 | |
 | warnings | 一致 / 差异 / 环境中不存在 | |
+| **顺序规则独立校验** | 通过 / 待验证 | AgentScope A 区域顺序是否符合官方文档规则？（不直接对比 `/memory` UI） |
 
 #### 差异说明（如有）
 
@@ -150,6 +154,7 @@ claude
 | A10（当前目录 `.claude/CLAUDE.md`） | 若项目天然存在该文件则可观察，否则不创建（单元测试已覆盖） |
 | A11（祖先 `CLAUDE.local.md`） | 若祖先目录天然存在该文件则可观察，否则不创建（单元测试已覆盖） |
 | E4（非 git 目录 Auto Memory） | 暂不验证，后续用 `/tmp` 隔离环境 |
+| `autoMemoryDirectory` 自定义路径 | P1 **不读取**该设置。若用户自定义了路径，AgentScope 仅表现为默认路径 `auto_memory_not_found`（通用"未找到"提示），**不是**专门的 limitation warning |
 | P2 `@import` 解析 | 尚未实现 |
 | 编辑 / 删除 / 同步 | P3/P4 范围，尚未实现 |
 

@@ -454,9 +454,43 @@ fn read_rule_paths(path: &Path) -> Result<Option<Vec<String>>, String> {
     }
 }
 
+/// 从 cwd 向上查找 git 仓库根目录（只识别 `.git` 目录）
+///
+/// **行为**：
+/// - 普通 git repo 子目录：向上找到 `.git` 目录，返回该目录的父路径（repo root）
+/// - git worktree / submodule：`.git` 是文件而非目录，本函数不识别，返回 None
+/// - 非 git 目录：无 `.git` 目录，返回 None
+///
+/// worktree 的 `.git` 文件解析不在 P1 范围内，由调用方单独处理。
+///
+/// 返回：若找到 `.git` 目录则返回 repo root 路径；否则返回 None
+fn find_git_repo_root(cwd: &Path) -> Option<PathBuf> {
+    let mut current = Some(cwd.to_path_buf());
+    while let Some(path) = current {
+        let git_path = path.join(".git");
+        // 只识别 `.git` 目录（普通 repo），不识别 `.git` 文件（worktree / submodule）
+        if git_path.is_dir() {
+            return Some(path);
+        }
+        current = path.parent().map(|p| p.to_path_buf());
+    }
+    None
+}
+
 /// 查找并读取 Auto Memory（MEMORY.md）
 ///
-/// 匹配策略：Claude Code 使用编码后的 cwd 路径作为项目目录名。
+/// 匹配策略（最终版）：
+/// 1. **普通 git repo 子目录**（cwd 或其祖先有 `.git` 目录）：
+///    用 `find_git_repo_root()` 定位 repo root，再用 repo root 编码路径匹配 Auto Memory。
+///    ✅ 当前已实现支持。
+/// 2. **git worktree / submodule**（cwd 或其祖先有 `.git` 文件，非目录）：
+///    安全收口——不尝试任何近似匹配（包括 cwd-encoded fallback），直接返回
+///    `auto_memory_worktree_unsupported` warning，避免误展示。
+///    ⚠️ P1 limitation：worktree 与主 repo 共享 Auto Memory 的语义未实现。
+/// 3. **非 git 目录**（无任何 `.git`）：
+///    回退到 cwd 编码路径匹配。
+///    ⚠️ P1 limitation：用户自定义 `autoMemoryDirectory` 未读取。
+///
 /// 例如 /Users/name/Repo → ~/.claude/projects/-Users-name-Repo/memory/MEMORY.md
 /// 如果不存在，记录 info warning，不返回模糊匹配结果。
 fn find_auto_memory(
@@ -475,26 +509,64 @@ fn find_auto_memory(
         return None;
     }
 
-    // 使用 cwd 的编码路径匹配项目目录（Claude Code 实际使用的标识方式）
-    let cwd_str = cwd.to_string_lossy();
-    let encoded = encode_cwd_path(&cwd_str);
-    let memory_md = projects_dir.join(&encoded).join("memory").join("MEMORY.md");
+    // 区分三种场景：普通 git repo 子目录 / worktree / 非 git 目录
+    // 1. 普通 git repo 子目录：cwd 或其祖先有 `.git` 目录
+    // 2. worktree / submodule：cwd 或其祖先有 `.git` 文件（非目录）
+    // 3. 非 git 目录：无任何 `.git`
 
-    if memory_md.exists() {
-        return read_auto_memory_file(&memory_md, excludes_config, excluded_assets, warnings);
-    }
-
-    // 未找到匹配的 Auto Memory
-    warnings.push(SerLoadChainWarning {
-        level: "info".to_string(),
-        code: "auto_memory_not_found".to_string(),
-        message: format!(
-            "未找到 Auto Memory：期望路径 ~/.claude/projects/{}/memory/MEMORY.md",
-            encoded
-        ),
+    let has_git_dir = cwd.ancestors().any(|p| p.join(".git").is_dir());
+    let has_git_file = cwd.ancestors().any(|p| {
+        let git_path = p.join(".git");
+        git_path.exists() && !git_path.is_dir()
     });
 
-    None
+    if has_git_dir {
+        // 场景 1：普通 git repo 子目录，用 repo root 编码匹配
+        let repo_root = find_git_repo_root(cwd).unwrap_or_else(|| cwd.to_path_buf());
+        let encoded = encode_cwd_path(&repo_root.to_string_lossy());
+        let memory_md = projects_dir.join(&encoded).join("memory").join("MEMORY.md");
+
+        if memory_md.exists() {
+            return read_auto_memory_file(&memory_md, excludes_config, excluded_assets, warnings);
+        }
+
+        warnings.push(SerLoadChainWarning {
+            level: "info".to_string(),
+            code: "auto_memory_not_found".to_string(),
+            message: format!(
+                "未找到 Auto Memory：git repo root 编码路径 ~/.claude/projects/{}/memory/MEMORY.md 不存在",
+                encoded
+            ),
+        });
+        None
+    } else if has_git_file {
+        // 场景 2：worktree / submodule
+        // 安全收口：不尝试任何 cwd-encoded fallback，避免误导用户
+        warnings.push(SerLoadChainWarning {
+            level: "warning".to_string(),
+            code: "auto_memory_worktree_unsupported".to_string(),
+            message: "当前目录位于 git worktree（或 submodule）中。Claude 官方语义要求 worktree 与主 repo 共享 Auto Memory，但 P1 当前未解析 `.git` 文件来定位共享 identity。因此本轮不做近似匹配，避免误展示。后续版本将补充 worktree 支持。".to_string(),
+        });
+        None
+    } else {
+        // 场景 3：非 git 目录，用 cwd 编码回退匹配
+        let encoded = encode_cwd_path(&cwd.to_string_lossy());
+        let memory_md = projects_dir.join(&encoded).join("memory").join("MEMORY.md");
+
+        if memory_md.exists() {
+            return read_auto_memory_file(&memory_md, excludes_config, excluded_assets, warnings);
+        }
+
+        warnings.push(SerLoadChainWarning {
+            level: "info".to_string(),
+            code: "auto_memory_not_found".to_string(),
+            message: format!(
+                "未找到 Auto Memory：cwd 编码路径 ~/.claude/projects/{}/memory/MEMORY.md 不存在",
+                encoded
+            ),
+        });
+        None
+    }
 }
 
 /// 读取 Auto Memory 文件（应用截断）
@@ -1155,6 +1227,178 @@ mod tests {
             line_count
         );
         assert!(step.content_preview.is_some(), "应有 content_preview");
+
+        let _ = fs::remove_dir_all(&root);
+    }
+
+    /// 测试：git repo 子目录共享同一 Auto Memory（repo root 编码匹配）
+    #[test]
+    fn test_auto_memory_git_repo_root_match() {
+        let root = setup_test_dir();
+        let fake_claude_dir = root.join("fake-claude");
+        let repo_root = root.join("my-repo");
+        let sub_dir = repo_root.join("src").join("components");
+
+        // 创建 git repo 根目录（含 .git 子目录）
+        fs::create_dir_all(&repo_root).unwrap();
+        fs::create_dir_all(repo_root.join(".git")).unwrap();
+        fs::write(repo_root.join("CLAUDE.md"), "# Repo CLAUDE.md\n").unwrap();
+
+        // 创建子目录（无 CLAUDE.md）
+        fs::create_dir_all(&sub_dir).unwrap();
+
+        // 创建 Auto Memory：使用 repo root 编码，不是子目录编码
+        let encoded_root = encode_cwd_path(&repo_root.to_string_lossy());
+        let memory_dir = fake_claude_dir
+            .join("projects")
+            .join(&encoded_root)
+            .join("memory");
+        fs::create_dir_all(&memory_dir).unwrap();
+        fs::write(memory_dir.join("MEMORY.md"), "# Auto Memory\n").unwrap();
+
+        // 从子目录启动模拟，应能找到 Auto Memory（因为共享 repo root 的）
+        let result = with_env_var(
+            "CLAUDE_CONFIG_DIR",
+            fake_claude_dir.to_str().unwrap(),
+            || simulate_load_chain(&sub_dir).expect("模拟应成功"),
+        );
+
+        let step = result
+            .startup_chain
+            .iter()
+            .find(|s| s.asset_type == "auto_memory_index")
+            .expect("从子目录启动应找到 repo root 对应的 Auto Memory");
+
+        assert_eq!(step.scope, "auto");
+        assert!(
+            step.native_path.contains(&encoded_root),
+            "Auto Memory 路径应包含 repo root 编码，实际路径: {}",
+            step.native_path
+        );
+
+        // 验证：若用子目录编码创建独立的 Auto Memory，不应被匹配到
+        let encoded_sub = encode_cwd_path(&sub_dir.to_string_lossy());
+        assert_ne!(
+            encoded_root, encoded_sub,
+            "repo root 和子目录的编码应不同，否则测试无意义"
+        );
+
+        let _ = fs::remove_dir_all(&root);
+    }
+
+    /// 测试：非 git 目录使用 cwd 编码匹配 Auto Memory
+    #[test]
+    fn test_auto_memory_non_git_cwd_match() {
+        let root = setup_test_dir();
+        let fake_claude_dir = root.join("fake-claude");
+        let cwd = root.join("no-git-project");
+
+        // 创建非 git 目录（无 .git）
+        fs::create_dir_all(&cwd).unwrap();
+        fs::write(cwd.join("CLAUDE.md"), "# No Git\n").unwrap();
+
+        // 创建 Auto Memory：使用 cwd 编码
+        let encoded = encode_cwd_path(&cwd.to_string_lossy());
+        let memory_dir = fake_claude_dir
+            .join("projects")
+            .join(&encoded)
+            .join("memory");
+        fs::create_dir_all(&memory_dir).unwrap();
+        fs::write(memory_dir.join("MEMORY.md"), "# Auto Memory\n").unwrap();
+
+        let result = with_env_var(
+            "CLAUDE_CONFIG_DIR",
+            fake_claude_dir.to_str().unwrap(),
+            || simulate_load_chain(&cwd).expect("模拟应成功"),
+        );
+
+        let step = result
+            .startup_chain
+            .iter()
+            .find(|s| s.asset_type == "auto_memory_index")
+            .expect("非 git 目录应找到 cwd 编码的 Auto Memory");
+
+        assert_eq!(step.scope, "auto");
+
+        let _ = fs::remove_dir_all(&root);
+    }
+
+    /// 测试：git worktree 场景不加载 cwd-encoded Auto Memory，返回 limitation warning
+    #[test]
+    fn test_auto_memory_worktree_no_fallback() {
+        let root = setup_test_dir();
+        let fake_claude_dir = root.join("fake-claude");
+        // 模拟 worktree 目录结构：
+        // root/
+        //   main-repo/          (主 repo，有 .git 目录)
+        //     .git/
+        //   worktree-1/         (worktree，有 .git 文件)
+        //     .git              (内容为 "gitdir: ...")
+        //     src/              (模拟从 worktree 子目录启动)
+        let main_repo = root.join("main-repo");
+        let worktree = root.join("worktree-1");
+        let worktree_sub = worktree.join("src");
+
+        fs::create_dir_all(&main_repo).unwrap();
+        fs::create_dir_all(main_repo.join(".git")).unwrap();
+        fs::write(main_repo.join("CLAUDE.md"), "# Main Repo\n").unwrap();
+
+        fs::create_dir_all(&worktree).unwrap();
+        // .git 文件（不是目录）模拟 worktree
+        fs::write(
+            worktree.join(".git"),
+            "gitdir: /fake/path/to/main-repo/.git/worktrees/worktree-1\n",
+        )
+        .unwrap();
+        fs::write(worktree.join("CLAUDE.md"), "# Worktree\n").unwrap();
+
+        fs::create_dir_all(&worktree_sub).unwrap();
+
+        // 创建 cwd-encoded Auto Memory（即 worktree 路径编码）
+        // 如果实现有误，会从 worktree 回退到 cwd 编码并加载这个
+        let encoded_cwd = encode_cwd_path(&worktree_sub.to_string_lossy());
+        let memory_dir_cwd = fake_claude_dir
+            .join("projects")
+            .join(&encoded_cwd)
+            .join("memory");
+        fs::create_dir_all(&memory_dir_cwd).unwrap();
+        fs::write(memory_dir_cwd.join("MEMORY.md"), "# CWD Encoded Memory\n").unwrap();
+
+        let result = with_env_var(
+            "CLAUDE_CONFIG_DIR",
+            fake_claude_dir.to_str().unwrap(),
+            || simulate_load_chain(&worktree_sub).expect("模拟应成功"),
+        );
+
+        // 1. 不应加载任何 Auto Memory
+        let auto_step = result
+            .startup_chain
+            .iter()
+            .find(|s| s.asset_type == "auto_memory_index");
+        assert!(
+            auto_step.is_none(),
+            "worktree 场景不应加载 Auto Memory（即使是 cwd-encoded 的）"
+        );
+
+        // 2. 应返回 worktree limitation warning
+        let worktree_warning = result
+            .warnings
+            .iter()
+            .find(|w| w.code == "auto_memory_worktree_unsupported");
+        assert!(
+            worktree_warning.is_some(),
+            "worktree 场景应返回 auto_memory_worktree_unsupported warning"
+        );
+
+        // 3. 不应返回 auto_memory_not_found（因为不是"没找到"，而是"不查找"）
+        let not_found = result
+            .warnings
+            .iter()
+            .find(|w| w.code == "auto_memory_not_found");
+        assert!(
+            not_found.is_none(),
+            "worktree 场景不应返回 auto_memory_not_found"
+        );
 
         let _ = fs::remove_dir_all(&root);
     }

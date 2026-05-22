@@ -80,6 +80,10 @@ v0.2 新增
 7. 全局 rules（~/.claude/rules/**/*.md，无 paths 的 → 无条件加载）
 8. 项目级 rules（./.claude/rules/**/*.md，无 paths 的 → 无条件加载）
 9. Auto Memory（~/.claude/projects/<project>/memory/MEMORY.md，前 200 行或前 25KB，取先到者）
+   - `<project>` 的匹配策略：
+     - 普通 git repo 子目录：以 **repo root 路径的编码** 匹配（同一 repo 的不同子目录共享 auto memory）✅ 已支持
+     - git worktree：官方说明与主 repo 共享 auto memory，但当前实现未解析 `.git` 文件，返回 worktree 自身路径 ⚠️ P1 limitation
+     - 非 git 目录：以 **cwd 路径编码** 匹配
 ```
 
 **关键细节**：
@@ -159,7 +163,10 @@ pub fn simulate_load_chain(
       - cwd/CLAUDE.local.md（✅ 官方确认）
    d. 全局无条件 rules: ~/.claude/rules/**/*.md（无 paths frontmatter 的，递归扫描子目录）
    e. 项目级无条件 rules: cwd/.claude/rules/**/*.md（无 paths frontmatter 的，递归扫描子目录）
-   f. Auto Memory: ~/.claude/projects/<encode_cwd_path(cwd)>/memory/MEMORY.md
+   f. Auto Memory: ~/.claude/projects/<encode_cwd_path(repo_root_or_cwd)>/memory/MEMORY.md
+      - git 仓库内：先定位 git repo root，再用 repo root 的编码路径匹配
+      - 非 git 目录：用 cwd 的编码路径匹配
+      - 受 `autoMemoryDirectory` 设置影响（见 §2.8）
 
 2. path-scoped rules 发现（B 区域，单独列出）:
    a. 全局 path-scoped rules: ~/.claude/rules/**/*.md（有 paths 的，递归扫描子目录）
@@ -173,9 +180,16 @@ pub fn simulate_load_chain(
 
 | 输入类型 | 行为 |
 |---------|------|
-| Registered project cwd | 项目级规则从 `cwd/.claude/rules/` 读取（递归子目录）；Auto Memory 通过 encode_cwd_path 精确匹配 |
-| Arbitrary cwd（未注册） | 项目级规则仍从 `cwd/.claude/rules/` 读取（递归子目录，Claude Code 不要求项目注册）；Auto Memory 通过 encode_cwd_path 精确匹配 |
-| 非 git 目录 | Auto Memory 通过 encode_cwd_path 精确匹配目录路径；若未找到匹配则记录 info warning，不阻断加载链模拟 |
+| Registered project cwd | 项目级规则从 `cwd/.claude/rules/` 读取（递归子目录）；Auto Memory 通过 **repo root 编码路径** 匹配（普通 git repo） |
+| Arbitrary cwd（未注册） | 项目级规则仍从 `cwd/.claude/rules/` 读取（递归子目录，Claude Code 不要求项目注册）；Auto Memory 通过 **repo root 编码路径** 匹配（普通 git repo） |
+| 非 git 目录 | Auto Memory 通过 **cwd 编码路径** 匹配；若未找到匹配则记录 info warning，不阻断加载链模拟 |
+| git worktree | Auto Memory 匹配行为 **未保证**：当前实现返回 worktree 自身路径，官方文档要求与主 repo 共享 ⚠️ limitation |
+
+**Auto Memory 匹配策略（修订）**：
+1. **普通 git repo 子目录**：Claude Code 按 repository identity 派生 Auto Memory 目录。同一 repo 的不同子目录共享同一 Auto Memory。AgentScope 通过向上查找 `.git` 目录定位 repo root，再用 repo root 编码匹配 ✅ 已支持
+2. **git worktree**：官方文档说明 worktree 与主 repo 共享 Auto Memory，但当前实现未解析 `.git` 文件，返回 worktree 自身路径 ⚠️ P1 limitation
+3. **非 git 目录**：Claude Code 使用 project root（即 cwd 本身）派生 Auto Memory 目录。AgentScope 回退到 cwd 编码路径
+4. **用户自定义**：`autoMemoryDirectory` 设置可改变存储位置（见 §2.8）⚠️ P1 limitation
 
 ### 2.4 数据结构（修订）
 
@@ -335,11 +349,34 @@ Claude Code 的 rules 目录支持递归组织：
 2. v0.1 scanner 已支持递归目录扫描，技术上无额外复杂度
 3. 不递归会导致遗漏用户实际使用的 rules
 
-**手动对照验证点**：
-- 在真实项目中运行 `/memory` 命令，对比 AgentScope 模拟的启动链顺序是否一致
-- 验证"上级目录 CLAUDE.md"的加载顺序（从根到 cwd）
+**手动对照验证点（修订）**：
+- `/memory` 命令输出为**交互式 UI**（on/off 开关 + 文件路径），不是文本列表形式的启动链报告。验证应分三个层面：
+  1. **文件存在性/识别项对照**：Claude `/memory` 中显示的记忆项，AgentScope 是否也识别到？
+  2. **顺序规则校验**：AgentScope 输出是否符合官方文档描述的加载规则？（独立校验，不直接对比 `/memory` UI）
+  3. **差异项记录**：哪些是 `/memory` UI 不可观察但 AgentScope 可展示的（如 managed CLAUDE.md、祖先目录链）
+- 验证"上级目录 CLAUDE.md"的加载顺序（从根到 cwd）：AgentScope 输出应符合官方规则
 - 验证 path-scoped rules 是否在 `/memory` 中单独列出（而非混入启动链）
 - 验证 Auto Memory 的 200 行 / 25KB 截断行为
+- 验证 Auto Memory 匹配：同一 git repo 的不同子目录是否共享同一 Auto Memory
+
+### 2.8 Auto Memory 目录自定义（`autoMemoryDirectory`）
+
+Claude Code 用户可通过 `settings.json` 中的 `autoMemoryDirectory` 字段自定义 Auto Memory 的存储位置：
+
+```json
+{
+  "autoMemoryDirectory": "/path/to/custom/auto-memory"
+}
+```
+
+**第一批次处理策略**：
+- **当前实现**：先按默认路径（`~/.claude/projects/<id>/memory/`）查找，若未找到则记录 info warning
+- **Limitation**：P1 **不读取** `autoMemoryDirectory` 设置。若用户自定义了该路径，AgentScope 仅表现为默认路径 `auto_memory_not_found`（通用"未找到"提示），**不是**专门的 limitation warning。Claude Code 实际可能从自定义路径加载，但 AgentScope 不会检测或提示此差异
+- **后续计划**：P2/P3 阶段增加 `autoMemoryDirectory` 读取支持，优先级低于 git repo root 匹配修复
+
+**验证建议**：
+- 若用户未设置 `autoMemoryDirectory`，默认路径查找应正常工作
+- 若用户设置了 `autoMemoryDirectory`，AgentScope P1 不会检测该设置，仅表现为默认路径 `auto_memory_not_found` warning。这**不是**专门的 limitation warning，而是未找到默认路径的通用提示。需在验证日志中注明此 limitation
 
 ---
 
@@ -790,7 +827,8 @@ v0.1 数据模型在第一批次中的复用方式：
 |---|--------|------|---------|------|
 | E1 | MEMORY.md 启动加载上限：200 行或 25KB | 官方文档 | 创建超大 MEMORY.md，/memory 观察截断位置 | ⬜ |
 | E2 | topic 文件（非 MEMORY.md）不自动加载 | 官方文档 | /memory 观察是否有 topic 文件 | ⬜ |
-| E3 | Auto Memory 是否与 AgentScope 当前 encode_cwd_path(cwd) 精确匹配结果一致 | 推断 | 在同一 cwd 下对比 /memory 与 AgentScope 模拟结果 | ⬜ |
+| E3 | Auto Memory 是否按 **repo identity / project root** 语义匹配（而非 cwd 精确匹配） | 官方文档 | 同一 git repo 的不同子目录下对比 `/memory` 与 AgentScope 模拟结果，确认共享同一 Auto Memory | ⬜ |
+| E4 | `autoMemoryDirectory` 自定义路径是否被支持 | 官方文档 | 若用户设置了 `autoMemoryDirectory`，观察 AgentScope 是否能正确查找 | ⬜ |
 
 ### 9.3 验证优先级
 
@@ -859,12 +897,17 @@ Phase 3：手动对照验证
 
 ### 10.2 第一批次退出条件
 
-**P1 阶段退出条件（当前）**：
+**P1 阶段退出条件（当前，修订）**：
 1. P1 加载链模拟功能完整，E2E 测试通过
-2. 与 Claude Code `/memory` 命令在 2 个以上真实项目的手动对照验证通过（启动链顺序）
-3. 不引入 SQLite 等重型依赖（保持 v0.1 的架构约束）
-4. 三平台 CI 构建通过
-5. §9.2 中标记为"第一批验证"的 A/B/C/E 组假设项（不含 @import D 组）已完成验证
+2. 与 Claude Code `/memory` 命令在 2 个以上 cwd 完成手动对照验证；验证口径为：
+   - **文件存在性/识别项对照**：Claude `/memory` 中显示的记忆项，AgentScope 是否也识别到？
+   - **顺序规则独立校验**：AgentScope 输出是否符合官方文档描述的加载规则？（不直接对比 `/memory` UI）
+   - **差异项记录**：记录 `/memory` UI 不可观察但 AgentScope 可展示的项（如 managed CLAUDE.md、祖先目录链）
+   - 可优先使用"项目根目录 + 同项目深层子目录"，不强制必须是 2 个不同项目
+3. Auto Memory 匹配策略已按 repo identity / project root 语义修复（同一 git repo 的不同子目录共享 Auto Memory）
+4. 不引入 SQLite 等重型依赖（保持 v0.1 的架构约束）
+5. 三平台 CI 构建通过
+6. §9.3 中列为"第一批验证"的现有资产可观察项已完成验证（C 组保留在后续批次/条件满足时验证）
 
 **P2 阶段退出条件（后续）**：
 1. @import 功能完整，E2E 测试通过
