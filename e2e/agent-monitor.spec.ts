@@ -2,7 +2,7 @@ import { test, expect, type Page } from "@playwright/test";
 
 /**
  * AgentMonitor E2E 测试
- * 
+ *
  * 测试 Agent 监控面板的空状态渲染。
  * Tauri event listener 在浏览器环境不可用，
  * totalSessions 始终为 0 → 显示"暂无活跃 Agent"空状态。
@@ -27,7 +27,7 @@ test.describe("AgentMonitor", () => {
   test("显示汇总指标卡片", async ({ page }) => {
     // 即使无 Agent，汇总卡片仍渲染
     await expect(page.getByText("会话总数")).toBeVisible();
-    await expect(page.getByText("关联项目")).toBeVisible();
+    await expect(page.getByText("已注册项目")).toBeVisible();
     await expect(page.getByText("刷新时间")).toBeVisible();
   });
 
@@ -100,18 +100,28 @@ test.describe("AgentMonitor", () => {
 
     // 汇总卡片可见
     await expect(page.getByText("会话总数")).toBeVisible();
-    await expect(page.getByText("关联项目")).toBeVisible();
+    await expect(page.getByText("已注册项目")).toBeVisible();
     await expect(page.getByText("刷新时间")).toBeVisible();
 
     // 主题按钮可见
     const themeButton = page.locator(".theme-toggle, [aria-label*='模式'], [aria-label='跟随系统']").first();
     await expect(themeButton).toBeVisible();
   });
+
+  test("mock 数据下显示其他工作目录标题和描述", async ({ page }) => {
+    await mockAgentUpdateEvent(page);
+    await openAgentMonitor(page);
+
+    // 其他工作目录卡片标题
+    await expect(page.getByText("其他工作目录")).toBeVisible({ timeout: 8000 });
+    // 未匹配描述文本
+    await expect(page.getByText("未匹配项目监控中已注册的项目路径")).toBeVisible();
+  });
 });
 
 async function openAgentMonitor(page: Page) {
   await page.goto("/");
-  await page.locator('nav[aria-label="大域导航"]').getByRole("button", { name: "通用监控" }).click();
+  await page.locator('nav[aria-label="大域导航"]').getByRole("button", { name: "Claude Code" }).click();
 }
 
 async function mockAgentUpdateEvent(page: Page) {
@@ -152,11 +162,18 @@ async function mockAgentUpdateEvent(page: Page) {
       thinking_since_ms: 0,
     };
 
+    const unmappedAgent = {
+      ...sampleAgent,
+      session_id: "unmapped-session-001",
+      cwd: "/tmp/other-workspace",
+      project_name: "other-workspace",
+    };
+
     const agentPayload = {
       projects: [{ project_path: "/tmp/sample-project", agents: [sampleAgent], count: 1 }],
-      unmapped: [],
+      unmapped: [unmappedAgent],
       timestamp_ms: Date.now(),
-      total_sessions: 1,
+      total_sessions: 2,
     };
 
     const win = window as unknown as {

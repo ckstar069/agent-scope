@@ -4,6 +4,7 @@ export type { ProjectEntry, StageInfo, GitStatus, ProjectConfig, ProjectAgents, 
 
 export interface DashboardProps {
   onNavigateSettings: () => void;
+  onSelectProject: (projectPath: string) => void;
 }
 
 export interface TemplateDataPayload {

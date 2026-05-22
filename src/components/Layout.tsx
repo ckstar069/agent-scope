@@ -16,7 +16,6 @@ interface LayoutProps {
   onDomainChange: (domain: AppDomain) => void;
   onProjectPageChange: (page: string) => void;
   onMonitoringPageChange: (page: string) => void;
-  onClaudeMemoryPageChange: (page: string) => void;
   onSettingsPageChange: (page: string) => void;
   onSelectProject: (projectPath: string) => void;
   children: ReactNode;
@@ -29,7 +28,6 @@ export function Layout({
   onDomainChange,
   onProjectPageChange,
   onMonitoringPageChange,
-  onClaudeMemoryPageChange,
   onSettingsPageChange,
   onSelectProject,
   children,
@@ -49,7 +47,6 @@ export function Layout({
           onToggle={() => setIsSidebarExpanded((current) => !current)}
           onProjectPageChange={onProjectPageChange}
           onMonitoringPageChange={onMonitoringPageChange}
-          onClaudeMemoryPageChange={onClaudeMemoryPageChange}
           onSettingsPageChange={onSettingsPageChange}
           onSelectProject={onSelectProject}
         />

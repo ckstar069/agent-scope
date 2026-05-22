@@ -1,6 +1,6 @@
 import type { AppDomain } from "@/App";
 import { cn } from "@/lib/utils";
-import { Brain, FolderKanban, Gauge, Settings } from "lucide-react";
+import { Bot, FolderKanban, Settings } from "lucide-react";
 
 interface TopNavProps {
   activeDomain: AppDomain;
@@ -13,8 +13,7 @@ const domains: Array<{
   icon: typeof FolderKanban;
 }> = [
   { id: "projects", label: "项目监控", icon: FolderKanban },
-  { id: "monitoring", label: "通用监控", icon: Gauge },
-  { id: "claude-memory", label: "Claude 记忆", icon: Brain },
+  { id: "monitoring", label: "Claude Code", icon: Bot },
   { id: "settings", label: "设置", icon: Settings },
 ];
 

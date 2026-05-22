@@ -28,7 +28,6 @@ interface SidebarProps {
   onToggle: () => void;
   onProjectPageChange: (page: string) => void;
   onMonitoringPageChange: (page: string) => void;
-  onClaudeMemoryPageChange: (page: string) => void;
   onSettingsPageChange: (page: string) => void;
   onSelectProject: (projectPath: string) => void;
 }
@@ -43,7 +42,6 @@ export function Sidebar({
   onToggle,
   onProjectPageChange,
   onMonitoringPageChange,
-  onClaudeMemoryPageChange,
   onSettingsPageChange,
   onSelectProject,
 }: SidebarProps) {
@@ -79,8 +77,7 @@ export function Sidebar({
         {isExpanded && (
           <p className="truncate text-xs font-medium text-sidebar-foreground/60">
             {activeDomain === "projects" && "项目监控"}
-            {activeDomain === "monitoring" && "通用监控"}
-            {activeDomain === "claude-memory" && "Claude 记忆"}
+            {activeDomain === "monitoring" && "Claude Code"}
             {activeDomain === "settings" && "设置"}
           </p>
         )}
@@ -103,13 +100,6 @@ export function Sidebar({
             isExpanded={isExpanded}
             activePage={activePage}
             onPageChange={onMonitoringPageChange}
-          />
-        )}
-        {activeDomain === "claude-memory" && (
-          <ClaudeMemorySidebarContent
-            isExpanded={isExpanded}
-            activePage={activePage}
-            onPageChange={onClaudeMemoryPageChange}
           />
         )}
         {activeDomain === "settings" && (
@@ -216,7 +206,7 @@ function ProjectSidebarContent({
   );
 }
 
-/* ─── 通用监控域侧边栏 ─── */
+/* ─── Claude Code 域侧边栏（监控 + 记忆） ─── */
 function MonitoringSidebarContent({
   isExpanded,
   activePage,
@@ -226,39 +216,34 @@ function MonitoringSidebarContent({
   activePage: string;
   onPageChange: (page: string) => void;
 }) {
-  const items = [
-    { id: "agents", label: "Agent 监控", icon: Bot },
-    { id: "claude-history", label: "会话管理", icon: History },
-  ] as const;
-
   return (
     <>
-      {items.map((item) => (
-        <SidebarButton
-          key={item.id}
-          icon={item.icon}
-          label={item.label}
-          isExpanded={isExpanded}
-          isActive={activePage === item.id}
-          onClick={() => onPageChange(item.id)}
-        />
-      ))}
-    </>
-  );
-}
+      {/* 监控分组 */}
+      {isExpanded && (
+        <div className="px-3 py-1.5 text-xs font-medium text-sidebar-foreground/50">监控</div>
+      )}
+      <SidebarButton
+        icon={Bot}
+        label="Agent 监控"
+        isExpanded={isExpanded}
+        isActive={activePage === "agents"}
+        onClick={() => onPageChange("agents")}
+      />
+      <SidebarButton
+        icon={History}
+        label="会话管理"
+        isExpanded={isExpanded}
+        isActive={activePage === "claude-history"}
+        onClick={() => onPageChange("claude-history")}
+      />
 
-/* ─── Claude 记忆域侧边栏 ─── */
-function ClaudeMemorySidebarContent({
-  isExpanded,
-  activePage,
-  onPageChange,
-}: {
-  isExpanded: boolean;
-  activePage: string;
-  onPageChange: (page: string) => void;
-}) {
-  return (
-    <>
+      {/* 分隔 */}
+      <div className={cn("my-1 h-px bg-sidebar-border/50", !isExpanded && "mx-2")} />
+
+      {/* 记忆分组 */}
+      {isExpanded && (
+        <div className="px-3 py-1.5 text-xs font-medium text-sidebar-foreground/50">记忆</div>
+      )}
       <SidebarButton
         icon={Brain}
         label="记忆资产"

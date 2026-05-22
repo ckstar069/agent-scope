@@ -1,5 +1,5 @@
 import { useEffect, useMemo, useState } from "react";
-import { Activity, AlertTriangle, Bot, ChevronDown, ChevronRight, Clock, Gauge, Layers3, Radio, RotateCcw, Search, X } from "lucide-react";
+import { Activity, AlertTriangle, Bot, ChevronDown, ChevronRight, Clock, FolderOpen, Gauge, Layers3, Radio, RotateCcw, Search, X } from "lucide-react";
 
 import { AgentFileAudit } from "@/components/AgentFileAudit";
 import { AgentSubTree } from "@/components/AgentSubTree";
@@ -228,7 +228,7 @@ export function AgentMonitor() {
 
       <div className="grid gap-3 md:grid-cols-3">
         <SummaryTile icon={Radio} label="会话总数" value={`${totalSessions}`} detail="agent-update 实时快照" />
-        <SummaryTile icon={Activity} label="关联项目" value={`${activeProjects.length}`} detail="仅显示有 Agent 的项目" />
+        <SummaryTile icon={Activity} label="已注册项目" value={`${activeProjects.length}`} detail="当前有会话的项目监控路径" />
         <SummaryTile icon={Clock} label="刷新时间" value={snapshot ? formatRelativeTime(snapshot.timestamp_ms, now) : "等待中"} detail={snapshot ? formatDateTime(snapshot.timestamp_ms) : "每 2 秒同步"} />
       </div>
 
@@ -305,7 +305,7 @@ export function AgentMonitor() {
 
           {filteredUnmappedAgents.length > 0 && (
             <ProjectAgentCard
-              project={{ project_path: "未关联", agents: filteredUnmappedAgents, count: filteredUnmappedAgents.length }}
+              project={{ project_path: "未匹配项目监控中已注册的项目路径", agents: filteredUnmappedAgents, count: filteredUnmappedAgents.length }}
               maxRate={maxRate}
               rateUnit={rateUnit}
               rateType={rateType}
@@ -372,8 +372,8 @@ interface ProjectAgentCardProps {
 
 function ProjectAgentCard({ project, maxRate, rateUnit, rateType, expandedSessionId, onToggleSession, isUnmapped = false }: ProjectAgentCardProps) {
   const [isExpanded, setIsExpanded] = useState(true);
-  const displayName = isUnmapped ? "未关联" : getProjectName(project.project_path, project.agents[0]?.project_name);
-  const cardAccent = isUnmapped ? "from-muted via-muted-foreground/30 to-muted" : "from-stage-l0 via-stage-l2 to-stage-l5";
+  const displayName = isUnmapped ? "其他工作目录" : getProjectName(project.project_path, project.agents[0]?.project_name);
+  const cardAccent = isUnmapped ? "from-muted via-muted-foreground/20 to-muted" : "from-stage-l0 via-stage-l2 to-stage-l5";
 
   return (
     <Card className="overflow-hidden">
@@ -382,11 +382,11 @@ function ProjectAgentCard({ project, maxRate, rateUnit, rateType, expandedSessio
         <div className="min-w-0 space-y-2">
           <div className="flex items-center gap-3">
             <div className="flex size-10 shrink-0 items-center justify-center rounded-lg bg-muted text-muted-foreground">
-              {isUnmapped ? <AlertTriangle className="size-5" aria-hidden="true" /> : <Bot className="size-5" aria-hidden="true" />}
+              {isUnmapped ? <FolderOpen className="size-5" aria-hidden="true" /> : <Bot className="size-5" aria-hidden="true" />}
             </div>
             <div className="min-w-0">
               <CardTitle className="truncate text-lg">{displayName}</CardTitle>
-              <CardDescription className="truncate">{project.project_path}</CardDescription>
+              <CardDescription className={cn("truncate", isUnmapped && "text-muted-foreground/70")}>{project.project_path}</CardDescription>
             </div>
           </div>
         </div>

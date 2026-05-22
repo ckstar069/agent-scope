@@ -11,7 +11,8 @@ import { test, expect, type Page } from "@playwright/test";
 
 async function openClaudeMemory(page: Page) {
   await page.goto("/");
-  await page.locator('nav[aria-label="大域导航"]').getByRole("button", { name: "Claude 记忆" }).click();
+  await page.locator('nav[aria-label="大域导航"]').getByRole("button", { name: "Claude Code" }).click();
+  await page.locator('nav[aria-label="子导航"]').getByRole("button", { name: "记忆资产" }).click();
 }
 
 const mockOverview = {
@@ -241,9 +242,10 @@ async function mockClaudeMemoryInvoke(page: Page, options?: { rejectFileContent?
 }
 
 test.describe("ClaudeMemory", () => {
-  test("从顶部导航可导航到 Claude 记忆", async ({ page }) => {
+  test("从 Claude Code 域可导航到记忆资产", async ({ page }) => {
     await page.goto("/");
-    await page.locator('nav[aria-label="大域导航"]').getByRole("button", { name: "Claude 记忆" }).click();
+    await page.locator('nav[aria-label="大域导航"]').getByRole("button", { name: "Claude Code" }).click();
+    await page.locator('nav[aria-label="子导航"]').getByRole("button", { name: "记忆资产" }).click();
 
     await expect(page.getByRole("heading", { name: "Claude 记忆" })).toBeVisible();
   });

@@ -9,7 +9,7 @@ import { test, expect, type Page } from "@playwright/test";
 
 async function openClaudeHistory(page: Page) {
   await page.goto("/");
-  await page.locator('nav[aria-label="大域导航"]').getByRole("button", { name: "通用监控" }).click();
+  await page.locator('nav[aria-label="大域导航"]').getByRole("button", { name: "Claude Code" }).click();
   await page.locator('nav[aria-label="子导航"]').getByRole("button", { name: "会话管理" }).click();
 }
 
