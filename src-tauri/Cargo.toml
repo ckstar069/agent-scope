@@ -1,6 +1,6 @@
 [package]
 name = "agent-scope"
-version = "0.2.0"
+version = "0.3.0"
 description = "AgentScope - AI Agent 监控桌面应用"
 authors = ["ckstar"]
 edition = "2021"
