@@ -8,8 +8,8 @@
 
 | 分发形式 | 文件示例 | 使用方式 |
 |---------|---------|---------|
-| **AppImage** | `AgentScope_0.3.0_amd64.AppImage` | `chmod +x` 后双击运行，或命令行 `./AgentScope_0.3.0_amd64.AppImage` |
-| **deb** | `AgentScope_0.3.0_amd64.deb` | `sudo dpkg -i AgentScope_0.3.0_amd64.deb`，安装后从应用菜单启动 |
+| **AppImage** | `AgentScope_0.3.1_amd64.AppImage` | `chmod +x` 后双击运行，或命令行 `./AgentScope_0.3.1_amd64.AppImage` |
+| **deb** | `AgentScope_0.3.1_amd64.deb` | `sudo dpkg -i AgentScope_0.3.1_amd64.deb`，安装后从应用菜单启动 |
 
 ### 运行时文件
 
@@ -30,7 +30,7 @@
 | 分发形式 | 文件示例 | 使用方式 |
 |---------|---------|---------|
 | **.app Bundle** | `AgentScope.app` | 双击运行，或从 Launchpad 启动 |
-| **.dmg** | `AgentScope_0.3.0_x64.dmg` | 挂载后拖入 `Applications` 文件夹 |
+| **.dmg** | `AgentScope_0.3.1_x64.dmg` | 挂载后拖入 `Applications` 文件夹 |
 
 > **注意**：macOS 构建目前未集成到 GitLab CI 自动发布链中，需手动执行 `npm run tauri build`。正式 Release 产物以 Linux（deb + AppImage）和 Windows（NSIS exe + portable zip）为主。
 
@@ -52,8 +52,8 @@
 
 | 分发形式 | 文件示例 | 使用方式 |
 |---------|---------|---------|
-| **NSIS 安装包** | `AgentScope_0.3.0_x64-setup.exe` | 双击安装到 `Program Files`，自动创建开始菜单和桌面快捷方式 |
-| **Portable 免安装** | `AgentScope_0.3.0_x64_portable.zip` | 解压后直接运行 `agent-scope.exe`（依赖系统已安装 WebView2 运行时） |
+| **NSIS 安装包** | `AgentScope_0.3.1_x64-setup.exe` | 双击安装到 `Program Files`，自动创建开始菜单和桌面快捷方式 |
+| **Portable 免安装** | `AgentScope_0.3.1_x64_portable.zip` | 解压后直接运行 `agent-scope.exe`（依赖系统已安装 WebView2 运行时） |
 
 ### 运行时文件
 

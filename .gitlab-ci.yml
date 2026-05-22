@@ -32,6 +32,13 @@ verify:
     - linux
   before_script:
     - echo "=== 安装前端依赖 ==="
+    # Fix: upgrade npm to avoid "Exit handler never called!" crash in agent-scope-ci:node20-rust1.95
+    # The base image's npm (bundled with Node 20 from NodeSource) has a signal-handling race condition
+    # that causes npm ci to crash with exit code 1 after completing install.
+    # Upgrading to latest npm resolves this without changing install semantics.
+    # See docs/desktop-ci-cd-lessons.md §5.12 for details.
+    - npm install -g npm@latest
+    - npm --version
     - npm ci
     - echo "=== 安装 Playwright 浏览器 ==="
     - npx playwright install chromium
@@ -97,6 +104,10 @@ build:linux:
     - echo "=== 同步版本号 ==="
     - *sync-version-script
     - echo "=== 安装前端依赖 ==="
+    # Fix: upgrade npm to avoid "Exit handler never called!" crash
+    # Same workaround as verify job. See docs/desktop-ci-cd-lessons.md §5.12.
+    - npm install -g npm@latest
+    - npm --version
     - npm ci
   script:
     - echo "=== 构建前端 ==="

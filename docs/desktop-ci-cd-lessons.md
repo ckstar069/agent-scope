@@ -296,7 +296,20 @@ job 在 `before_script` 之前即失败，没有任何用户代码被执行。
 | 最终解决 | **两层修复**：① `.gitlab-ci.yml` 中 build job 的 `expire_in` 从 `1 month` 缩短为 `1 day`（release job 保持较长或不设置，因为它负责向 Package Registry 上传永久产物）；② 文档明确规范：外部系统应查询 **GitLab Releases API** 或 **Package Registry API** 获取软件发布，不应直接查询 Jobs API |
 | 经验教训 | **CI job artifact 是临时构建产物，不是发布产物。** 长期存储应走 Package Registry，查询应走 Releases API。Build job 的 artifact 保留期应尽可能短（仅够 release job 下载即可），避免服务器存储无限增长和外部系统误用。 |
 
+### 5.12 Linux npm ci "Exit handler never called!" crash（v0.3.0 发现）
+
+| 字段 | 内容 |
+|------|------|
+| 问题 | Linux `verify` 和 `build:linux` job 中 `npm ci` 稳定 crash，连续 2 次均失败 |
+| 错误现象 | `npm error Exit handler never called!` → node_modules 安装不完整 → 后续 `tsc: not found` |
+| 发生阶段 | verify / build:linux job 的 `npm ci` 步骤 |
+| 根因 | CI 镜像 `agent-scope-ci:node20-rust1.95` 中 Node 20 (NodeSource) 自带的 npm 版本存在信号处理竞争条件（race condition），在 Docker executor 环境下不稳定，与 §5.8 记录的 ECONNRESET 不是同一问题 |
+| 错误尝试 | 直接重试（verify pipeline 通过了，但 tag pipeline 的 build:linux 连续 2 次 crash），排除网络波动 |
+| 最终解决 | **不替换 `npm ci`**，而是在 `npm ci` 前执行 `npm install -g npm@latest` 升级 npm 到最新稳定版。该方案保留 `npm ci` 的锁定安装语义，仅修复 npm 自身的 bug，升级耗时约 3-5 秒 |
+| 经验教训 | 1. Docker 镜像中的 Node.js 预装 npm 版本不一定是稳定版本，CI 环境中应显式管理 npm 版本；2. "Exit handler never called!" 不是网络问题，不应重试或切换到 `npm install`；3. 长期应更新 Dockerfile 固定 npm 版本，避免在 CI 运行时升级 |
+
 ---
+
 
 ## 6. 推荐的标准实施步骤
 
