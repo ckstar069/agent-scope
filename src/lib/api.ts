@@ -31,3 +31,16 @@ export function exportClaudeSession(sessionId: string, format: "Jsonl" | "Markdo
 export function previewClaudeSession<T = unknown>(sessionId: string) {
   return tauriInvoke<T>("preview_claude_session_cmd", { sessionId });
 }
+
+// Claude Memory API
+export function getClaudeMemoryOverview<T = unknown>(projectPath?: string, force = false) {
+  return tauriInvoke<T>("get_claude_memory_overview", { projectPath, force });
+}
+
+export function getClaudeMemoryFileContent<T = string>(nativePath: string, projectPath?: string) {
+  return tauriInvoke<T>("get_claude_memory_file_content", { nativePath, projectPath });
+}
+
+export function simulateClaudeMemoryLoadChain<T = unknown>(cwd: string) {
+  return tauriInvoke<T>("simulate_claude_memory_load_chain", { cwd });
+}

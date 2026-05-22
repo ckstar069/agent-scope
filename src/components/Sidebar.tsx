@@ -1,11 +1,13 @@
 import { useCallback, useEffect, useMemo, useState } from "react";
 import {
   Bot,
+  Brain,
   FolderKanban,
   History,
   LayoutDashboard,
   PanelLeftClose,
   PanelLeftOpen,
+  Route,
   Settings,
 } from "lucide-react";
 
@@ -26,6 +28,7 @@ interface SidebarProps {
   onToggle: () => void;
   onProjectPageChange: (page: string) => void;
   onMonitoringPageChange: (page: string) => void;
+  onClaudeMemoryPageChange: (page: string) => void;
   onSettingsPageChange: (page: string) => void;
   onSelectProject: (projectPath: string) => void;
 }
@@ -40,6 +43,7 @@ export function Sidebar({
   onToggle,
   onProjectPageChange,
   onMonitoringPageChange,
+  onClaudeMemoryPageChange,
   onSettingsPageChange,
   onSelectProject,
 }: SidebarProps) {
@@ -76,6 +80,7 @@ export function Sidebar({
           <p className="truncate text-xs font-medium text-sidebar-foreground/60">
             {activeDomain === "projects" && "项目监控"}
             {activeDomain === "monitoring" && "通用监控"}
+            {activeDomain === "claude-memory" && "Claude 记忆"}
             {activeDomain === "settings" && "设置"}
           </p>
         )}
@@ -98,6 +103,13 @@ export function Sidebar({
             isExpanded={isExpanded}
             activePage={activePage}
             onPageChange={onMonitoringPageChange}
+          />
+        )}
+        {activeDomain === "claude-memory" && (
+          <ClaudeMemorySidebarContent
+            isExpanded={isExpanded}
+            activePage={activePage}
+            onPageChange={onClaudeMemoryPageChange}
           />
         )}
         {activeDomain === "settings" && (
@@ -231,6 +243,36 @@ function MonitoringSidebarContent({
           onClick={() => onPageChange(item.id)}
         />
       ))}
+    </>
+  );
+}
+
+/* ─── Claude 记忆域侧边栏 ─── */
+function ClaudeMemorySidebarContent({
+  isExpanded,
+  activePage,
+  onPageChange,
+}: {
+  isExpanded: boolean;
+  activePage: string;
+  onPageChange: (page: string) => void;
+}) {
+  return (
+    <>
+      <SidebarButton
+        icon={Brain}
+        label="记忆资产"
+        isExpanded={isExpanded}
+        isActive={activePage === "assets"}
+        onClick={() => onPageChange("assets")}
+      />
+      <SidebarButton
+        icon={Route}
+        label="加载链模拟器"
+        isExpanded={isExpanded}
+        isActive={activePage === "load-chain"}
+        onClick={() => onPageChange("load-chain")}
+      />
     </>
   );
 }

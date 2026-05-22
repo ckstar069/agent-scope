@@ -16,11 +16,44 @@ test.describe("Navigation", () => {
     await expect(page.getByRole("heading", { name: "项目仪表盘" })).toBeVisible();
   });
 
-  test("顶部三个大域导航按钮都存在", async ({ page }) => {
+  test("顶部四个大域导航按钮都存在", async ({ page }) => {
     const topNav = page.locator('nav[aria-label="大域导航"]');
     await expect(topNav.getByRole("button", { name: "项目监控" })).toBeVisible();
     await expect(topNav.getByRole("button", { name: "通用监控" })).toBeVisible();
+    await expect(topNav.getByRole("button", { name: "Claude 记忆" })).toBeVisible();
     await expect(topNav.getByRole("button", { name: "设置" })).toBeVisible();
+  });
+
+  test("切换到 Claude 记忆域显示记忆资产", async ({ page }) => {
+    await page.locator('nav[aria-label="大域导航"]').getByRole("button", { name: "Claude 记忆" }).click();
+
+    // 顶部高亮
+    const claudeMemoryBtn = page.locator('nav[aria-label="大域导航"]').getByRole("button", { name: "Claude 记忆" });
+    await expect(claudeMemoryBtn).toHaveAttribute("aria-current", "page");
+
+    // 侧边栏应显示记忆资产和加载链模拟器
+    const subNav = page.locator('nav[aria-label="子导航"]');
+    await expect(subNav.getByRole("button", { name: "记忆资产" })).toBeVisible();
+    await expect(subNav.getByRole("button", { name: "加载链模拟器" })).toBeVisible();
+
+    // 默认显示 Claude 记忆内容
+    await expect(page.getByRole("heading", { name: "Claude 记忆" })).toBeVisible();
+  });
+
+  test("Claude 记忆域可切换到加载链模拟器", async ({ page }) => {
+    await page.locator('nav[aria-label="大域导航"]').getByRole("button", { name: "Claude 记忆" }).click();
+    await page.locator('nav[aria-label="子导航"]').getByRole("button", { name: "加载链模拟器" }).click();
+
+    await expect(page.getByRole("heading", { name: "加载链模拟器" })).toBeVisible();
+  });
+
+  test("设置域侧边栏不再显示 Claude 记忆", async ({ page }) => {
+    await page.locator('nav[aria-label="大域导航"]').getByRole("button", { name: "设置" }).click();
+
+    const subNav = page.locator('nav[aria-label="子导航"]');
+    await expect(subNav.getByRole("button", { name: "项目设置" })).toBeVisible();
+    await expect(subNav.getByRole("button", { name: "通用设置" })).toBeVisible();
+    await expect(subNav.getByRole("button", { name: "Claude 记忆" })).not.toBeVisible();
   });
 
   test("项目监控域侧边栏显示项目概览和项目列表", async ({ page }) => {

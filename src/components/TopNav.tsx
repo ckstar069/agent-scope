@@ -1,6 +1,6 @@
 import type { AppDomain } from "@/App";
 import { cn } from "@/lib/utils";
-import { FolderKanban, Gauge, Settings } from "lucide-react";
+import { Brain, FolderKanban, Gauge, Settings } from "lucide-react";
 
 interface TopNavProps {
   activeDomain: AppDomain;
@@ -14,6 +14,7 @@ const domains: Array<{
 }> = [
   { id: "projects", label: "项目监控", icon: FolderKanban },
   { id: "monitoring", label: "通用监控", icon: Gauge },
+  { id: "claude-memory", label: "Claude 记忆", icon: Brain },
   { id: "settings", label: "设置", icon: Settings },
 ];
 
@@ -33,6 +34,7 @@ export function TopNav({ activeDomain, onDomainChange }: TopNavProps) {
             <button
               key={domain.id}
               type="button"
+              aria-current={isActive ? "page" : undefined}
               onClick={() => onDomainChange(domain.id)}
               className={cn(
                 "relative flex items-center gap-1.5 rounded-md px-3 py-1.5 text-sm font-medium transition-colors",

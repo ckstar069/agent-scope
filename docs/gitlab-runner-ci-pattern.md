@@ -1,5 +1,9 @@
 # GitLab + Docker Runner CI 模式说明
 
+> **当前权威指南**：工作环境 GitLab Runner 的通用规范已统一维护在
+> `/Users/ckstar/Documents/Obsidian/techNote/工作/环境配置/GitLab-Runner-CI-模式最佳实践.md`。
+> 本文保留为 AgentScope 项目的落地快照与案例材料；新项目接入、Runner 运维和故障排查以 techNote 指南为准。
+
 本文总结一套可复用的内网 GitLab CI/CD 模式，供所有需要接入 CI/CD 的项目使用。目标是把 GitLab 服务、Runner 执行环境、项目 `.gitlab-ci.yml` 的职责边界说清楚，避免每个项目重新摸索。
 
 ---

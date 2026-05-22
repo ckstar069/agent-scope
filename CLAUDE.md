@@ -49,7 +49,15 @@ npm run test:report
 
 ### Frontend (`src/`)
 
-- **Routing**: `App.tsx` manages route state (`dashboard` | `agents` | `settings`). Project detail is rendered within the dashboard route when `currentProjectPath` is set.
+- **Routing**: `App.tsx` manages double-layer route state:
+  - `domain`: `"projects" | "monitoring" | "settings"` (top-level domain)
+  - `page`: varies by domain — `ProjectPage` (overview | detail), `MonitoringPage` (agents | claude-history), `SettingsPage` (project | general)
+  - Domain and selected project are persisted to `localStorage`
+- **Top navigation**: `TopNav.tsx` renders three domain tabs (项目监控 / 通用监控 / 设置). Switching domain resets the sidebar sub-navigation.
+- **Sidebar**: `Sidebar.tsx` renders dynamic sub-navigation based on active domain:
+  - **Projects domain**: "项目概览" button + scrollable registered project list (fetched from `list_projects`)
+  - **Monitoring domain**: "Agent 监控" + "会话管理" buttons
+  - **Settings domain**: "项目设置" + "通用设置" buttons
 - **Tauri bridge**: `src/hooks/useTauri.ts` wraps `@tauri-apps/api` invoke/listen calls. Frontend calls Rust commands via `invoke('command_name', args)`.
 - **State management**: No global state library — React `useState` + props drilling. Theme and font size are persisted via `localStorage`.
 - **Components**: shadcn/ui components live in `src/components/ui/`. Custom components follow kebab-case filenames.
@@ -81,15 +89,27 @@ The `abtop-collector/` directory is a local Rust crate (not a git submodule). It
 
 ## Testing
 
-- **E2E**: Playwright tests in `e2e/` run against the Vite dev server (not Tauri). Tauri invoke/listen APIs are not available in the browser test environment — tests cover UI rendering, error states, and empty states only.
+- **E2E**: Playwright tests in `e2e/` run against the Vite dev server (not Tauri). Tauri invoke/listen APIs are not available in the browser test environment — tests cover UI rendering, error states, and empty states only. Currently **43 passed / 0 failed**.
 - **Rust unit tests**: Located inline in `#[cfg(test)]` modules. `registry.rs` and `collectors/template/mod.rs` have the most comprehensive test coverage.
 
 ## Testing Environments
 
 | OS | Address | User/Pass | SSH | Code Path |
 |:---|:---|:---|:---|:---|
-| Windows 10+ | `192.168.3.10` | `yufei` / `yufei` | `sshpass` configured | `C:\Repositories\ai_project_template_visualization` |
-| Ubuntu 24.04 | `100.85.255.89` | `yufei` / `yufei` | `sshpass` configured | `/home/yufei/Repo/ai_project_template_visualization` |
+| Windows 10+ | `192.168.3.10` | `yufei` / `yufei` | `sshpass` configured | `C:\Repositories\agent-scope` |
+| Ubuntu 24.04 | `100.85.255.89` | `yufei` / `yufei` | `sshpass` configured | `/home/yufei/Repo/agent-scope` |
+
+## CI/CD
+
+GitLab CI runs on `192.168.3.100` (project: `znxt_tools/agent-scope`).
+
+- **Linux Runner**: `192.168.3.42` (Docker executor, image: `agent-scope-ci:node20-rust1.95`)
+- **Windows Runner**: `192.168.3.10` (Shell executor)
+- **Verify stage** (push/MR): frontend build, `cargo fmt/check/clippy/test`, E2E tests
+- **Build stage** (tag push): Linux (deb + AppImage) + Windows (exe + zip)
+- **Release stage** (tag push): GitLab Release with Package Registry upload
+
+For full CI/CD details, see `docs/ci-cd-setup.md`.
 
 ## Development Notes
 
