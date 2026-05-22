@@ -295,10 +295,11 @@ export function ProjectDetail({ projectPath = "", onSelectProject }: ProjectDeta
     <section className="space-y-6">
       <div className="flex flex-col gap-4 lg:flex-row lg:items-end lg:justify-between">
         <div className="space-y-2">
+          <p className="text-sm font-medium text-muted-foreground">模板项目</p>
           <h1 className="text-3xl font-semibold tracking-tight">项目详情</h1>
           <p className="max-w-3xl break-all text-sm text-foreground/70">{projectPath}</p>
         </div>
-        <div className="flex items-center gap-2 rounded-lg border border-border bg-card px-3 py-2 text-sm text-foreground/70 shadow-sm">
+        <div className="flex items-center gap-2 rounded-xl border border-border bg-card px-3 py-2 text-sm text-foreground/70 shadow-xs">
           {isLoading ? <Loader2 className="size-4 animate-spin" aria-hidden="true" /> : <Clock className="size-4" aria-hidden="true" />}
           <span>更新：{isLoading ? "采集中" : formatTimestamp(data?.timestamp_ms)}</span>
         </div>
@@ -456,7 +457,7 @@ function Panel({
 
   return (
     <Collapsible open={open} onOpenChange={setOpen}>
-      <article className="overflow-hidden rounded-xl border border-border/60 bg-card text-card-foreground">
+      <article className="overflow-hidden rounded-xl border border-border/60 bg-card text-card-foreground shadow-xs">
         <div className={cn("h-[2px] bg-gradient-to-r", topGradient)} />
         <button
           type="button"
@@ -616,7 +617,7 @@ function ConfigSnapshot({ config, configError }: { config: SerProjectConfig | nu
         {summaryConfigFields.map((field) => {
           const Icon = field.icon;
           return (
-            <div key={field.key} className="rounded-lg border border-border/50 bg-muted/30 p-3">
+            <div key={field.key} className="rounded-lg border border-border/50 bg-tile p-3">
               <div className="mb-2 flex items-center justify-between gap-3">
                 <p className="text-xs font-medium uppercase tracking-wide text-foreground/60">{field.label}</p>
                 <Icon className="size-4 text-foreground/60" aria-hidden="true" />
@@ -670,7 +671,7 @@ function GitPanel({ git, gitError }: { git: SerGitStatus | null; gitError: strin
 
   return (
     <div className="space-y-3">
-      <div className="rounded-lg border border-border/50 bg-muted/30 p-3">
+      <div className="rounded-lg border border-border/50 bg-tile p-3">
         <div className="mb-1.5 flex items-center gap-2 text-sm text-foreground/70">
           <GitBranch className="size-4" aria-hidden="true" />
           <span>当前分支</span>

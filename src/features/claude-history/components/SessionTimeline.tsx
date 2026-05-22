@@ -82,13 +82,13 @@ function PreviewPanel({ preview }: { preview: SessionPreview }) {
   };
 
   return (
-    <div className="mt-2 rounded-md border bg-muted/30 p-3">
+    <div className="mt-3 rounded-xl border border-border bg-tile p-3">
       <p className="mb-2 text-xs text-muted-foreground">
         预览（共 {preview.total_turns} 轮对话）
       </p>
       <div className="flex max-h-[600px] flex-col gap-4 overflow-y-auto pr-1">
         {preview.messages.map((msg, idx) => (
-          <div key={idx} className="rounded-sm p-2 text-sm hover:bg-muted/50">
+          <div key={idx} className="rounded-lg border border-transparent bg-card/70 p-2 text-sm hover:border-border hover:bg-card">
             <span
               className={cn(
                 "font-medium",
@@ -129,10 +129,10 @@ export function SessionTimeline({ sessions, onDelete, onExport, onPreview, previ
           <div
             key={session.session_id}
             className={cn(
-              "rounded-lg border p-3 transition-colors",
+              "rounded-xl border p-3 shadow-xs transition-colors",
               session.is_active
                 ? "border-primary/30 bg-primary/5"
-                : "border-border bg-card hover:bg-accent/50"
+                : "border-border bg-card hover:bg-tile"
             )}
           >
             {/* 主行：可点击展开预览 */}
@@ -216,7 +216,7 @@ export function SessionTimeline({ sessions, onDelete, onExport, onPreview, previ
               </>
             )}
             {isExpanded && !preview && (
-              <div className="mt-2 rounded-md border bg-muted/30 p-3">
+              <div className="mt-3 rounded-xl border border-border bg-tile p-3">
                 <p className="text-sm text-muted-foreground">加载中...</p>
               </div>
             )}
@@ -283,7 +283,7 @@ function SessionAnalysisPanel({ preview }: { preview: SessionPreview }) {
   return (
     <div className="mt-3 grid gap-3 sm:grid-cols-2">
       {toolStats.length > 0 && (
-        <div className="rounded-md border bg-muted/20 p-3">
+        <div className="rounded-xl border border-border bg-tile p-3">
           <div className="mb-2 flex items-center gap-1.5 text-xs font-medium text-muted-foreground">
             <Wrench className="size-3.5" />
             工具调用 ({toolStats.reduce((s, t) => s + t.count, 0)} 次)
@@ -299,7 +299,7 @@ function SessionAnalysisPanel({ preview }: { preview: SessionPreview }) {
         </div>
       )}
       {fileRefs.length > 0 && (
-        <div className="rounded-md border bg-muted/20 p-3">
+        <div className="rounded-xl border border-border bg-tile p-3">
           <div className="mb-2 flex items-center gap-1.5 text-xs font-medium text-muted-foreground">
             <FileCode className="size-3.5" />
             热点文件

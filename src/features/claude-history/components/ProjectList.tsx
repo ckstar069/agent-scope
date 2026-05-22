@@ -16,9 +16,9 @@ export function ProjectList({ groups, selectedPath, onSelect }: ProjectListProps
             type="button"
             onClick={() => onSelect(group.project_path)}
             className={cn(
-              "flex items-center gap-2 rounded-md px-3 py-2 text-left text-sm transition-colors",
-              "hover:bg-accent hover:text-accent-foreground",
-              isSelected && "bg-accent text-accent-foreground"
+              "flex items-center gap-2 rounded-lg border border-transparent px-3 py-2 text-left text-sm transition-colors",
+              "hover:border-border hover:bg-card hover:text-accent-foreground",
+              isSelected && "border-border bg-card text-accent-foreground shadow-xs"
             )}
             title={group.project_path}
           >
@@ -38,13 +38,13 @@ export function ProjectList({ groups, selectedPath, onSelect }: ProjectListProps
               </span>
             </div>
             {activeCount > 0 && (
-              <span className="shrink-0 rounded bg-green-100 px-1.5 py-0.5 text-[10px] font-medium text-green-700">
+              <span className="shrink-0 rounded bg-green-100 px-1.5 py-0.5 text-[10px] font-medium text-green-700 dark:bg-green-950/40 dark:text-green-400">
                 {activeCount > 1 ? `${activeCount}个活跃` : '活跃'}
               </span>
             )}
             {group.is_orphaned && (
               <span
-                className="shrink-0 rounded bg-gray-100 px-1.5 py-0.5 text-[10px] font-medium text-gray-500"
+                className="shrink-0 rounded bg-muted px-1.5 py-0.5 text-[10px] font-medium text-muted-foreground"
                 title="项目路径已不存在"
               >
                 失效
