@@ -72,16 +72,7 @@ export function Sidebar({
         isExpanded ? "w-[var(--sidebar-width-expanded)]" : "w-[var(--sidebar-width-collapsed)]",
       )}
     >
-      {/* 域标识 */}
-      <div className="flex h-10 items-center gap-2 border-b border-sidebar-border px-3">
-        {isExpanded && (
-          <p className="truncate text-xs font-medium text-sidebar-foreground/60">
-            {activeDomain === "projects" && "项目监控"}
-            {activeDomain === "monitoring" && "Claude Code"}
-            {activeDomain === "settings" && "设置"}
-          </p>
-        )}
-      </div>
+
 
       {/* 子导航内容 */}
       <nav className="flex flex-1 flex-col gap-0.5 overflow-hidden p-2" aria-label="子导航">

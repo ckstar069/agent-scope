@@ -25,7 +25,7 @@ AI Agent 会话及项目状态监控桌面应用。
 ## 目录结构
 
 ```
-ai_project_template_visualization/
+agent-scope/
 ├── src/                    # React 前端源码
 │   ├── App.tsx             # 根组件
 │   ├── main.tsx            # 入口
@@ -70,7 +70,7 @@ cargo check            # 检查 Rust 后端编译 (在 src-tauri/ 下执行)
 | SSH 用户 | `yufei` |
 | SSH 密码 | `yufei` |
 | SSH 方式 | `sshpass` 已配置 |
-| 代码路径 | `/home/yufei/Repo/ai_project_template_visualization` |
+| 代码路径 | `/home/yufei/Repo/agent-scope` |
 | macOS 开发机 | 本机 |
 
 ## 相关项目

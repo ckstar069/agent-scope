@@ -154,7 +154,7 @@ export function AgentMonitor() {
     <section className="space-y-6">
       <div className="flex flex-col gap-4 lg:flex-row lg:items-end lg:justify-between">
         <div className="space-y-3">
-          <p className="text-sm font-medium text-muted-foreground">Agents</p>
+          <p className="text-sm font-medium text-muted-foreground">Claude Code</p>
           <h1 className="text-3xl font-semibold tracking-tight">Agent 监控</h1>
           <p className="max-w-2xl text-sm text-muted-foreground">
             通过 Tauri 事件流展示 Token 消耗速率（burn rate）、上下文窗口占用和会话在线状态。
@@ -228,7 +228,7 @@ export function AgentMonitor() {
 
       <div className="grid gap-3 md:grid-cols-3">
         <SummaryTile icon={Radio} label="会话总数" value={`${totalSessions}`} detail="agent-update 实时快照" />
-        <SummaryTile icon={Activity} label="已注册项目" value={`${activeProjects.length}`} detail="当前有会话的项目监控路径" />
+        <SummaryTile icon={Activity} label="已注册项目" value={`${activeProjects.length}`} detail="当前有会话的模板项目路径" />
         <SummaryTile icon={Clock} label="刷新时间" value={snapshot ? formatRelativeTime(snapshot.timestamp_ms, now) : "等待中"} detail={snapshot ? formatDateTime(snapshot.timestamp_ms) : "每 2 秒同步"} />
       </div>
 
@@ -305,7 +305,7 @@ export function AgentMonitor() {
 
           {filteredUnmappedAgents.length > 0 && (
             <ProjectAgentCard
-              project={{ project_path: "未匹配项目监控中已注册的项目路径", agents: filteredUnmappedAgents, count: filteredUnmappedAgents.length }}
+              project={{ project_path: "未匹配模板项目中已注册的项目路径", agents: filteredUnmappedAgents, count: filteredUnmappedAgents.length }}
               maxRate={maxRate}
               rateUnit={rateUnit}
               rateType={rateType}

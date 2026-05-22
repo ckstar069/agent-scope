@@ -34,7 +34,7 @@ test.describe("ProjectDetail", () => {
     await expect(page.getByRole("heading", { name: "设置" })).toBeVisible();
 
     // 回到项目监控域
-    await page.locator('nav[aria-label="大域导航"]').getByRole("button", { name: "项目监控" }).click();
+    await page.locator('nav[aria-label="大域导航"]').getByRole("button", { name: "模板项目" }).click();
     await expect(page.getByRole("heading", { name: "项目仪表盘" })).toBeVisible();
   });
 });

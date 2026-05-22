@@ -12,19 +12,32 @@ const domains: Array<{
   label: string;
   icon: typeof FolderKanban;
 }> = [
-  { id: "projects", label: "项目监控", icon: FolderKanban },
+  { id: "projects", label: "模板项目", icon: FolderKanban },
   { id: "monitoring", label: "Claude Code", icon: Bot },
   { id: "settings", label: "设置", icon: Settings },
 ];
 
 export function TopNav({ activeDomain, onDomainChange }: TopNavProps) {
   return (
-    <header className="flex h-12 shrink-0 items-center gap-1 border-b border-border bg-background px-4">
-      <div className="flex items-center gap-2">
-        <span className="text-sm font-semibold tracking-tight">AgentScope</span>
+    <header className="flex h-12 shrink-0 items-center border-b border-border bg-sidebar px-4">
+      <div className="flex items-center gap-2.5 px-1">
+        <svg
+          width="20"
+          height="20"
+          viewBox="0 0 20 20"
+          fill="none"
+          className="text-foreground shrink-0"
+          aria-hidden="true"
+        >
+          <path d="M10 2a8 8 0 0 0 0 16v-16z" fill="currentColor" />
+          <path d="M10 2a8 8 0 0 1 0 16" stroke="currentColor" strokeWidth="2" strokeLinecap="round" />
+        </svg>
+        <span className="text-base font-bold tracking-tight text-foreground">AgentScope</span>
       </div>
 
-      <nav className="ml-6 flex items-center gap-0.5" aria-label="大域导航">
+      <div className="h-4 w-px bg-border mx-3" />
+
+      <nav className="flex items-center gap-0.5" aria-label="大域导航">
         {domains.map((domain) => {
           const Icon = domain.icon;
           const isActive = activeDomain === domain.id;

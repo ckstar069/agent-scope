@@ -138,7 +138,7 @@ export function Dashboard({ onNavigateSettings, onSelectProject }: DashboardProp
     <section className="space-y-6">
       <div className="flex flex-col gap-4 lg:flex-row lg:items-end lg:justify-between">
         <div className="space-y-2">
-          <p className="text-sm font-medium text-muted-foreground">Dashboard</p>
+          <p className="text-sm font-medium text-muted-foreground">模板项目</p>
           <h1 className="text-3xl font-semibold tracking-tight">项目仪表盘</h1>
           <p className="max-w-2xl text-sm text-muted-foreground">
             汇总已注册 FPGA 项目的 Stage、Git 工作区状态和实时 Agent 活跃度。
@@ -230,7 +230,7 @@ function ProjectCard({ project, onSelectProject }: ProjectCardProps) {
 
   return (
     <Card
-      className="group cursor-pointer overflow-hidden transition-all hover:border-primary/40 focus-visible:border-primary/60 focus-visible:ring-1 focus-visible:ring-primary/20"
+      className="group cursor-pointer overflow-hidden transition-all hover:border-primary/40 focus-visible:border-primary/60 focus-visible:ring-1 focus-visible:ring-primary/20 shadow-sm hover:shadow-md"
       onClick={() => onSelectProject(project.path)}
       onKeyDown={(e) => {
         if (e.key === "Enter" || e.key === " ") {
@@ -285,7 +285,7 @@ function ProjectCard({ project, onSelectProject }: ProjectCardProps) {
           <StatusTile icon={Clock} label="最近活动" value={formatRelativeTime(project.recentMs)} detail={formatDateTime(project.recentMs)} />
         </div>
 
-        <div className="flex w-full items-center gap-1.5 rounded-md border border-border/60 bg-muted/30 px-3 py-2.5 text-xs text-muted-foreground">
+        <div className="flex w-full items-center gap-1.5 rounded-md border border-border bg-tile px-3 py-2.5 text-xs text-muted-foreground">
           <Activity className="size-3.5" aria-hidden="true" />
           {project.data?.git.is_clean ? "工作区干净" : `${project.totalChanges} 个文件状态变化`}
           <span className="ml-auto text-muted-foreground/60">点击查看详情 →</span>
@@ -304,7 +304,7 @@ interface StatusTileProps {
 
 function StatusTile({ icon: Icon, label, value, detail }: StatusTileProps) {
   return (
-    <div className="rounded-md border border-border/60 bg-muted/30 p-3">
+    <div className="rounded-md border border-border bg-tile p-3">
       <div className="mb-2 flex items-center gap-2 text-xs text-muted-foreground">
         <Icon className="size-3.5" aria-hidden="true" />
         {label}

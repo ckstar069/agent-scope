@@ -18,7 +18,7 @@ test.describe("Navigation", () => {
 
   test("顶部三个大域导航按钮都存在", async ({ page }) => {
     const topNav = page.locator('nav[aria-label="大域导航"]');
-    await expect(topNav.getByRole("button", { name: "项目监控" })).toBeVisible();
+    await expect(topNav.getByRole("button", { name: "模板项目" })).toBeVisible();
     await expect(topNav.getByRole("button", { name: "Claude Code" })).toBeVisible();
     await expect(topNav.getByRole("button", { name: "设置" })).toBeVisible();
   });

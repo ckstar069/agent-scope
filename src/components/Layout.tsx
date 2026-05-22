@@ -52,7 +52,7 @@ export function Layout({
         />
         <main className="flex min-w-0 flex-1 flex-col bg-background">
           <ScrollArea className="h-full">
-            <div className={cn("min-h-full p-4 sm:p-6 lg:p-8")}>{children}</div>
+            <div className={cn("min-h-full p-4 sm:p-6 lg:p-8 xl:p-10")}>{children}</div>
           </ScrollArea>
         </main>
       </div>

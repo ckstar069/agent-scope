@@ -115,7 +115,7 @@ test.describe("AgentMonitor", () => {
     // 其他工作目录卡片标题
     await expect(page.getByText("其他工作目录")).toBeVisible({ timeout: 8000 });
     // 未匹配描述文本
-    await expect(page.getByText("未匹配项目监控中已注册的项目路径")).toBeVisible();
+    await expect(page.getByText("未匹配模板项目中已注册的项目路径")).toBeVisible();
   });
 });
 
