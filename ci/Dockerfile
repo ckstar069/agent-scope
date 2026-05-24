@@ -6,12 +6,16 @@ FROM ubuntu:22.04
 ARG NODE_VERSION=20
 ARG RUST_VERSION=1.95.0
 ARG CARGO_BINSTALL_VERSION=1.19.1
+ARG NPM_VERSION=10.9.8
+ARG NPM_REGISTRY=https://registry.npmmirror.com
 
 ENV DEBIAN_FRONTEND=noninteractive
 ENV RUSTUP_HOME=/usr/local/rustup
 ENV CARGO_HOME=/usr/local/cargo
 ENV PATH=/usr/local/cargo/bin:$PATH
 ENV NODE_VERSION=${NODE_VERSION}
+ENV NPM_VERSION=${NPM_VERSION}
+ENV NPM_REGISTRY=${NPM_REGISTRY}
 
 # 1. 安装系统依赖（Tauri + 构建工具）
 RUN apt-get update -qq && \
@@ -36,6 +40,10 @@ RUN apt-get update -qq && \
 RUN curl -fsSL https://deb.nodesource.com/setup_${NODE_VERSION}.x | bash - && \
     apt-get install -y -qq --no-install-recommends nodejs && \
     rm -rf /var/lib/apt/lists/*
+
+# 2.1 固定 npm 版本，避免 NodeSource 随 Node 捆绑的 npm 在 Docker executor 中漂移
+RUN npm install -g npm@${NPM_VERSION} --registry=${NPM_REGISTRY} && \
+    npm --version
 
 # 3. 安装 Rust（固定版本）
 RUN curl --proto '=https' --tlsv1.2 -sSf https://sh.rustup.rs | \
@@ -62,6 +70,7 @@ RUN npm install -g @playwright/test && \
 
 # 7. 验证安装
 RUN node --version && \
+    npm --version && \
     rustc --version && \
     cargo --version && \
     cargo fmt --version && \

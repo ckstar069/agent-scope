@@ -300,13 +300,13 @@ job 在 `before_script` 之前即失败，没有任何用户代码被执行。
 
 | 字段 | 内容 |
 |------|------|
-| 问题 | Linux `verify` 和 `build:linux` job 中 `npm ci` 稳定 crash，连续 2 次均失败 |
+| 问题 | Linux `verify` 和 `build:linux` job 中 `npm ci` / `npm install` 在 tag pipeline Docker executor 下稳定失败 |
 | 错误现象 | `npm error Exit handler never called!` → node_modules 安装不完整 → 后续 `tsc: not found` |
 | 发生阶段 | verify / build:linux job 的 `npm ci` 步骤 |
-| 根因 | CI 镜像 `agent-scope-ci:node20-rust1.95` 中 Node 20 (NodeSource) 自带的 npm 版本存在信号处理竞争条件（race condition），在 Docker executor 环境下不稳定，与 §5.8 记录的 ECONNRESET 不是同一问题 |
-| 错误尝试 | 1. 直接重试（连续 2 次 crash），排除网络波动；2. `npm install -g npm@latest` 升级 npm 版本 → ECONNRESET 网络故障（§5.8）；3. `npm install --prefer-offline` 替代 `npm ci` → 同样 crash（v0.3.1-rc.1），证明 crash 与命令类型无关，是 npm 二进制本身的缺陷 |
-| 最终解决 | **临时 workaround**：Linux job 中 `npm install --prefer-offline || npm install --prefer-offline`（重试）。crash 发生在 npm 退出阶段（安装已完成），第二次运行仅做增量校验，耗时短（<5s），触发 crash 概率极低。长期方案：更新 Dockerfile，在镜像构建时固定 npm 稳定版本，恢复单次 `npm ci` |
-| 经验教训 | 1. Docker 镜像中的 Node.js 预装 npm 版本不一定是稳定版本，应在 Dockerfile 构建时固定 npm 版本；2. "Exit handler never called!" 是 npm 二进制信号处理竞争条件，与 npm 子命令（ci/install）无关；3. CI 环境中运行时 npm 升级（`npm install -g npm`）不可靠，应在镜像构建时完成；4. npm crash 的重试策略有效，因为 crash 发生在退出阶段而非安装过程中 |
+| 根因 | CI 镜像 `agent-scope-ci:node20-rust1.95` 中 Node 20 (NodeSource) 捆绑 npm 10.8.2；该 npm 在 tag pipeline Docker executor 环境下无法稳定完成安装，与 §5.8 记录的 ECONNRESET 不是同一问题 |
+| 错误尝试 | 1. 直接重试；2. `npm ci` / `npm install` / `npm install --prefer-offline`；3. 串联重试、脚本块重试、独立重试脚本；4. 运行时 `npx npm@latest`。共 8 次独立重现，均无法产出可用 `node_modules` |
+| 最终解决 | **镜像层修复**：`ci/Dockerfile` 增加 `NPM_VERSION=10.9.8` 和 `NPM_REGISTRY=https://registry.npmmirror.com`，在镜像构建期执行 `npm install -g npm@${NPM_VERSION} --registry=${NPM_REGISTRY}`，Linux job 恢复单次 `npm ci`。同时 `.gitlab-ci.yml` 固定 `npm_config_registry=https://registry.npmmirror.com`，避开 3.42 当前访问 `registry.npmjs.org` 的 TLS EOF。修复后需在 Linux Runner（当前从本机经 Tailscale `100.70.62.93` 访问）重建同名镜像，并用新的 prerelease tag（如 `v0.3.1-rc.8`）验证 |
+| 经验教训 | 1. Docker 镜像中的 Node.js 预装 npm 版本不一定适合当前 Docker executor，应在 Dockerfile 构建时固定 npm 版本；2. 运行时升级或用 `npx npm@latest` 仍依赖问题环境，不适合作为 release 修复；3. tag pipeline 多次失败后不要继续在 rc tag 上堆 workaround，应转向 Runner 镜像修复；4. npm registry 访问路径也要固定，避免镜像问题和公网 TLS 问题混在一起；5. 已触发过 pipeline 的 tag 不删除不复用，使用新的 rc tag 验证 |
 
 ---
 
