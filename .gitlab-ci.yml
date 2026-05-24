@@ -107,6 +107,9 @@ build:linux:
     - echo "=== 安装前端依赖 ==="
     # 同 verify job，使用固定 npm + npmmirror registry。见 §5.12
     - bash scripts/ci-npm-install.sh --no-audit --no-fund
+    - echo "=== 预置 Tauri AppImage 工具 ==="
+    - mkdir -p src-tauri/target/.tauri
+    - install -m 755 ci/tauri-tools/linux-x86_64/* src-tauri/target/.tauri/
   script:
     - echo "=== 构建前端 ==="
     - npm run build

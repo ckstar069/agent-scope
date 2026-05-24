@@ -24,6 +24,10 @@ ENV CARGO_REGISTRIES_CRATES_IO_PROTOCOL=sparse
 RUN mkdir -p ${CARGO_HOME} && \
     printf '[source.crates-io]\nreplace-with = "rsproxy"\n\n[source.rsproxy]\nregistry = "%s"\n' "${CARGO_REGISTRY_INDEX}" > ${CARGO_HOME}/config.toml
 
+# 1.1 预置 Tauri AppImage 工具，避免 release job 构建期访问 GitHub 下载 AppRun/linuxdeploy
+COPY ci/tauri-tools/linux-x86_64/ /opt/tauri-tools/linux-x86_64/
+RUN chmod 755 /opt/tauri-tools/linux-x86_64/*
+
 # 1. 安装系统依赖（Tauri + 构建工具）
 RUN apt-get update -qq && \
     apt-get install -y -qq --no-install-recommends \

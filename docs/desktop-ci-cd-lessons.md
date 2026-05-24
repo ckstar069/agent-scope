@@ -308,6 +308,16 @@ job 在 `before_script` 之前即失败，没有任何用户代码被执行。
 | 最终解决 | **镜像层修复**：`ci/Dockerfile` 增加 `NPM_VERSION=10.9.8`、`NPM_REGISTRY=https://registry.npmmirror.com`、`CARGO_REGISTRY_INDEX=sparse+https://rsproxy.cn/index/`；镜像构建期固定 npm，仓库级 `.cargo/config.toml` 将 crates.io 替换为 rsproxy sparse registry。Linux job 恢复单次 `npm ci`。修复后需在 Linux Runner（当前从本机经 Tailscale `100.70.62.93` 访问）重建同名镜像，并用新的 prerelease tag 验证 |
 | 经验教训 | 1. Docker 镜像中的 Node.js 预装 npm 版本不一定适合当前 Docker executor，应在 Dockerfile 构建时固定 npm 版本；2. 运行时升级或用 `npx npm@latest` 仍依赖问题环境，不适合作为 release 修复；3. tag pipeline 多次失败后不要继续在 rc tag 上堆 workaround，应转向 Runner 镜像修复；4. npm 和 Cargo registry 访问路径都要固定，避免镜像问题和公网 TLS 问题混在一起；5. 已触发过 pipeline 的 tag 不删除不复用，使用新的 rc tag 验证 |
 
+### 5.13 AppImage 工具下载 EOF（v0.3.1-rc.9 发现）
+
+| 字段 | 内容 |
+|------|------|
+| 问题 | `cargo tauri build` 已完成 Rust release 编译和 deb 打包，但 AppImage 阶段下载 `AppRun-x86_64` 失败 |
+| 错误现象 | `Downloading https://github.com/tauri-apps/binary-releases/releases/download/apprun-old/AppRun-x86_64` 后报 `failed to bundle project io: unexpected end of file` |
+| 根因 | Linux Runner 到 GitHub/raw.githubusercontent.com TLS 路径不稳定；Tauri bundler 在 `useLocalToolsDir=true` 时会从 `src-tauri/target/.tauri/` 读取 AppImage 工具，缺失时才访问 GitHub 下载 |
+| 最终解决 | 将 `AppRun-x86_64`、`linuxdeploy-x86_64.AppImage`、`linuxdeploy-plugin-gtk.sh`、`linuxdeploy-plugin-gstreamer.sh` 固定为仓库内 CI 资产（`ci/tauri-tools/linux-x86_64/`），Linux build 前复制到 `src-tauri/target/.tauri/` |
+| 经验教训 | AppImage 构建的工具链也属于 release 输入，不能依赖 tag pipeline 运行时临时访问 GitHub；和 npm/Cargo 一样，应固定到镜像或仓库资产中 |
+
 ---
 
 
