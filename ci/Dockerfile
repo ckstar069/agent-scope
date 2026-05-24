@@ -8,6 +8,7 @@ ARG RUST_VERSION=1.95.0
 ARG CARGO_BINSTALL_VERSION=1.19.1
 ARG NPM_VERSION=10.9.8
 ARG NPM_REGISTRY=https://registry.npmmirror.com
+ARG CARGO_REGISTRY_INDEX=sparse+https://rsproxy.cn/index/
 
 ENV DEBIAN_FRONTEND=noninteractive
 ENV RUSTUP_HOME=/usr/local/rustup
@@ -16,6 +17,12 @@ ENV PATH=/usr/local/cargo/bin:$PATH
 ENV NODE_VERSION=${NODE_VERSION}
 ENV NPM_VERSION=${NPM_VERSION}
 ENV NPM_REGISTRY=${NPM_REGISTRY}
+ENV CARGO_REGISTRIES_CRATES_IO_INDEX=${CARGO_REGISTRY_INDEX}
+ENV CARGO_REGISTRIES_CRATES_IO_PROTOCOL=sparse
+
+# 1.0 固定 Cargo crates.io 源，避免 Runner 到 index.crates.io/static.crates.io TLS EOF
+RUN mkdir -p ${CARGO_HOME} && \
+    printf '[source.crates-io]\nreplace-with = "rsproxy"\n\n[source.rsproxy]\nregistry = "%s"\n' "${CARGO_REGISTRY_INDEX}" > ${CARGO_HOME}/config.toml
 
 # 1. 安装系统依赖（Tauri + 构建工具）
 RUN apt-get update -qq && \

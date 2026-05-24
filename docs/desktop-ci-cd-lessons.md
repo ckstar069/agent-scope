@@ -305,8 +305,8 @@ job 在 `before_script` 之前即失败，没有任何用户代码被执行。
 | 发生阶段 | verify / build:linux job 的 `npm ci` 步骤 |
 | 根因 | CI 镜像 `agent-scope-ci:node20-rust1.95` 中 Node 20 (NodeSource) 捆绑 npm 10.8.2；该 npm 在 tag pipeline Docker executor 环境下无法稳定完成安装，与 §5.8 记录的 ECONNRESET 不是同一问题 |
 | 错误尝试 | 1. 直接重试；2. `npm ci` / `npm install` / `npm install --prefer-offline`；3. 串联重试、脚本块重试、独立重试脚本；4. 运行时 `npx npm@latest`。共 8 次独立重现，均无法产出可用 `node_modules` |
-| 最终解决 | **镜像层修复**：`ci/Dockerfile` 增加 `NPM_VERSION=10.9.8` 和 `NPM_REGISTRY=https://registry.npmmirror.com`，在镜像构建期执行 `npm install -g npm@${NPM_VERSION} --registry=${NPM_REGISTRY}`，Linux job 恢复单次 `npm ci`。同时 `.gitlab-ci.yml` 固定 `npm_config_registry=https://registry.npmmirror.com`，避开 3.42 当前访问 `registry.npmjs.org` 的 TLS EOF。修复后需在 Linux Runner（当前从本机经 Tailscale `100.70.62.93` 访问）重建同名镜像，并用新的 prerelease tag（如 `v0.3.1-rc.8`）验证 |
-| 经验教训 | 1. Docker 镜像中的 Node.js 预装 npm 版本不一定适合当前 Docker executor，应在 Dockerfile 构建时固定 npm 版本；2. 运行时升级或用 `npx npm@latest` 仍依赖问题环境，不适合作为 release 修复；3. tag pipeline 多次失败后不要继续在 rc tag 上堆 workaround，应转向 Runner 镜像修复；4. npm registry 访问路径也要固定，避免镜像问题和公网 TLS 问题混在一起；5. 已触发过 pipeline 的 tag 不删除不复用，使用新的 rc tag 验证 |
+| 最终解决 | **镜像层修复**：`ci/Dockerfile` 增加 `NPM_VERSION=10.9.8`、`NPM_REGISTRY=https://registry.npmmirror.com`、`CARGO_REGISTRY_INDEX=sparse+https://rsproxy.cn/index/`；镜像构建期固定 npm，仓库级 `.cargo/config.toml` 将 crates.io 替换为 rsproxy sparse registry。Linux job 恢复单次 `npm ci`。修复后需在 Linux Runner（当前从本机经 Tailscale `100.70.62.93` 访问）重建同名镜像，并用新的 prerelease tag 验证 |
+| 经验教训 | 1. Docker 镜像中的 Node.js 预装 npm 版本不一定适合当前 Docker executor，应在 Dockerfile 构建时固定 npm 版本；2. 运行时升级或用 `npx npm@latest` 仍依赖问题环境，不适合作为 release 修复；3. tag pipeline 多次失败后不要继续在 rc tag 上堆 workaround，应转向 Runner 镜像修复；4. npm 和 Cargo registry 访问路径都要固定，避免镜像问题和公网 TLS 问题混在一起；5. 已触发过 pipeline 的 tag 不删除不复用，使用新的 rc tag 验证 |
 
 ---
 

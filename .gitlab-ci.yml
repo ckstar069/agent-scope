@@ -9,6 +9,8 @@ variables:
   npm_config_cache: "$CI_PROJECT_DIR/.npm"
   npm_config_registry: "https://registry.npmmirror.com"
   PLAYWRIGHT_BROWSERS_PATH: "$CI_PROJECT_DIR/.cache/ms-playwright"
+  CARGO_REGISTRIES_CRATES_IO_INDEX: "sparse+https://rsproxy.cn/index/"
+  CARGO_REGISTRIES_CRATES_IO_PROTOCOL: "sparse"
   CARGO_NET_RETRY: "3"
   CARGO_HTTP_TIMEOUT: "120"
 
@@ -89,6 +91,8 @@ build:linux:
     CARGO_HOME: "$CI_PROJECT_DIR/.cargo"
     npm_config_cache: "$CI_PROJECT_DIR/.npm"
     npm_config_registry: "https://registry.npmmirror.com"
+    CARGO_REGISTRIES_CRATES_IO_INDEX: "sparse+https://rsproxy.cn/index/"
+    CARGO_REGISTRIES_CRATES_IO_PROTOCOL: "sparse"
     APPIMAGE_EXTRACT_AND_RUN: "1"
     NO_STRIP: "true"
   cache:
