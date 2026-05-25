@@ -289,10 +289,11 @@ release:
       ZIP=$(find . -name "*.zip" | head -1)
 
       # 构建 Release 描述和 assets links（用 node 替代 jq，避免容器内安装依赖）
-      DEB_NAME=$(basename "$DEB")
-      APPIMAGE_NAME=$(basename "$APPIMAGE")
-      EXE_NAME=$(basename "$EXE")
-      ZIP_NAME=$(basename "$ZIP")
+      # shell 变量必须 export 才能在 node process.env 中可见
+      export DEB_NAME=$(basename "$DEB")
+      export APPIMAGE_NAME=$(basename "$APPIMAGE")
+      export EXE_NAME=$(basename "$EXE")
+      export ZIP_NAME=$(basename "$ZIP")
 
       RELEASE_JSON=$(node -e '
         const links = [];
@@ -321,12 +322,5 @@ release:
         "${CI_API_V4_URL}/projects/${CI_PROJECT_ID}/releases"
 
       echo "Release created successfully"
-  artifacts:
-    paths:
-      - "**/*.deb"
-      - "**/*.AppImage"
-      - "**/*.exe"
-      - "**/*.zip"
-    expire_in: 1 month
   rules:
     - if: '$CI_COMMIT_TAG =~ /^v\d+\.\d+\.\d+$/'
