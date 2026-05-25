@@ -44,3 +44,7 @@ export function getClaudeMemoryFileContent<T = string>(nativePath: string, proje
 export function simulateClaudeMemoryLoadChain<T = unknown>(cwd: string) {
   return tauriInvoke<T>("simulate_claude_memory_load_chain", { cwd });
 }
+
+export function getMemoryHealthReport<T = unknown>(projectPath?: string, force = false) {
+  return tauriInvoke<T>("get_memory_health_report", { projectPath, force });
+}

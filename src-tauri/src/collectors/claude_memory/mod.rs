@@ -1,4 +1,6 @@
+pub mod dedup;
 pub mod frontmatter;
+pub mod health_checker;
 pub mod load_chain;
 pub mod models;
 pub mod path_resolver;

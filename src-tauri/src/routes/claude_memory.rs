@@ -1,10 +1,10 @@
 use tauri::State;
 
 use crate::app_state::AppState;
-use crate::collectors::claude_memory::models::{SerClaudeMemoryScanResult, SerLoadChain};
+use crate::collectors::claude_memory::models::{SerClaudeMemoryScanResult, SerLoadChain, SerMemoryHealthReport};
 use crate::services::claude_memory_service::{
     get_claude_memory_file_content_service, get_claude_memory_overview_service,
-    simulate_load_chain_service,
+    get_memory_health_report_service, simulate_load_chain_service,
 };
 
 #[tauri::command(rename = "get_claude_memory_overview")]
@@ -31,4 +31,13 @@ pub fn simulate_claude_memory_load_chain_cmd(
     _state: State<'_, AppState>,
 ) -> Result<SerLoadChain, String> {
     simulate_load_chain_service(cwd)
+}
+
+#[tauri::command(rename = "get_memory_health_report")]
+pub fn get_memory_health_report_cmd(
+    project_path: Option<String>,
+    force: bool,
+    state: State<'_, AppState>,
+) -> Result<SerMemoryHealthReport, String> {
+    get_memory_health_report_service(project_path, force, state.inner())
 }

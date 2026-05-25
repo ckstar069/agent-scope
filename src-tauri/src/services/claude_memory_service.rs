@@ -3,10 +3,11 @@ use std::path::{Path, PathBuf};
 
 use crate::app_state::AppState;
 use crate::collectors::claude_memory::load_chain::simulate_load_chain;
-use crate::collectors::claude_memory::models::{SerClaudeMemoryScanResult, SerLoadChain};
+use crate::collectors::claude_memory::models::{SerClaudeMemoryScanResult, SerLoadChain, SerMemoryHealthReport};
 use crate::collectors::claude_memory::path_resolver::resolve_claude_config_dir;
 use crate::collectors::claude_memory::scanner::{scan_claude_memory, scan_project_level};
 use crate::collectors::claude_memory::secret_scanner::SecretScanner;
+use crate::collectors::claude_memory::health_checker::compute_health_report;
 
 const MAX_FILE_READ_SIZE: u64 = 1_048_576; // 1 MiB
 
@@ -171,6 +172,16 @@ pub fn get_claude_memory_file_content_service(
         std::fs::read_to_string(&canonical_file).map_err(|e| format!("无法读取文件内容: {}", e))?;
 
     Ok(content)
+}
+
+/// 获取记忆健康报告
+pub fn get_memory_health_report_service(
+    project_path: Option<String>,
+    force: bool,
+    state: &AppState,
+) -> Result<SerMemoryHealthReport, String> {
+    let scan_result = get_claude_memory_overview_service(project_path, force, state)?;
+    Ok(compute_health_report(&scan_result.assets))
 }
 
 // ─── 辅助：重建 summary ───

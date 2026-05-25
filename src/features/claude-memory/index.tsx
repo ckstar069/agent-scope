@@ -4,6 +4,7 @@ import {
   Brain,
   EyeOff,
   FolderOpen,
+  Heart,
   Loader2,
   RefreshCw,
   ShieldCheck,
@@ -14,6 +15,7 @@ import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Switch } from "@/components/ui/switch";
 
 import type { ClaudeMemoryAsset } from "./types";
+import { useMemoryHealth } from "./hooks/useClaudeMemory";
 
 import { LoadChainSimulator } from "./components/LoadChainSimulator";
 import { MemoryAssetDetail } from "./components/MemoryAssetDetail";
@@ -35,6 +37,7 @@ export function ClaudeMemory({ projectPath, page = "assets" }: ClaudeMemoryProps
 
 function ClaudeMemoryAssets({ projectPath }: { projectPath?: string }) {
   const { overview, isLoading, error, refresh } = useClaudeMemory(projectPath);
+  const { report: healthReport } = useMemoryHealth(projectPath);
   const [selectedAsset, setSelectedAsset] = useState<ClaudeMemoryAsset | null>(
     null,
   );
@@ -102,7 +105,7 @@ function ClaudeMemoryAssets({ projectPath }: { projectPath?: string }) {
       {overview && (
         <div className="flex flex-1 flex-col gap-4 overflow-hidden">
           {/* 顶部统计 */}
-          <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-4">
+          <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-5">
             <StatCard
               icon={Brain}
               label="总资产"
@@ -120,6 +123,20 @@ function ClaudeMemoryAssets({ projectPath }: { projectPath?: string }) {
               tone={
                 overview.summary.total_secret_issues > 0
                   ? "warning"
+                  : "default"
+              }
+            />
+            <StatCard
+              icon={Heart}
+              label="诊断评分"
+              value={healthReport?.overall_score ?? "-"}
+              tone={
+                healthReport
+                  ? healthReport.overall_score >= 80
+                    ? "default"
+                    : healthReport.overall_score >= 60
+                      ? "warning"
+                      : "danger"
                   : "default"
               }
             />
@@ -190,6 +207,50 @@ function ClaudeMemoryAssets({ projectPath }: { projectPath?: string }) {
               </CardContent>
             </Card>
           </div>
+
+          {/* Health Details */}
+          {healthReport && (
+            <details className="group rounded-xl border border-border bg-card shadow-xs">
+              <summary className="flex cursor-pointer items-center gap-2 p-4 text-sm font-medium select-none">
+                <span className="text-muted-foreground">健康诊断详情</span>
+                <span className="text-xs text-muted-foreground">（启发式评估，非绝对质量分）</span>
+                <span className="ml-auto text-xs text-muted-foreground group-open:rotate-180 transition-transform">▼</span>
+              </summary>
+              <div className="space-y-4 border-t border-border p-4">
+                <div className="grid gap-3 sm:grid-cols-5">
+                  {([healthReport.freshness, healthReport.quality, healthReport.coverage, healthReport.cleanliness, healthReport.safety] as const).map((dim) => (
+                    <div key={dim.name} className="space-y-1">
+                      <div className="flex items-center justify-between text-xs">
+                        <span className="text-muted-foreground capitalize">{dim.name}</span>
+                        <span className={`font-semibold ${dim.score >= 80 ? "text-green-600" : dim.score >= 60 ? "text-amber-600" : "text-red-600"}`}>{dim.score}</span>
+                      </div>
+                      <div className="h-2 rounded-full bg-muted overflow-hidden">
+                        <div
+                          className={`h-full rounded-full ${dim.score >= 80 ? "bg-green-500" : dim.score >= 60 ? "bg-amber-500" : "bg-red-500"}`}
+                          style={{ width: `${dim.score}%` }}
+                        />
+                      </div>
+                      <p className="text-xs text-muted-foreground truncate" title={dim.reason}>{dim.reason}</p>
+                    </div>
+                  ))}
+                </div>
+                {healthReport.top_issues.length > 0 && (
+                  <div className="space-y-2">
+                    <p className="text-xs font-medium text-muted-foreground">主要问题</p>
+                    {healthReport.top_issues.map((issue, i) => (
+                      <div key={i} className={`flex items-start gap-2 rounded-lg border p-2 text-xs ${issue.severity === "critical" ? "border-red-200 bg-red-50 dark:border-red-900/50 dark:bg-red-950/20" : issue.severity === "warning" ? "border-amber-200 bg-amber-50 dark:border-amber-900/50 dark:bg-amber-950/20" : "border-border bg-muted/30"}`}>
+                        <span className={`shrink-0 font-medium ${issue.severity === "critical" ? "text-red-600" : issue.severity === "warning" ? "text-amber-600" : "text-muted-foreground"}`}>{issue.severity}</span>
+                        <div className="min-w-0">
+                          <p className="truncate" title={issue.message}>{issue.message}</p>
+                          <p className="text-muted-foreground truncate" title={issue.suggestion}>→ {issue.suggestion}</p>
+                        </div>
+                      </div>
+                    ))}
+                  </div>
+                )}
+              </div>
+            </details>
+          )}
         </div>
       )}
     </section>
@@ -206,36 +267,53 @@ function StatCard({
   icon: typeof Brain;
   label: string;
   value: string | number;
-  tone?: "default" | "warning";
+  tone?: "default" | "warning" | "danger";
   isText?: boolean;
 }) {
+  const toneClass =
+    tone === "danger"
+      ? "border-red-200 bg-red-50 dark:border-red-900/50 dark:bg-red-950/20"
+      : tone === "warning"
+        ? "border-amber-200 bg-amber-50 dark:border-amber-900/50 dark:bg-amber-950/20"
+        : "border-border bg-card";
+  const iconBorderClass =
+    tone === "danger"
+      ? "border-red-200 bg-red-100/70 dark:border-red-900/60 dark:bg-red-950/40"
+      : tone === "warning"
+        ? "border-amber-200 bg-amber-100/70 dark:border-amber-900/60 dark:bg-amber-950/40"
+        : "border-border bg-tile";
+  const iconClass =
+    tone === "danger"
+      ? "text-red-600 dark:text-red-400"
+      : tone === "warning"
+        ? "text-amber-600 dark:text-amber-400"
+        : "text-muted-foreground";
+  const valueClass =
+    tone === "danger"
+      ? "text-red-700 dark:text-red-400"
+      : tone === "warning"
+        ? "text-amber-700 dark:text-amber-400"
+        : "";
+
   return (
     <div
-      className={`rounded-xl border p-4 shadow-xs ${
-        tone === "warning"
-          ? "border-amber-200 bg-amber-50 dark:border-amber-900/50 dark:bg-amber-950/20"
-          : "border-border bg-card"
-      }`}
+      className={`rounded-xl border p-4 shadow-xs ${toneClass}`}
     >
       <div className="flex min-h-20 items-start justify-between gap-3">
         <div className="min-w-0">
           <span className="text-xs text-muted-foreground">{label}</span>
           <p
             data-stat={label}
-            className={`mt-2 truncate font-semibold tracking-tight ${isText ? "font-mono text-xs" : "text-2xl"} ${tone === "warning" ? "text-amber-700 dark:text-amber-400" : ""}`}
+            className={`mt-2 truncate font-semibold tracking-tight ${isText ? "font-mono text-xs" : "text-2xl"} ${valueClass}`}
           >
             {value}
           </p>
         </div>
         <span
-          className={`flex size-8 shrink-0 items-center justify-center rounded-md border ${
-            tone === "warning"
-              ? "border-amber-200 bg-amber-100/70 dark:border-amber-900/60 dark:bg-amber-950/40"
-              : "border-border bg-tile"
-          }`}
+          className={`flex size-8 shrink-0 items-center justify-center rounded-md border ${iconBorderClass}`}
         >
           <Icon
-            className={`size-4 ${tone === "warning" ? "text-amber-600 dark:text-amber-400" : "text-muted-foreground"}`}
+            className={`size-4 ${iconClass}`}
             aria-hidden="true"
           />
         </span>

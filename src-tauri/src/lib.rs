@@ -15,7 +15,7 @@ use routes::{
     get_claude_memory_file_content_cmd, get_claude_memory_overview_cmd,
     get_claude_session_detail_cmd, get_latest_session_cmd, get_project_data_cmd,
     get_project_file_content_cmd, get_project_files_cmd, get_session_transcript_cmd,
-    get_template_path_cmd, list_claude_sessions_cmd, list_project_sessions_cmd, list_projects_cmd,
+    get_template_path_cmd, get_memory_health_report_cmd, list_claude_sessions_cmd, list_project_sessions_cmd, list_projects_cmd,
     preview_claude_session_cmd, remove_project_cmd, save_candidate_memory_cmd,
     search_claude_history_cmd, search_sessions_cmd, set_template_path_cmd,
     simulate_claude_memory_load_chain_cmd, start_watching_cmd, stop_watching_cmd,
@@ -100,6 +100,7 @@ pub fn run() {
             get_claude_memory_overview_cmd,
             get_claude_memory_file_content_cmd,
             simulate_claude_memory_load_chain_cmd,
+            get_memory_health_report_cmd,
         ])
         .run(tauri::generate_context!())
         .expect("error while running tauri application");

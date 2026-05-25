@@ -122,3 +122,50 @@ export interface LoadChainResult {
   excluded_assets: ExcludedAsset[];
   warnings: LoadChainWarning[];
 }
+
+// ─── Memory Health Phase 1 Types ───
+
+export interface HealthDimension {
+  name: string;
+  score: number;
+  reason: string;
+  contributing_assets: string[];
+}
+
+export interface MemoryHealthIssue {
+  issue_type: string;
+  severity: string;
+  asset_ids: string[];
+  message: string;
+  suggestion: string;
+}
+
+export interface MemoryStaleness {
+  asset_id: string;
+  asset_type: string;
+  scope: string;
+  logical_path: string;
+  mtime_ms: number | null;
+  stale_days: number | null;
+  threshold_days: number;
+}
+
+export interface MemoryDuplicateGroup {
+  group_id: string;
+  asset_ids: string[];
+  similarity: number;
+  overlap_content: string;
+  suggestion: string;
+}
+
+export interface MemoryHealthReport {
+  overall_score: number;
+  freshness: HealthDimension;
+  quality: HealthDimension;
+  coverage: HealthDimension;
+  cleanliness: HealthDimension;
+  safety: HealthDimension;
+  top_issues: MemoryHealthIssue[];
+  stale_assets: MemoryStaleness[];
+  duplicate_groups: MemoryDuplicateGroup[];
+}

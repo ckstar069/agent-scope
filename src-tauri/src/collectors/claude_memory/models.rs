@@ -147,3 +147,62 @@ pub struct ExcludePattern {
     pub pattern: String,
     pub source: String,
 }
+
+// ============================================================================
+// Memory Health Phase 1 数据结构
+// ============================================================================
+
+/// 记忆健康报告
+#[derive(Debug, Clone, Serialize)]
+pub struct SerMemoryHealthReport {
+    pub overall_score: u8,
+    pub freshness: SerHealthDimension,
+    pub quality: SerHealthDimension,
+    pub coverage: SerHealthDimension,
+    pub cleanliness: SerHealthDimension,
+    pub safety: SerHealthDimension,
+    pub top_issues: Vec<SerMemoryHealthIssue>,
+    pub stale_assets: Vec<SerMemoryStaleness>,
+    pub duplicate_groups: Vec<SerMemoryDuplicateGroup>,
+}
+
+/// 健康维度评分
+#[derive(Debug, Clone, Serialize)]
+pub struct SerHealthDimension {
+    pub name: String,
+    pub score: u8,
+    pub reason: String,
+    pub contributing_assets: Vec<String>,
+}
+
+/// 健康问题
+#[derive(Debug, Clone, Serialize)]
+pub struct SerMemoryHealthIssue {
+    pub issue_type: String,
+    pub severity: String,
+    pub asset_ids: Vec<String>,
+    pub message: String,
+    pub suggestion: String,
+}
+
+/// 过期资产信息
+#[derive(Debug, Clone, Serialize)]
+pub struct SerMemoryStaleness {
+    pub asset_id: String,
+    pub asset_type: String,
+    pub scope: String,
+    pub logical_path: String,
+    pub mtime_ms: Option<u64>,
+    pub stale_days: Option<u64>,
+    pub threshold_days: u64,
+}
+
+/// 重复资产组
+#[derive(Debug, Clone, Serialize)]
+pub struct SerMemoryDuplicateGroup {
+    pub group_id: String,
+    pub asset_ids: Vec<String>,
+    pub similarity: f64,
+    pub overlap_content: String,
+    pub suggestion: String,
+}
