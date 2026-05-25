@@ -52,10 +52,7 @@ pub fn compute_health_report(assets: &[SerClaudeMemoryAsset]) -> SerMemoryHealth
 }
 
 /// 计算过期资产列表
-pub fn compute_staleness(
-    assets: &[SerClaudeMemoryAsset],
-    now_ms: u64,
-) -> Vec<SerMemoryStaleness> {
+pub fn compute_staleness(assets: &[SerClaudeMemoryAsset], now_ms: u64) -> Vec<SerMemoryStaleness> {
     let mut stale_list = Vec::new();
 
     for asset in assets {
@@ -134,7 +131,12 @@ fn compute_freshness(
     let reason = if stale_count == 0 {
         "所有资产均在有效期内".to_string()
     } else {
-        format!("{}/{} 资产已过期（阈值 {} 天）", stale_count, eligible.len(), stale_assets.first().map(|s| s.threshold_days).unwrap_or(30))
+        format!(
+            "{}/{} 资产已过期（阈值 {} 天）",
+            stale_count,
+            eligible.len(),
+            stale_assets.first().map(|s| s.threshold_days).unwrap_or(30)
+        )
     };
 
     // contributing: stale_days 最长的 3 个
@@ -189,7 +191,11 @@ fn compute_quality(assets: &[SerClaudeMemoryAsset]) -> SerHealthDimension {
         .filter(|a| {
             matches!(
                 a.asset_type.as_str(),
-                "global_rule" | "project_rule" | "global_skill" | "project_skill" | "global_agent"
+                "global_rule"
+                    | "project_rule"
+                    | "global_skill"
+                    | "project_skill"
+                    | "global_agent"
                     | "project_agent"
             )
         })
@@ -214,10 +220,9 @@ fn compute_quality(assets: &[SerClaudeMemoryAsset]) -> SerHealthDimension {
     };
     let large_ratio = large_file_count as f64 / total;
 
-    let score =
-        ((1.0 - (too_long_ratio * 0.5 + no_fm_ratio * 0.3 + large_ratio * 0.2)) * 100.0)
-            .round()
-            .clamp(0.0, 100.0) as u8;
+    let score = ((1.0 - (too_long_ratio * 0.5 + no_fm_ratio * 0.3 + large_ratio * 0.2)) * 100.0)
+        .round()
+        .clamp(0.0, 100.0) as u8;
 
     let reason = format!(
         "过长 {}/{}，缺 frontmatter {}/{}，大文件 {}/{}",
@@ -232,11 +237,7 @@ fn compute_quality(assets: &[SerClaudeMemoryAsset]) -> SerHealthDimension {
     // contributing: line_count 最长的 3 个
     let mut by_lines: Vec<&SerClaudeMemoryAsset> = existing.clone();
     by_lines.sort_by(|a, b| b.line_count.cmp(&a.line_count));
-    let contributing: Vec<String> = by_lines
-        .iter()
-        .take(3)
-        .map(|a| a.id.clone())
-        .collect();
+    let contributing: Vec<String> = by_lines.iter().take(3).map(|a| a.id.clone()).collect();
 
     SerHealthDimension {
         name: "quality".to_string(),
@@ -292,10 +293,7 @@ fn compute_coverage(assets: &[SerClaudeMemoryAsset]) -> SerHealthDimension {
         .any(|a| a.asset_type == "auto_memory_index" && a.exists);
     if !has_auto_memory {
         penalty += 20;
-        if let Some(a) = assets
-            .iter()
-            .find(|a| a.asset_type == "auto_memory_index")
-        {
+        if let Some(a) = assets.iter().find(|a| a.asset_type == "auto_memory_index") {
             contributing.push(a.id.clone());
         }
     }
@@ -348,15 +346,18 @@ fn compute_cleanliness(
         .collect();
     let dup_ratio = dup_asset_ids.len() as f64 / existing_count as f64;
 
-    let score =
-        ((1.0 - (dup_ratio * 0.6 + dup_group_penalty * 0.4)) * 100.0)
-            .round()
-            .clamp(0.0, 100.0) as u8;
+    let score = ((1.0 - (dup_ratio * 0.6 + dup_group_penalty * 0.4)) * 100.0)
+        .round()
+        .clamp(0.0, 100.0) as u8;
 
     let reason = if dup_group_count == 0 {
         "未检测到重复".to_string()
     } else {
-        format!("{} 组重复，涉及 {} 个资产", dup_group_count, dup_asset_ids.len())
+        format!(
+            "{} 组重复，涉及 {} 个资产",
+            dup_group_count,
+            dup_asset_ids.len()
+        )
     };
 
     // contributing: 相似度最高的 3 个组中的 asset id
@@ -389,7 +390,10 @@ fn compute_safety(assets: &[SerClaudeMemoryAsset]) -> SerHealthDimension {
     let reason = if total_secrets == 0 {
         "未检测到敏感信息".to_string()
     } else {
-        format!("{} 个风险项（其中 {} 个高危）", total_secrets, critical_secrets)
+        format!(
+            "{} 个风险项（其中 {} 个高危）",
+            total_secrets, critical_secrets
+        )
     };
 
     // contributing: secret_issues 最多的 3 个 asset
@@ -398,11 +402,7 @@ fn compute_safety(assets: &[SerClaudeMemoryAsset]) -> SerHealthDimension {
         .filter(|a| !a.secret_issues.is_empty())
         .collect();
     by_secrets.sort_by(|a, b| b.secret_issues.len().cmp(&a.secret_issues.len()));
-    let contributing: Vec<String> = by_secrets
-        .iter()
-        .take(3)
-        .map(|a| a.id.clone())
-        .collect();
+    let contributing: Vec<String> = by_secrets.iter().take(3).map(|a| a.id.clone()).collect();
 
     SerHealthDimension {
         name: "safety".to_string(),
@@ -427,7 +427,10 @@ fn collect_top_issues(
             issue_type: "stale".to_string(),
             severity: if days > 60 { "warning" } else { "info" }.to_string(),
             asset_ids: vec![stale.asset_id.clone()],
-            message: format!("{} 已 {} 天未更新（阈值 {} 天）", stale.logical_path, days, stale.threshold_days),
+            message: format!(
+                "{} 已 {} 天未更新（阈值 {} 天）",
+                stale.logical_path, days, stale.threshold_days
+            ),
             suggestion: "复查内容是否仍然有效，考虑归档或更新".to_string(),
         });
     }
@@ -444,7 +447,11 @@ fn collect_top_issues(
                 issue_type: "too_long".to_string(),
                 severity: "warning".to_string(),
                 asset_ids: vec![asset.id.clone()],
-                message: format!("{} 超过 200 行（{} 行）", asset.logical_path, asset.line_count.unwrap_or(0)),
+                message: format!(
+                    "{} 超过 200 行（{} 行）",
+                    asset.logical_path,
+                    asset.line_count.unwrap_or(0)
+                ),
                 suggestion: "考虑拆分为 rules 或 skills".to_string(),
             });
         }
@@ -460,7 +467,11 @@ fn collect_top_issues(
             issue_type: "secret_risk".to_string(),
             severity: if has_critical { "critical" } else { "warning" }.to_string(),
             asset_ids: vec![asset.id.clone()],
-            message: format!("{} 包含 {} 个敏感信息", asset.logical_path, asset.secret_issues.len()),
+            message: format!(
+                "{} 包含 {} 个敏感信息",
+                asset.logical_path,
+                asset.secret_issues.len()
+            ),
             suggestion: "移除敏感信息，改用环境变量或 secrets manager".to_string(),
         });
     }
@@ -471,7 +482,11 @@ fn collect_top_issues(
             issue_type: "duplicate".to_string(),
             severity: "info".to_string(),
             asset_ids: group.asset_ids.clone(),
-            message: format!("检测到 {} 个相似资产（相似度 {:.0}%）", group.asset_ids.len(), group.similarity * 100.0),
+            message: format!(
+                "检测到 {} 个相似资产（相似度 {:.0}%）",
+                group.asset_ids.len(),
+                group.similarity * 100.0
+            ),
             suggestion: if group.suggestion == "merge" {
                 "内容完全相同，建议合并".to_string()
             } else {
@@ -555,7 +570,14 @@ mod tests {
     #[test]
     fn test_staleness_fresh_asset() {
         let now = now_ms();
-        let assets = vec![make_asset("a1", "project_claude_md", true, Some(now), None, None)];
+        let assets = vec![make_asset(
+            "a1",
+            "project_claude_md",
+            true,
+            Some(now),
+            None,
+            None,
+        )];
         let stale = compute_staleness(&assets, now);
         assert!(stale.is_empty(), "刚修改的资产不应过期");
     }
@@ -597,7 +619,14 @@ mod tests {
     #[test]
     fn test_staleness_no_mtime() {
         let now = now_ms();
-        let assets = vec![make_asset("a1", "project_claude_md", true, None, None, None)];
+        let assets = vec![make_asset(
+            "a1",
+            "project_claude_md",
+            true,
+            None,
+            None,
+            None,
+        )];
         let stale = compute_staleness(&assets, now);
         assert!(stale.is_empty(), "mtime 不可用不应标记为过期");
     }
@@ -605,7 +634,14 @@ mod tests {
     #[test]
     fn test_staleness_nonexistent() {
         let now = now_ms();
-        let assets = vec![make_asset("a1", "project_claude_md", false, None, None, None)];
+        let assets = vec![make_asset(
+            "a1",
+            "project_claude_md",
+            false,
+            None,
+            None,
+            None,
+        )];
         let stale = compute_staleness(&assets, now);
         assert!(stale.is_empty(), "不存在的资产不应参与过期检测");
     }
@@ -622,12 +658,37 @@ mod tests {
     fn test_health_report_fresh_assets() {
         let now = now_ms();
         let assets = vec![
-            make_asset("a1", "user_claude_md", true, Some(now), Some(50), Some("Use pnpm")),
-            make_asset("a2", "project_claude_md", true, Some(now), Some(30), Some("Test first")),
-            make_asset("a3", "auto_memory_index", true, Some(now), Some(10), Some("Lesson 1")),
+            make_asset(
+                "a1",
+                "user_claude_md",
+                true,
+                Some(now),
+                Some(50),
+                Some("Use pnpm"),
+            ),
+            make_asset(
+                "a2",
+                "project_claude_md",
+                true,
+                Some(now),
+                Some(30),
+                Some("Test first"),
+            ),
+            make_asset(
+                "a3",
+                "auto_memory_index",
+                true,
+                Some(now),
+                Some(10),
+                Some("Lesson 1"),
+            ),
         ];
         let report = compute_health_report(&assets);
-        assert!(report.overall_score > 50, "新鲜资产应得分较高: {}", report.overall_score);
+        assert!(
+            report.overall_score > 50,
+            "新鲜资产应得分较高: {}",
+            report.overall_score
+        );
         assert!(report.stale_assets.is_empty());
     }
 
@@ -635,9 +696,14 @@ mod tests {
     fn test_health_report_stale_assets() {
         let now = now_ms();
         let forty_days_ago = now - 40 * 24 * 60 * 60 * 1000;
-        let assets = vec![
-            make_asset("a1", "project_claude_md", true, Some(forty_days_ago), Some(50), Some("Old content")),
-        ];
+        let assets = vec![make_asset(
+            "a1",
+            "project_claude_md",
+            true,
+            Some(forty_days_ago),
+            Some(50),
+            Some("Old content"),
+        )];
         let report = compute_health_report(&assets);
         assert!(!report.stale_assets.is_empty(), "应检测到过期资产");
         assert!(report.freshness.score < 100, "有过期资产时新鲜度应 < 100");
@@ -646,7 +712,14 @@ mod tests {
     #[test]
     fn test_health_report_with_secrets() {
         let now = now_ms();
-        let mut asset = make_asset("a1", "project_claude_md", true, Some(now), Some(10), Some("API key here"));
+        let mut asset = make_asset(
+            "a1",
+            "project_claude_md",
+            true,
+            Some(now),
+            Some(10),
+            Some("API key here"),
+        );
         asset.secret_issues.push(SerSecretIssue {
             issue_type: "api_key".to_string(),
             line_number: 1,
@@ -661,9 +734,14 @@ mod tests {
     #[test]
     fn test_health_dimensions_range() {
         let now = now_ms();
-        let assets = vec![
-            make_asset("a1", "project_claude_md", true, Some(now), Some(50), Some("Content")),
-        ];
+        let assets = vec![make_asset(
+            "a1",
+            "project_claude_md",
+            true,
+            Some(now),
+            Some(50),
+            Some("Content"),
+        )];
         let report = compute_health_report(&assets);
         for dim in &[
             &report.freshness,
@@ -689,7 +767,14 @@ mod tests {
 
     #[test]
     fn test_coverage_missing_instruction() {
-        let assets = vec![make_asset("a1", "global_rule", true, None, Some(5), Some("Rule content"))];
+        let assets = vec![make_asset(
+            "a1",
+            "global_rule",
+            true,
+            None,
+            Some(5),
+            Some("Rule content"),
+        )];
         let report = compute_health_report(&assets);
         assert!(
             report.coverage.score < 100,
@@ -702,7 +787,14 @@ mod tests {
     fn test_staleness_default_threshold_boundary() {
         let now = now_ms();
         let exactly_30_days = now - 30 * 24 * 60 * 60 * 1000;
-        let assets = vec![make_asset("a1", "project_claude_md", true, Some(exactly_30_days), None, None)];
+        let assets = vec![make_asset(
+            "a1",
+            "project_claude_md",
+            true,
+            Some(exactly_30_days),
+            None,
+            None,
+        )];
         let stale = compute_staleness(&assets, now);
         assert!(stale.is_empty(), "刚好 30 天不应过期（需 > 阈值）");
     }
@@ -712,7 +804,14 @@ mod tests {
     fn test_staleness_auto_memory_14d_boundary() {
         let now = now_ms();
         let exactly_14_days = now - 14 * 24 * 60 * 60 * 1000;
-        let assets = vec![make_asset("a1", "auto_memory_index", true, Some(exactly_14_days), None, None)];
+        let assets = vec![make_asset(
+            "a1",
+            "auto_memory_index",
+            true,
+            Some(exactly_14_days),
+            None,
+            None,
+        )];
         let stale = compute_staleness(&assets, now);
         assert!(stale.is_empty(), "刚好 14 天不应过期（需 > 阈值）");
     }
@@ -721,7 +820,14 @@ mod tests {
     #[test]
     fn test_safety_critical_secret_scoring() {
         let now = now_ms();
-        let mut asset = make_asset("a1", "project_claude_md", true, Some(now), Some(10), Some("env content"));
+        let mut asset = make_asset(
+            "a1",
+            "project_claude_md",
+            true,
+            Some(now),
+            Some(10),
+            Some("env content"),
+        );
         // 3 个 critical secret
         for _ in 0..3 {
             asset.secret_issues.push(SerSecretIssue {
@@ -818,7 +924,14 @@ mod tests {
     fn test_staleness_future_mtime() {
         let now = now_ms();
         let future = now + 1000;
-        let assets = vec![make_asset("a1", "project_claude_md", true, Some(future), None, None)];
+        let assets = vec![make_asset(
+            "a1",
+            "project_claude_md",
+            true,
+            Some(future),
+            None,
+            None,
+        )];
         let stale = compute_staleness(&assets, now);
         assert!(stale.is_empty(), "mtime 在未来不应标记为过期");
     }

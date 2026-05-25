@@ -272,7 +272,10 @@ fn find_duplicates_within(eligible: &[&SerClaudeMemoryAsset]) -> Vec<SerMemoryDu
         }
 
         let hash = compute_content_hash(&all_normalized);
-        hash_groups.entry(hash.clone()).or_default().push(asset.id.clone());
+        hash_groups
+            .entry(hash.clone())
+            .or_default()
+            .push(asset.id.clone());
         normalized_texts.insert(asset.id.clone(), all_normalized);
     }
 
@@ -671,10 +674,7 @@ mod tests {
     /// 两个各只有 1 个不同词的短文本不应被判为重复
     #[test]
     fn test_dedul_short_text_single_word_different() {
-        let assets = vec![
-            make_asset("a1", "hello\n"),
-            make_asset("a2", "world\n"),
-        ];
+        let assets = vec![make_asset("a1", "hello\n"), make_asset("a2", "world\n")];
         let groups = find_duplicates(&assets);
         assert!(groups.is_empty(), "单词完全不同不应误判");
     }
@@ -692,7 +692,11 @@ mod tests {
             make_asset("a2", "alpha beta gamma delta epsilon\n"),
         ];
         let groups = find_duplicates(&assets);
-        assert_eq!(groups.len(), 1, "Jaccard = 0.8 刚好在阈值边界应检测为近似重复");
+        assert_eq!(
+            groups.len(),
+            1,
+            "Jaccard = 0.8 刚好在阈值边界应检测为近似重复"
+        );
         assert!((groups[0].similarity - 0.8).abs() < 0.01);
         assert_eq!(groups[0].suggestion, "review");
     }
