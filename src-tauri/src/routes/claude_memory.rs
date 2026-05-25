@@ -1,7 +1,9 @@
 use tauri::State;
 
 use crate::app_state::AppState;
-use crate::collectors::claude_memory::models::{SerClaudeMemoryScanResult, SerLoadChain, SerMemoryHealthReport};
+use crate::collectors::claude_memory::models::{
+    SerClaudeMemoryScanResult, SerLoadChain, SerMemoryHealthReport,
+};
 use crate::services::claude_memory_service::{
     get_claude_memory_file_content_service, get_claude_memory_overview_service,
     get_memory_health_report_service, simulate_load_chain_service,
