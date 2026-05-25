@@ -160,6 +160,28 @@ job 在 `before_script` 之前即失败，没有任何用户代码被执行。
 - 不指向 `artifacts/raw/...`
 - 全部可下载（HTTP 200）
 
+### v0.3.4 正式发布
+
+| 项目 | 值 |
+|------|-----|
+| 正式 tag | `v0.3.4` |
+| tag 类型 | lightweight |
+| Pipeline | #300 |
+| build:linux | 通过，产出 deb + AppImage |
+| build:windows | 通过，产出 NSIS exe + portable zip |
+| release | job 本身因 400 错误失败，但 Package Registry 上传成功；通过 API 手动创建 Release + assets links |
+| Package Registry | `packages/generic/agent-scope/0.3.4/` |
+
+**产物文件名**：
+- `AgentScope_0.3.4_amd64.deb`（5.8 MB）
+- `AgentScope_0.3.4_amd64.AppImage`（79.4 MB）
+- `AgentScope_0.3.4_x64-setup.exe`（3.1 MB）
+- `AgentScope_0.3.4_x64_portable.zip`（4.3 MB）
+
+**Release assets 验证**：
+- 四个链接均指向 `packages/generic/agent-scope/0.3.4/`
+- 全部可下载（HTTP 200，Content-Length 非零）
+
 ---
 
 ## 5. 踩坑清单
@@ -316,7 +338,18 @@ job 在 `before_script` 之前即失败，没有任何用户代码被执行。
 | 错误现象 | `Downloading https://github.com/tauri-apps/binary-releases/releases/download/apprun-old/AppRun-x86_64` 后报 `failed to bundle project io: unexpected end of file` |
 | 根因 | Linux Runner 到 GitHub/raw.githubusercontent.com TLS 路径不稳定；Tauri bundler 在 `useLocalToolsDir=true` 时会从 `src-tauri/target/.tauri/` 读取 AppImage 工具，缺失时才访问 GitHub 下载 |
 | 最终解决 | 将 `AppRun-x86_64`、`linuxdeploy-x86_64.AppImage`、`linuxdeploy-plugin-gtk.sh`、`linuxdeploy-plugin-gstreamer.sh` 固定为仓库内 CI 资产（`ci/tauri-tools/linux-x86_64/`），Linux build 前复制到 `src-tauri/target/.tauri/` |
-| 经验教训 | AppImage 构建的工具链也属于 release 输入，不能依赖 tag pipeline 运行时临时访问 GitHub；和 npm/Cargo 一样，应固定到镜像或仓库资产中 |
+| 经验教训 | AppImage 构建的工具链也属于 release 辏入，不能依赖 tag pipeline 运行时临时访问 GitHub；和 npm/Cargo 一样，应固定到镜像或仓库资产中 |
+
+### 5.14 Release job alpine TLS + jq 依赖 + artifacts 过大（v0.3.1~v0.3.4 发现）
+
+| 字段 | 内容 |
+|------|------|
+| 问题 | release job 在 v0.3.1/v0.3.2/v0.3.3/v0.3.4 连续四次失败，每次原因不同 |
+| 错误现象 | v0.3.1: alpine TLS 连接失败（`apk add curl jq`）；v0.3.2: apt-get 在无外网容器中失败；v0.3.3: Release assets links 为空 + artifacts 上传 413 过大；v0.3.4: Release 创建 400 错误 |
+| 根因 | 1. alpine:latest 镜像在 Docker executor 内 TLS 不稳定；2. 容器无外网访问无法 apt-get install jq；3. shell 变量未 export 导致 node process.env 读取 undefined；4. 每个 GitLab CI script step（`- |`）是独立 shell，变量不跨 step 传递；5. release job artifacts 约 85MB（deb + AppImage 约 79MB）超过 GitLab 上传限制 |
+| 错误尝试 | 1. 使用 alpine:latest + apk add（TLS 失败）；2. 使用 CI 镜像 + apt-get install jq（容器无外网）；3. shell 变量不 export（node 读不到）；4. 每个 step 独立 shell，变量跨 step 丢失 |
+| 最终解决 | 四层修复：① release job image 改为 CI 镜像 `agent-scope-ci:node20-rust1.95`（预装 curl 和 node）；② 所有 JSON 操作用 `node -e` 替代 jq，node 在 CI 镜像中预装；③ shell 变量必须 `export` 才能在 node `process.env` 中可见；④ 每个 script step 是独立 shell，需在需要变量的 step 中重新 `find` + `export`；⑤ 移除 release job 的 `artifacts` 配置（产物已在 Package Registry 中永久存储，job artifacts 无意义且超过大小限制） |
+| 经验教训 | 1. Docker executor 容器通常无外网访问，不要在 job 内安装系统包；2. CI 镜像应预装所有工具（curl、node 等），避免运行时依赖外网；3. GitLab CI 每个 script step 是独立 shell 进程，变量不跨 step 传递，必须在每个 step 中重新获取；4. shell 变量默认不是环境变量，`export` 才能让子进程（如 node）通过 `process.env` 读取；5. release job 不需要 `artifacts` 配置——产物已上传至 Package Registry，job artifacts 只会增加存储负担并可能超过大小限制 |
 
 ---
 
@@ -412,5 +445,6 @@ scripts/release-tag.sh v0.2.15 <commit-sha>
 ---
 
 *文档创建时间：2026-05-19*
-*对应版本：v0.2.14*
-*对应 commit：6bc23faf*
+*最新更新时间：2026-05-25*
+*对应版本：v0.3.4*
+*对应 commit：6607c05*
