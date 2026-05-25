@@ -527,6 +527,7 @@ pub struct SerImportIssue {
 ### 4.1 设计保留说明
 
 P3 的设计内容（重复段落检测、健康评分、冲突检测占位）保留在本文档中作为未来实现参考，但**不在 v0.2 第一批次代码中实现**。
+治理模型、Review Queue 和 Health Score v1 的后续骨架见 `docs/design-ai-context-governance-v0.1.md`。
 
 第一批次完成后，根据 P1+P2 的实际进度评估是否进入 P3。
 

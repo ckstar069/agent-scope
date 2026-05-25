@@ -1,7 +1,7 @@
 # AgentScope 项目状态与扩展路线
 
 > 本文档汇总项目当前状态、技术债务、重构计划和功能扩展方向，作为团队迭代的核心参考。
-> 最后更新：2026-05-13
+> 最后更新：2026-05-23
 
 ---
 
@@ -216,6 +216,24 @@ src-tauri/src/
 
 ---
 
+### Phase 4：AI 上下文治理（规划中）
+
+目标：在 Claude Memory 资产扫描和加载链模拟基础上补齐治理闭环，先把问题看清和审清，再推进编辑、同步与跨工具适配。
+
+| 优先级 | 方向 | 范围 | 价值 |
+|--------|------|------|------|
+| P1 | **健康检测 v1** | Context Pressure、过长资产、Secret 风险、重复检测 v1、import/paths 结构异常、健康维度分 | 高 |
+| P1 | **Memory Candidate 泛化** | 从会话、手工标记和治理建议产生可追溯候选项，脱离模板项目固定写入路径 | 高 |
+| P2 | **Review Queue** | 汇总候选知识、重复项、冲突项、拆分建议和安全 blocker，提供接受/拒绝/合并/归档 | 高 |
+| P2 | **跨工具资产盘点** | 只读发现 Claude、Codex、AGENTS.md、Cursor、Copilot 等上下文资产，提示重复与漂移 | 中 |
+| P3 | **写入预览与版本管理** | 在明确 diff、备份和 allowlist 后写入 rules/skills/instructions，支持 rollback | 中 |
+
+设计入口：
+- `docs/requirements-claude-memory-management.md`
+- `docs/design-ai-context-governance-v0.1.md`
+
+---
+
 ## 四、潜在探索方向（长期）
 
 | 方向 | 场景描述 |
@@ -229,6 +247,7 @@ src-tauri/src/
 | Agent 会话回放 | 时间轴形式回放会话过程，支持快进/回退 |
 | 自定义监控指标 | 用户自定义指标（特定文件变更次数、测试通过率变化）接入面板 |
 | 项目知识图谱 | 从会话中提取关键概念和文件关系，自动生成知识结构图 |
+| 跨项目经验继承 | 新项目启动时，从历史 Candidate、决策和治理结果中推荐可继承的上下文约束 |
 
 ---
 
@@ -237,5 +256,6 @@ src-tauri/src/
 | 文档 | 路径 | 说明 |
 |:-----|:-----|:-----|
 | 开发指南 | `CLAUDE.md` | Tauri 命令、架构、数据流、测试环境 |
-| 软件分发 | `docs/distribution.md` | Linux/macOS/Windows 分发形式（⚠️ 仍含旧名"PTV"） |
+| 软件分发 | `docs/distribution.md` | Linux/macOS/Windows 分发形式 |
+| AI 上下文治理设计 | `docs/design-ai-context-governance-v0.1.md` | Candidate、Review Queue、Health Score v1 |
 | 本文件 | `docs/roadmap.md` | 项目状态与扩展路线（本文档） |
