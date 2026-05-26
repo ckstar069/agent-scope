@@ -94,7 +94,7 @@ pub fn compute_staleness(assets: &[SerClaudeMemoryAsset], now_ms: u64) -> Vec<Se
     }
 
     // 按 stale_days 降序排列
-    stale_list.sort_by(|a, b| b.stale_days.cmp(&a.stale_days));
+    stale_list.sort_by_key(|b| std::cmp::Reverse(b.stale_days));
     stale_list
 }
 
@@ -236,7 +236,7 @@ fn compute_quality(assets: &[SerClaudeMemoryAsset]) -> SerHealthDimension {
 
     // contributing: line_count 最长的 3 个
     let mut by_lines: Vec<&SerClaudeMemoryAsset> = existing.clone();
-    by_lines.sort_by(|a, b| b.line_count.cmp(&a.line_count));
+    by_lines.sort_by_key(|b| std::cmp::Reverse(b.line_count));
     let contributing: Vec<String> = by_lines.iter().take(3).map(|a| a.id.clone()).collect();
 
     SerHealthDimension {
@@ -401,7 +401,7 @@ fn compute_safety(assets: &[SerClaudeMemoryAsset]) -> SerHealthDimension {
         .iter()
         .filter(|a| !a.secret_issues.is_empty())
         .collect();
-    by_secrets.sort_by(|a, b| b.secret_issues.len().cmp(&a.secret_issues.len()));
+    by_secrets.sort_by_key(|b| std::cmp::Reverse(b.secret_issues.len()));
     let contributing: Vec<String> = by_secrets.iter().take(3).map(|a| a.id.clone()).collect();
 
     SerHealthDimension {
