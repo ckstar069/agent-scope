@@ -15,7 +15,7 @@ import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Switch } from "@/components/ui/switch";
 import { cn } from "@/lib/utils";
 
-import type { ClaudeMemoryAsset, MemoryHealthReport } from "./types";
+import type { ClaudeMemoryAsset, MemoryDuplicateGroup, MemoryHealthReport } from "./types";
 import { useMemoryHealth } from "./hooks/useClaudeMemory";
 
 import { LoadChainSimulator } from "./components/LoadChainSimulator";
@@ -24,13 +24,15 @@ import { MemoryAssetTree } from "./components/MemoryAssetTree";
 import { useClaudeMemory } from "./hooks/useClaudeMemory";
 
 /** 从 healthReport 派生各资产的健康标记 */
-function deriveHealthSets(report: MemoryHealthReport | null) {
+function deriveHealthSets(report: MemoryHealthReport | null, assets: ClaudeMemoryAsset[]) {
   const staleAssetIds = new Set<string>();
   const duplicateAssetIds = new Set<string>();
   const staleDaysByAssetId = new Map<string, number>();
   const issueAssetIds = new Set<string>();
+  const secretAssetIds = new Set<string>();
+  const duplicateGroupsByAssetId = new Map<string, MemoryDuplicateGroup[]>();
 
-  if (!report) return { staleAssetIds, duplicateAssetIds, staleDaysByAssetId, issueAssetIds };
+  if (!report) return { staleAssetIds, duplicateAssetIds, staleDaysByAssetId, issueAssetIds, secretAssetIds, duplicateGroupsByAssetId };
 
   for (const s of report.stale_assets) {
     staleAssetIds.add(s.asset_id);
@@ -39,6 +41,9 @@ function deriveHealthSets(report: MemoryHealthReport | null) {
   for (const g of report.duplicate_groups) {
     for (const aid of g.asset_ids) {
       duplicateAssetIds.add(aid);
+      const list = duplicateGroupsByAssetId.get(aid) ?? [];
+      list.push(g);
+      duplicateGroupsByAssetId.set(aid, list);
     }
   }
   for (const issue of report.top_issues) {
@@ -46,7 +51,10 @@ function deriveHealthSets(report: MemoryHealthReport | null) {
       issueAssetIds.add(aid);
     }
   }
-  return { staleAssetIds, duplicateAssetIds, staleDaysByAssetId, issueAssetIds };
+  for (const a of assets) {
+    if (a.secret_issues.length > 0) secretAssetIds.add(a.id);
+  }
+  return { staleAssetIds, duplicateAssetIds, staleDaysByAssetId, issueAssetIds, secretAssetIds, duplicateGroupsByAssetId };
 }
 
 interface ClaudeMemoryProps {
@@ -65,10 +73,10 @@ export function ClaudeMemory({ projectPath, page = "assets" }: ClaudeMemoryProps
 function ClaudeMemoryAssets({ projectPath }: { projectPath?: string }) {
   const { overview, isLoading, error, refresh } = useClaudeMemory(projectPath);
   const { report: healthReport } = useMemoryHealth(projectPath);
-  const healthSets = useMemo(() => deriveHealthSets(healthReport), [healthReport]);
+  const healthSets = useMemo(() => deriveHealthSets(healthReport, overview?.assets ?? []), [healthReport, overview?.assets]);
   const [selectedAsset, setSelectedAsset] = useState<ClaudeMemoryAsset | null>(null);
   const [hideMissing, setHideMissing] = useState(true);
-  const [healthFilter, setHealthFilter] = useState<"all" | "stale" | "duplicate" | "issue">("all");
+  const [healthFilter, setHealthFilter] = useState<"all" | "stale" | "duplicate" | "issue" | "secret">("all");
 
   const visibleAssets = useMemo(() => {
     if (!overview) return [];
@@ -77,6 +85,7 @@ function ClaudeMemoryAssets({ projectPath }: { projectPath?: string }) {
     if (healthFilter === "stale") assets = assets.filter((a) => healthSets.staleAssetIds.has(a.id));
     else if (healthFilter === "duplicate") assets = assets.filter((a) => healthSets.duplicateAssetIds.has(a.id));
     else if (healthFilter === "issue") assets = assets.filter((a) => healthSets.issueAssetIds.has(a.id));
+    else if (healthFilter === "secret") assets = assets.filter((a) => healthSets.secretAssetIds.has(a.id));
     return assets;
   }, [overview, hideMissing, healthFilter, healthSets]);
 
@@ -231,12 +240,13 @@ function ClaudeMemoryAssets({ projectPath }: { projectPath?: string }) {
               </CardHeader>
               <CardContent className="flex-1 p-0">
                 <div className="flex items-center gap-1 border-b border-border px-3 py-2">
-                  {(["all", "stale", "duplicate", "issue"] as const).map((f) => {
+                  {(["all", "stale", "duplicate", "issue", "secret"] as const).map((f) => {
                     const labels: Record<typeof f, string> = {
                       all: "全部",
                       stale: "stale",
                       duplicate: "duplicate",
                       issue: "有问题",
+                      secret: "secret",
                     };
                     return (
                       <button
@@ -261,6 +271,7 @@ function ClaudeMemoryAssets({ projectPath }: { projectPath?: string }) {
                   onSelectAsset={setSelectedAsset}
                   staleAssetIds={healthSets.staleAssetIds}
                   duplicateAssetIds={healthSets.duplicateAssetIds}
+                  secretAssetIds={healthSets.secretAssetIds}
                 />
               </CardContent>
             </Card>
@@ -272,6 +283,10 @@ function ClaudeMemoryAssets({ projectPath }: { projectPath?: string }) {
                   isStale={selectedAsset ? healthSets.staleAssetIds.has(selectedAsset.id) : false}
                   staleDays={selectedAsset ? healthSets.staleDaysByAssetId.get(selectedAsset.id) : undefined}
                   isDuplicate={selectedAsset ? healthSets.duplicateAssetIds.has(selectedAsset.id) : false}
+                  isSecretRisk={selectedAsset ? healthSets.secretAssetIds.has(selectedAsset.id) : false}
+                  duplicateGroupsForAsset={selectedAsset ? healthSets.duplicateGroupsByAssetId.get(selectedAsset.id) : undefined}
+                  assetsById={overview ? new Map(overview.assets.map((a) => [a.id, a])) : undefined}
+                  onSelectAsset={setSelectedAsset}
                 />
               </CardContent>
             </Card>

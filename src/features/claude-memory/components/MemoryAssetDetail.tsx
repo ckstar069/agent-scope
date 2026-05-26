@@ -2,7 +2,9 @@ import { AlertTriangle, Clock, Copy, FileWarning, Loader2, Ruler, Scale } from "
 
 import { MarkdownRenderer } from "@/components/MarkdownRenderer";
 
-import type { ClaudeMemoryAsset, Frontmatter } from "../types";
+import { cn } from "@/lib/utils";
+
+import type { ClaudeMemoryAsset, Frontmatter, MemoryDuplicateGroup } from "../types";
 
 import { useClaudeMemoryFile } from "../hooks/useClaudeMemory";
 
@@ -12,9 +14,13 @@ interface MemoryAssetDetailProps {
   isStale?: boolean;
   staleDays?: number;
   isDuplicate?: boolean;
+  isSecretRisk?: boolean;
+  duplicateGroupsForAsset?: MemoryDuplicateGroup[];
+  assetsById?: Map<string, ClaudeMemoryAsset>;
+  onSelectAsset?: (asset: ClaudeMemoryAsset) => void;
 }
 
-export function MemoryAssetDetail({ asset, projectPath, isStale, staleDays, isDuplicate }: MemoryAssetDetailProps) {
+export function MemoryAssetDetail({ asset, projectPath, isStale, staleDays, isDuplicate, isSecretRisk, duplicateGroupsForAsset, assetsById, onSelectAsset }: MemoryAssetDetailProps) {
   const { content, isLoading, error } = useClaudeMemoryFile(asset, projectPath);
 
   if (!asset) {
@@ -28,7 +34,7 @@ export function MemoryAssetDetail({ asset, projectPath, isStale, staleDays, isDu
   return (
     <div className="flex h-full flex-col">
       {/* 元数据头部 —— 始终显示 */}
-      <AssetMetaHeader asset={asset} isStale={isStale} staleDays={staleDays} isDuplicate={isDuplicate} />
+      <AssetMetaHeader asset={asset} isStale={isStale} staleDays={staleDays} isDuplicate={isDuplicate} isSecretRisk={isSecretRisk} />
 
       {/* 内容区域 */}
       {!asset.exists && (
@@ -82,11 +88,20 @@ export function MemoryAssetDetail({ asset, projectPath, isStale, staleDays, isDu
           无法加载内容
         </div>
       )}
+      {/* Duplicate Groups */}
+      {duplicateGroupsForAsset && duplicateGroupsForAsset.length > 0 && assetsById && (
+        <DuplicateGroupView
+          groups={duplicateGroupsForAsset}
+          currentAssetId={asset.id}
+          assetsById={assetsById}
+          onSelectAsset={onSelectAsset}
+        />
+      )}
     </div>
   );
 }
 
-function AssetMetaHeader({ asset, isStale, staleDays, isDuplicate }: { asset: ClaudeMemoryAsset; isStale?: boolean; staleDays?: number; isDuplicate?: boolean }) {
+function AssetMetaHeader({ asset, isStale, staleDays, isDuplicate, isSecretRisk }: { asset: ClaudeMemoryAsset; isStale?: boolean; staleDays?: number; isDuplicate?: boolean; isSecretRisk?: boolean }) {
   const isTooLong =
     asset.asset_type === "auto_memory_index" &&
     asset.line_count != null &&
@@ -138,6 +153,12 @@ function AssetMetaHeader({ asset, isStale, staleDays, isDuplicate }: { asset: Cl
           <span className="inline-flex items-center gap-1 rounded bg-blue-100 px-2 py-0.5 text-xs font-medium text-blue-700 dark:bg-blue-950/40 dark:text-blue-400">
             <Copy className="size-3" aria-hidden="true" />
             duplicate
+          </span>
+        )}
+        {isSecretRisk && (
+          <span className="inline-flex items-center gap-1 rounded bg-red-100 px-2 py-0.5 text-xs font-medium text-red-700 dark:bg-red-950/40 dark:text-red-400">
+            <AlertTriangle className="size-3" aria-hidden="true" />
+            secret risk
           </span>
         )}
       </div>
@@ -247,4 +268,96 @@ function formatFileSize(bytes: number | null): string {
   if (bytes < 1024) return `${bytes} B`;
   if (bytes < 1024 * 1024) return `${(bytes / 1024).toFixed(1)} KB`;
   return `${(bytes / (1024 * 1024)).toFixed(1)} MB`;
+}
+
+function DuplicateGroupView({
+  groups,
+  currentAssetId,
+  assetsById,
+  onSelectAsset,
+}: {
+  groups: MemoryDuplicateGroup[];
+  currentAssetId: string;
+  assetsById: Map<string, ClaudeMemoryAsset>;
+  onSelectAsset?: (asset: ClaudeMemoryAsset) => void;
+}) {
+  return (
+    <div className="mt-3 space-y-3">
+      <p className="text-xs font-medium text-blue-700 dark:text-blue-400">重复组</p>
+      {groups.map((group) => {
+        const suggestionLabel =
+          group.suggestion === "merge" ? "建议合并"
+            : group.suggestion === "review" ? "建议人工审查"
+              : group.suggestion;
+        return (
+          <div
+            key={group.group_id}
+            className={cn(
+              "rounded-lg border p-3",
+              "border-blue-200 bg-blue-50 dark:border-blue-900/50 dark:bg-blue-950/20",
+            )}
+          >
+            <div className="mb-2 flex items-center gap-3 text-xs">
+              <span className="font-semibold text-blue-700 dark:text-blue-400">相似度 {Math.round(group.similarity * 100)}%</span>
+              <span className="text-blue-600 dark:text-blue-300">{suggestionLabel}</span>
+              <span className="text-muted-foreground">{group.asset_ids.length} 个资产</span>
+            </div>
+            {group.overlap_content && (
+              <p className="mb-2 text-xs text-muted-foreground truncate" title={group.overlap_content}>
+                重叠摘要：{group.overlap_content}
+                <span className="ml-1 text-muted-foreground/70">（归一化摘要，非原文）</span>
+              </p>
+            )}
+            <div className="space-y-1">
+              {group.asset_ids.map((aid) => {
+                const peer = assetsById.get(aid);
+                const isCurrent = aid === currentAssetId;
+                const canLocate = peer?.exists ?? false;
+                return (
+                  <div
+                    key={aid}
+                    className={cn(
+                      "flex items-center gap-2 rounded px-2 py-1 text-xs",
+                      isCurrent ? "bg-primary/10 text-primary font-medium" : canLocate ? "hover:bg-muted/60 cursor-pointer" : "text-muted-foreground/60",
+                    )}
+                    role={canLocate && !isCurrent ? "button" : undefined}
+                    tabIndex={canLocate && !isCurrent ? 0 : undefined}
+                    onClick={
+                      canLocate && !isCurrent && peer && onSelectAsset
+                        ? () => onSelectAsset(peer)
+                        : undefined
+                    }
+                    onKeyDown={
+                      canLocate && !isCurrent && peer && onSelectAsset
+                        ? (e) => {
+                            if (e.key === "Enter" || e.key === " ") {
+                              e.preventDefault();
+                              onSelectAsset(peer);
+                            }
+                          }
+                        : undefined
+                    }
+                  >
+                    <span className="min-w-0 flex-1 truncate">
+                      {peer?.logical_path ?? aid}
+                    </span>
+                    {isCurrent && (
+                      <span className="shrink-0 rounded bg-primary/20 px-1 text-[10px] font-medium text-primary">
+                        当前
+                      </span>
+                    )}
+                    {!canLocate && (
+                      <span className="shrink-0 text-[10px] text-muted-foreground/60">
+                        不可定位
+                      </span>
+                    )}
+                  </div>
+                );
+              })}
+            </div>
+          </div>
+        );
+      })}
+    </div>
+  );
 }

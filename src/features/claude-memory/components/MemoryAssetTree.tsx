@@ -13,6 +13,7 @@ interface MemoryAssetTreeProps {
   onSelectAsset: (asset: ClaudeMemoryAsset) => void;
   staleAssetIds?: Set<string>;
   duplicateAssetIds?: Set<string>;
+  secretAssetIds?: Set<string>;
 }
 
 const GROUP_ORDER: AssetGroup[] = [
@@ -110,6 +111,7 @@ export function MemoryAssetTree({
   onSelectAsset,
   staleAssetIds,
   duplicateAssetIds,
+  secretAssetIds,
 }: MemoryAssetTreeProps) {
   const grouped = groupAssets(assets);
 
@@ -161,7 +163,7 @@ export function MemoryAssetTree({
                       <span className="min-w-0 flex-1 truncate text-sm font-medium">
                         {getFileName(asset.logical_path)}
                       </span>
-                      {asset.exists && (staleAssetIds?.has(asset.id) || duplicateAssetIds?.has(asset.id)) && (
+                      {asset.exists && (staleAssetIds?.has(asset.id) || duplicateAssetIds?.has(asset.id) || secretAssetIds?.has(asset.id)) && (
                         <span className="flex shrink-0 items-center gap-1">
                           {staleAssetIds?.has(asset.id) && (
                             <span className="rounded bg-amber-100 px-1 text-[10px] font-medium text-amber-700 dark:bg-amber-900/40 dark:text-amber-400">
@@ -171,6 +173,11 @@ export function MemoryAssetTree({
                           {duplicateAssetIds?.has(asset.id) && (
                             <span className="rounded bg-blue-100 px-1 text-[10px] font-medium text-blue-700 dark:bg-blue-900/40 dark:text-blue-400">
                               dup
+                            </span>
+                          )}
+                          {secretAssetIds?.has(asset.id) && (
+                            <span className="rounded bg-red-100 px-1 text-[10px] font-medium text-red-700 dark:bg-red-900/40 dark:text-red-400">
+                              secret
                             </span>
                           )}
                         </span>
