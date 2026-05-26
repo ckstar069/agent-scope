@@ -11,6 +11,8 @@ interface MemoryAssetTreeProps {
   assets: ClaudeMemoryAsset[];
   selectedAsset: ClaudeMemoryAsset | null;
   onSelectAsset: (asset: ClaudeMemoryAsset) => void;
+  staleAssetIds?: Set<string>;
+  duplicateAssetIds?: Set<string>;
 }
 
 const GROUP_ORDER: AssetGroup[] = [
@@ -106,6 +108,8 @@ export function MemoryAssetTree({
   assets,
   selectedAsset,
   onSelectAsset,
+  staleAssetIds,
+  duplicateAssetIds,
 }: MemoryAssetTreeProps) {
   const grouped = groupAssets(assets);
 
@@ -154,9 +158,23 @@ export function MemoryAssetTree({
                           aria-hidden="true"
                         />
                       )}
-                      <span className="truncate text-sm font-medium">
+                      <span className="min-w-0 flex-1 truncate text-sm font-medium">
                         {getFileName(asset.logical_path)}
                       </span>
+                      {asset.exists && (staleAssetIds?.has(asset.id) || duplicateAssetIds?.has(asset.id)) && (
+                        <span className="flex shrink-0 items-center gap-1">
+                          {staleAssetIds?.has(asset.id) && (
+                            <span className="rounded bg-amber-100 px-1 text-[10px] font-medium text-amber-700 dark:bg-amber-900/40 dark:text-amber-400">
+                              stale
+                            </span>
+                          )}
+                          {duplicateAssetIds?.has(asset.id) && (
+                            <span className="rounded bg-blue-100 px-1 text-[10px] font-medium text-blue-700 dark:bg-blue-900/40 dark:text-blue-400">
+                              dup
+                            </span>
+                          )}
+                        </span>
+                      )}
                     </div>
                     <div className="flex items-center gap-2 pl-5">
                       <span className="text-[10px] text-muted-foreground">

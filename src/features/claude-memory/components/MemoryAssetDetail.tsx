@@ -1,4 +1,4 @@
-import { AlertTriangle, FileWarning, Loader2, Ruler, Scale } from "lucide-react";
+import { AlertTriangle, Clock, Copy, FileWarning, Loader2, Ruler, Scale } from "lucide-react";
 
 import { MarkdownRenderer } from "@/components/MarkdownRenderer";
 
@@ -9,9 +9,12 @@ import { useClaudeMemoryFile } from "../hooks/useClaudeMemory";
 interface MemoryAssetDetailProps {
   asset: ClaudeMemoryAsset | null;
   projectPath?: string;
+  isStale?: boolean;
+  staleDays?: number;
+  isDuplicate?: boolean;
 }
 
-export function MemoryAssetDetail({ asset, projectPath }: MemoryAssetDetailProps) {
+export function MemoryAssetDetail({ asset, projectPath, isStale, staleDays, isDuplicate }: MemoryAssetDetailProps) {
   const { content, isLoading, error } = useClaudeMemoryFile(asset, projectPath);
 
   if (!asset) {
@@ -25,7 +28,7 @@ export function MemoryAssetDetail({ asset, projectPath }: MemoryAssetDetailProps
   return (
     <div className="flex h-full flex-col">
       {/* 元数据头部 —— 始终显示 */}
-      <AssetMetaHeader asset={asset} />
+      <AssetMetaHeader asset={asset} isStale={isStale} staleDays={staleDays} isDuplicate={isDuplicate} />
 
       {/* 内容区域 */}
       {!asset.exists && (
@@ -83,7 +86,7 @@ export function MemoryAssetDetail({ asset, projectPath }: MemoryAssetDetailProps
   );
 }
 
-function AssetMetaHeader({ asset }: { asset: ClaudeMemoryAsset }) {
+function AssetMetaHeader({ asset, isStale, staleDays, isDuplicate }: { asset: ClaudeMemoryAsset; isStale?: boolean; staleDays?: number; isDuplicate?: boolean }) {
   const isTooLong =
     asset.asset_type === "auto_memory_index" &&
     asset.line_count != null &&
@@ -120,6 +123,21 @@ function AssetMetaHeader({ asset }: { asset: ClaudeMemoryAsset }) {
           <span className="inline-flex items-center gap-1 rounded bg-red-100 px-2 py-0.5 text-xs font-medium text-red-700 dark:bg-red-950/40 dark:text-red-400">
             <AlertTriangle className="size-3" aria-hidden="true" />
             MEMORY.md 过长（{asset.line_count} 行）
+          </span>
+        )}
+        {isStale && (
+          <span
+            className="inline-flex items-center gap-1 rounded bg-amber-100 px-2 py-0.5 text-xs font-medium text-amber-700 dark:bg-amber-950/40 dark:text-amber-400"
+            title={staleDays != null ? `已 ${staleDays} 天未修改` : undefined}
+          >
+            <Clock className="size-3" aria-hidden="true" />
+            stale{staleDays != null ? ` ${staleDays}d` : ""}
+          </span>
+        )}
+        {isDuplicate && (
+          <span className="inline-flex items-center gap-1 rounded bg-blue-100 px-2 py-0.5 text-xs font-medium text-blue-700 dark:bg-blue-950/40 dark:text-blue-400">
+            <Copy className="size-3" aria-hidden="true" />
+            duplicate
           </span>
         )}
       </div>

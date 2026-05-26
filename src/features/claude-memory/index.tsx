@@ -14,13 +14,33 @@ import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Switch } from "@/components/ui/switch";
 
-import type { ClaudeMemoryAsset } from "./types";
+import type { ClaudeMemoryAsset, MemoryHealthReport } from "./types";
 import { useMemoryHealth } from "./hooks/useClaudeMemory";
 
 import { LoadChainSimulator } from "./components/LoadChainSimulator";
 import { MemoryAssetDetail } from "./components/MemoryAssetDetail";
 import { MemoryAssetTree } from "./components/MemoryAssetTree";
 import { useClaudeMemory } from "./hooks/useClaudeMemory";
+
+/** 从 healthReport 派生各资产的健康标记 */
+function deriveHealthSets(report: MemoryHealthReport | null) {
+  const staleAssetIds = new Set<string>();
+  const duplicateAssetIds = new Set<string>();
+  const staleDaysByAssetId = new Map<string, number>();
+
+  if (!report) return { staleAssetIds, duplicateAssetIds, staleDaysByAssetId };
+
+  for (const s of report.stale_assets) {
+    staleAssetIds.add(s.asset_id);
+    if (s.stale_days != null) staleDaysByAssetId.set(s.asset_id, s.stale_days);
+  }
+  for (const g of report.duplicate_groups) {
+    for (const aid of g.asset_ids) {
+      duplicateAssetIds.add(aid);
+    }
+  }
+  return { staleAssetIds, duplicateAssetIds, staleDaysByAssetId };
+}
 
 interface ClaudeMemoryProps {
   projectPath?: string;
@@ -38,9 +58,8 @@ export function ClaudeMemory({ projectPath, page = "assets" }: ClaudeMemoryProps
 function ClaudeMemoryAssets({ projectPath }: { projectPath?: string }) {
   const { overview, isLoading, error, refresh } = useClaudeMemory(projectPath);
   const { report: healthReport } = useMemoryHealth(projectPath);
-  const [selectedAsset, setSelectedAsset] = useState<ClaudeMemoryAsset | null>(
-    null,
-  );
+  const healthSets = useMemo(() => deriveHealthSets(healthReport), [healthReport]);
+  const [selectedAsset, setSelectedAsset] = useState<ClaudeMemoryAsset | null>(null);
   const [hideMissing, setHideMissing] = useState(true);
 
   const visibleAssets = useMemo(() => {
@@ -56,6 +75,15 @@ function ClaudeMemoryAssets({ projectPath }: { projectPath?: string }) {
       setSelectedAsset(null);
     }
   }, [visibleAssets, selectedAsset]);
+
+  /** 选中 issue 关联的第一个存在资产 */
+  const selectFirstIssueAsset = (issueAssetIds: string[]) => {
+    if (!overview || issueAssetIds.length === 0) return;
+    const target = overview.assets.find(
+      (a) => a.exists && issueAssetIds.includes(a.id),
+    );
+    if (target) setSelectedAsset(target);
+  };
 
   return (
     <section className="flex h-full flex-col gap-4">
@@ -195,6 +223,8 @@ function ClaudeMemoryAssets({ projectPath }: { projectPath?: string }) {
                   assets={visibleAssets}
                   selectedAsset={selectedAsset}
                   onSelectAsset={setSelectedAsset}
+                  staleAssetIds={healthSets.staleAssetIds}
+                  duplicateAssetIds={healthSets.duplicateAssetIds}
                 />
               </CardContent>
             </Card>
@@ -203,6 +233,9 @@ function ClaudeMemoryAssets({ projectPath }: { projectPath?: string }) {
                 <MemoryAssetDetail
                   asset={selectedAsset}
                   projectPath={projectPath}
+                  isStale={selectedAsset ? healthSets.staleAssetIds.has(selectedAsset.id) : false}
+                  staleDays={selectedAsset ? healthSets.staleDaysByAssetId.get(selectedAsset.id) : undefined}
+                  isDuplicate={selectedAsset ? healthSets.duplicateAssetIds.has(selectedAsset.id) : false}
                 />
               </CardContent>
             </Card>
@@ -238,7 +271,25 @@ function ClaudeMemoryAssets({ projectPath }: { projectPath?: string }) {
                   <div className="space-y-2">
                     <p className="text-xs font-medium text-muted-foreground">主要问题</p>
                     {healthReport.top_issues.map((issue, i) => (
-                      <div key={i} className={`flex items-start gap-2 rounded-lg border p-2 text-xs ${issue.severity === "critical" ? "border-red-200 bg-red-50 dark:border-red-900/50 dark:bg-red-950/20" : issue.severity === "warning" ? "border-amber-200 bg-amber-50 dark:border-amber-900/50 dark:bg-amber-950/20" : "border-border bg-muted/30"}`}>
+                      <div
+                        key={i}
+                        className={`flex items-start gap-2 rounded-lg border p-2 text-xs ${
+                          issue.severity === "critical"
+                            ? "border-red-200 bg-red-50 dark:border-red-900/50 dark:bg-red-950/20"
+                            : issue.severity === "warning"
+                              ? "border-amber-200 bg-amber-50 dark:border-amber-900/50 dark:bg-amber-950/20"
+                              : "border-border bg-muted/30"
+                        } ${issue.asset_ids.length > 0 ? "cursor-pointer hover:brightness-95" : ""}`}
+                        role={issue.asset_ids.length > 0 ? "button" : undefined}
+                        tabIndex={issue.asset_ids.length > 0 ? 0 : undefined}
+                        onClick={() => selectFirstIssueAsset(issue.asset_ids)}
+                        onKeyDown={(e) => {
+                          if (e.key === "Enter" || e.key === " ") {
+                            e.preventDefault();
+                            selectFirstIssueAsset(issue.asset_ids);
+                          }
+                        }}
+                      >
                         <span className={`shrink-0 font-medium ${issue.severity === "critical" ? "text-red-600" : issue.severity === "warning" ? "text-amber-600" : "text-muted-foreground"}`}>{issue.severity}</span>
                         <div className="min-w-0">
                           <p className="truncate" title={issue.message}>{issue.message}</p>
