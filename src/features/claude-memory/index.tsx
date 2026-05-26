@@ -13,6 +13,7 @@ import {
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Switch } from "@/components/ui/switch";
+import { cn } from "@/lib/utils";
 
 import type { ClaudeMemoryAsset, MemoryHealthReport } from "./types";
 import { useMemoryHealth } from "./hooks/useClaudeMemory";
@@ -27,8 +28,9 @@ function deriveHealthSets(report: MemoryHealthReport | null) {
   const staleAssetIds = new Set<string>();
   const duplicateAssetIds = new Set<string>();
   const staleDaysByAssetId = new Map<string, number>();
+  const issueAssetIds = new Set<string>();
 
-  if (!report) return { staleAssetIds, duplicateAssetIds, staleDaysByAssetId };
+  if (!report) return { staleAssetIds, duplicateAssetIds, staleDaysByAssetId, issueAssetIds };
 
   for (const s of report.stale_assets) {
     staleAssetIds.add(s.asset_id);
@@ -39,7 +41,12 @@ function deriveHealthSets(report: MemoryHealthReport | null) {
       duplicateAssetIds.add(aid);
     }
   }
-  return { staleAssetIds, duplicateAssetIds, staleDaysByAssetId };
+  for (const issue of report.top_issues) {
+    for (const aid of issue.asset_ids) {
+      issueAssetIds.add(aid);
+    }
+  }
+  return { staleAssetIds, duplicateAssetIds, staleDaysByAssetId, issueAssetIds };
 }
 
 interface ClaudeMemoryProps {
@@ -61,13 +68,17 @@ function ClaudeMemoryAssets({ projectPath }: { projectPath?: string }) {
   const healthSets = useMemo(() => deriveHealthSets(healthReport), [healthReport]);
   const [selectedAsset, setSelectedAsset] = useState<ClaudeMemoryAsset | null>(null);
   const [hideMissing, setHideMissing] = useState(true);
+  const [healthFilter, setHealthFilter] = useState<"all" | "stale" | "duplicate" | "issue">("all");
 
   const visibleAssets = useMemo(() => {
     if (!overview) return [];
-    return hideMissing
-      ? overview.assets.filter((a) => a.exists)
-      : overview.assets;
-  }, [overview, hideMissing]);
+    let assets = overview.assets;
+    if (hideMissing) assets = assets.filter((a) => a.exists);
+    if (healthFilter === "stale") assets = assets.filter((a) => healthSets.staleAssetIds.has(a.id));
+    else if (healthFilter === "duplicate") assets = assets.filter((a) => healthSets.duplicateAssetIds.has(a.id));
+    else if (healthFilter === "issue") assets = assets.filter((a) => healthSets.issueAssetIds.has(a.id));
+    return assets;
+  }, [overview, hideMissing, healthFilter, healthSets]);
 
   // 切换隐藏不存在时，如果当前选中项被隐藏则清除选中
   useEffect(() => {
@@ -219,6 +230,31 @@ function ClaudeMemoryAssets({ projectPath }: { projectPath?: string }) {
                 </div>
               </CardHeader>
               <CardContent className="flex-1 p-0">
+                <div className="flex items-center gap-1 border-b border-border px-3 py-2">
+                  {(["all", "stale", "duplicate", "issue"] as const).map((f) => {
+                    const labels: Record<typeof f, string> = {
+                      all: "全部",
+                      stale: "stale",
+                      duplicate: "duplicate",
+                      issue: "有问题",
+                    };
+                    return (
+                      <button
+                        key={f}
+                        type="button"
+                        onClick={() => setHealthFilter(f)}
+                        className={cn(
+                          "rounded-md px-2 py-1 text-xs font-medium transition-colors",
+                          healthFilter === f
+                            ? "bg-primary/10 text-primary"
+                            : "text-muted-foreground hover:bg-muted/60",
+                        )}
+                      >
+                        {labels[f]}
+                      </button>
+                    );
+                  })}
+                </div>
                 <MemoryAssetTree
                   assets={visibleAssets}
                   selectedAsset={selectedAsset}
@@ -270,33 +306,50 @@ function ClaudeMemoryAssets({ projectPath }: { projectPath?: string }) {
                 {healthReport.top_issues.length > 0 && (
                   <div className="space-y-2">
                     <p className="text-xs font-medium text-muted-foreground">主要问题</p>
-                    {healthReport.top_issues.map((issue, i) => (
-                      <div
-                        key={i}
-                        className={`flex items-start gap-2 rounded-lg border p-2 text-xs ${
-                          issue.severity === "critical"
-                            ? "border-red-200 bg-red-50 dark:border-red-900/50 dark:bg-red-950/20"
-                            : issue.severity === "warning"
-                              ? "border-amber-200 bg-amber-50 dark:border-amber-900/50 dark:bg-amber-950/20"
-                              : "border-border bg-muted/30"
-                        } ${issue.asset_ids.length > 0 ? "cursor-pointer hover:brightness-95" : ""}`}
-                        role={issue.asset_ids.length > 0 ? "button" : undefined}
-                        tabIndex={issue.asset_ids.length > 0 ? 0 : undefined}
-                        onClick={() => selectFirstIssueAsset(issue.asset_ids)}
-                        onKeyDown={(e) => {
-                          if (e.key === "Enter" || e.key === " ") {
-                            e.preventDefault();
-                            selectFirstIssueAsset(issue.asset_ids);
+                    {healthReport.top_issues.map((issue, i) => {
+                      const locatableCount = overview
+                        ? issue.asset_ids.filter((id) =>
+                            overview.assets.some((a) => a.exists && a.id === id),
+                          ).length
+                        : 0;
+                      const canLocate = locatableCount > 0;
+                      return (
+                        <div
+                          key={i}
+                          className={cn(
+                            "flex items-start gap-2 rounded-lg border p-2 text-xs",
+                            issue.severity === "critical"
+                              ? "border-red-200 bg-red-50 dark:border-red-900/50 dark:bg-red-950/20"
+                              : issue.severity === "warning"
+                                ? "border-amber-200 bg-amber-50 dark:border-amber-900/50 dark:bg-amber-950/20"
+                                : "border-border bg-muted/30",
+                            canLocate && "cursor-pointer hover:brightness-95",
+                          )}
+                          role={canLocate ? "button" : undefined}
+                          tabIndex={canLocate ? 0 : undefined}
+                          onClick={canLocate ? () => selectFirstIssueAsset(issue.asset_ids) : undefined}
+                          onKeyDown={
+                            canLocate
+                              ? (e) => {
+                                  if (e.key === "Enter" || e.key === " ") {
+                                    e.preventDefault();
+                                    selectFirstIssueAsset(issue.asset_ids);
+                                  }
+                                }
+                              : undefined
                           }
-                        }}
-                      >
-                        <span className={`shrink-0 font-medium ${issue.severity === "critical" ? "text-red-600" : issue.severity === "warning" ? "text-amber-600" : "text-muted-foreground"}`}>{issue.severity}</span>
-                        <div className="min-w-0">
-                          <p className="truncate" title={issue.message}>{issue.message}</p>
-                          <p className="text-muted-foreground truncate" title={issue.suggestion}>→ {issue.suggestion}</p>
+                        >
+                          <span className={`shrink-0 font-medium ${issue.severity === "critical" ? "text-red-600" : issue.severity === "warning" ? "text-amber-600" : "text-muted-foreground"}`}>{issue.severity}</span>
+                          <div className="min-w-0 flex-1">
+                            <p className="truncate" title={issue.message}>{issue.message}</p>
+                            <p className="text-muted-foreground truncate" title={issue.suggestion}>→ {issue.suggestion}</p>
+                          </div>
+                          {issue.asset_ids.length > 0 && (
+                            <span className="shrink-0 text-muted-foreground">{locatableCount} 个资产</span>
+                          )}
                         </div>
-                      </div>
-                    ))}
+                      );
+                    })}
                   </div>
                 )}
               </div>
