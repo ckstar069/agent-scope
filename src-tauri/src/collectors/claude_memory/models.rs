@@ -206,3 +206,41 @@ pub struct SerMemoryDuplicateGroup {
     pub overlap_content: String,
     pub suggestion: String,
 }
+
+// ============================================================================
+// Context Pressure 数据结构 (Phase 3 Batch 1)
+// ============================================================================
+
+/// 上下文压力报告
+#[derive(Debug, Clone, Serialize)]
+pub struct SerContextPressure {
+    pub total_assets: usize,
+    pub existing_assets: usize,
+    pub total_lines: usize,
+    pub total_bytes: u64,
+    pub estimated_tokens: usize,
+    pub pressure_ratio: f64,
+    pub level: String, // "normal" | "warning" | "critical"
+    pub heavy_assets: Vec<SerPressureHeavyAsset>,
+    pub alerts: Vec<SerPressureAlert>,
+}
+
+/// 重资产信息
+#[derive(Debug, Clone, Serialize)]
+pub struct SerPressureHeavyAsset {
+    pub asset_id: String,
+    pub asset_type: String,
+    pub logical_path: String,
+    pub line_count: Option<usize>,
+    pub byte_size: Option<u64>,
+}
+
+/// 压力预警项
+#[derive(Debug, Clone, Serialize)]
+pub struct SerPressureAlert {
+    pub metric: String,
+    pub current: f64,
+    pub threshold: f64,
+    pub severity: String, // "info" | "warning" | "critical"
+    pub message: String,
+}

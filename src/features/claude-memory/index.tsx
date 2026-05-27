@@ -8,6 +8,8 @@ import {
   Loader2,
   RefreshCw,
   ShieldCheck,
+  X,
+  Zap,
 } from "lucide-react";
 
 import { Button } from "@/components/ui/button";
@@ -15,13 +17,12 @@ import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Switch } from "@/components/ui/switch";
 import { cn } from "@/lib/utils";
 
-import type { ClaudeMemoryAsset, MemoryDuplicateGroup, MemoryHealthReport } from "./types";
-import { useMemoryHealth } from "./hooks/useClaudeMemory";
+import type { ClaudeMemoryAsset, ContextPressure, MemoryDuplicateGroup, MemoryHealthReport } from "./types";
+import { useClaudeMemory, useContextPressure, useMemoryHealth } from "./hooks/useClaudeMemory";
 
 import { LoadChainSimulator } from "./components/LoadChainSimulator";
 import { MemoryAssetDetail } from "./components/MemoryAssetDetail";
 import { MemoryAssetTree } from "./components/MemoryAssetTree";
-import { useClaudeMemory } from "./hooks/useClaudeMemory";
 
 /** 从 healthReport 派生各资产的健康标记 */
 function deriveHealthSets(report: MemoryHealthReport | null, assets: ClaudeMemoryAsset[]) {
@@ -71,12 +72,15 @@ export function ClaudeMemory({ projectPath, page = "assets" }: ClaudeMemoryProps
 }
 
 function ClaudeMemoryAssets({ projectPath }: { projectPath?: string }) {
-  const { overview, isLoading, error, refresh } = useClaudeMemory(projectPath);
-  const { report: healthReport } = useMemoryHealth(projectPath);
+  const { overview, isLoading, error, refresh: refreshOverview } = useClaudeMemory(projectPath);
+  const { report: healthReport, isLoading: healthLoading, refresh: refreshHealth } = useMemoryHealth(projectPath);
+  const { pressure, isLoading: pressureLoading, refresh: refreshPressure } = useContextPressure(projectPath);
+  const [bannerDismissed, setBannerDismissed] = useState(false);
   const healthSets = useMemo(() => deriveHealthSets(healthReport, overview?.assets ?? []), [healthReport, overview?.assets]);
   const [selectedAsset, setSelectedAsset] = useState<ClaudeMemoryAsset | null>(null);
   const [hideMissing, setHideMissing] = useState(true);
   const [healthFilter, setHealthFilter] = useState<"all" | "stale" | "duplicate" | "issue" | "secret">("all");
+  const isRefreshing = isLoading || healthLoading || pressureLoading;
 
   const visibleAssets = useMemo(() => {
     if (!overview) return [];
@@ -96,13 +100,23 @@ function ClaudeMemoryAssets({ projectPath }: { projectPath?: string }) {
     }
   }, [visibleAssets, selectedAsset]);
 
+  /** 从外部链接/ banner 定位到资产，先切回全部过滤确保资产可见 */
+  const selectAssetFromExternalLink = (assetId: string) => {
+    if (!overview) return;
+    const target = overview.assets.find((a) => a.exists && a.id === assetId);
+    if (target) {
+      setHealthFilter("all");
+      setSelectedAsset(target);
+    }
+  };
+
   /** 选中 issue 关联的第一个存在资产 */
   const selectFirstIssueAsset = (issueAssetIds: string[]) => {
     if (!overview || issueAssetIds.length === 0) return;
     const target = overview.assets.find(
       (a) => a.exists && issueAssetIds.includes(a.id),
     );
-    if (target) setSelectedAsset(target);
+    if (target) selectAssetFromExternalLink(target.id);
   };
 
   return (
@@ -121,10 +135,16 @@ function ClaudeMemoryAssets({ projectPath }: { projectPath?: string }) {
         <Button
           type="button"
           variant="outline"
-          disabled={isLoading}
-          onClick={() => refresh(true)}
+          disabled={isRefreshing}
+          onClick={() => {
+            void Promise.all([
+              refreshOverview(true),
+              refreshHealth(true),
+              refreshPressure(true),
+            ]);
+          }}
         >
-          {isLoading ? (
+          {isRefreshing ? (
             <Loader2 className="mr-2 size-4 animate-spin" aria-hidden="true" />
           ) : (
             <RefreshCw className="mr-2 size-4" aria-hidden="true" />
@@ -152,6 +172,15 @@ function ClaudeMemoryAssets({ projectPath }: { projectPath?: string }) {
       {/* 内容 */}
       {overview && (
         <div className="flex flex-1 flex-col gap-4 overflow-hidden">
+          {/* Context Pressure Banner */}
+          {pressure && !bannerDismissed && pressure.level !== "normal" && (
+            <ContextPressureBanner
+              pressure={pressure}
+              onDismiss={() => setBannerDismissed(true)}
+              onSelectAsset={selectAssetFromExternalLink}
+            />
+          )}
+
           {/* 顶部统计 */}
           <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-5">
             <StatCard
@@ -373,6 +402,85 @@ function ClaudeMemoryAssets({ projectPath }: { projectPath?: string }) {
         </div>
       )}
     </section>
+  );
+}
+
+function ContextPressureBanner({
+  pressure,
+  onDismiss,
+  onSelectAsset,
+}: {
+  pressure: ContextPressure;
+  onDismiss: () => void;
+  onSelectAsset: (assetId: string) => void;
+}) {
+  const isCritical = pressure.level === "critical";
+  const borderClass = isCritical
+    ? "border-red-200 bg-red-50 dark:border-red-900/50 dark:bg-red-950/20"
+    : "border-amber-200 bg-amber-50 dark:border-amber-900/50 dark:bg-amber-950/20";
+  const textClass = isCritical
+    ? "text-red-800 dark:text-red-400"
+    : "text-amber-800 dark:text-amber-400";
+  const iconClass = isCritical
+    ? "text-red-600 dark:text-red-400"
+    : "text-amber-600 dark:text-amber-400";
+
+  return (
+    <div className={`rounded-lg border px-4 py-3 ${borderClass}`}>
+      <div className="flex items-start gap-3">
+        <Zap className={`mt-0.5 size-4 shrink-0 ${iconClass}`} aria-hidden="true" />
+        <div className="min-w-0 flex-1 space-y-2">
+          <div className="flex items-center gap-2">
+            <span className={`text-sm font-semibold ${textClass}`}>
+              上下文压力 {pressure.level === "critical" ? "过高" : "偏高"}
+            </span>
+            <span className="text-xs text-muted-foreground">
+              {pressure.estimated_tokens >= 1000
+                ? `${(pressure.estimated_tokens / 1000).toFixed(0)}K`
+                : pressure.estimated_tokens}{" "}
+              tokens / 200K
+            </span>
+          </div>
+          {pressure.alerts.length > 0 && (
+            <div className="space-y-1">
+              {pressure.alerts.map((alert, i) => (
+                <p key={i} className="text-xs text-muted-foreground">
+                  {alert.message}
+                </p>
+              ))}
+            </div>
+          )}
+          {pressure.heavy_assets.length > 0 && (
+            <div className="flex flex-wrap gap-1.5">
+              {pressure.heavy_assets.slice(0, 3).map((asset) => (
+                <button
+                  key={asset.asset_id}
+                  type="button"
+                  onClick={() => onSelectAsset(asset.asset_id)}
+                  className="inline-flex max-w-[200px] items-center gap-1 rounded bg-background/60 px-2 py-0.5 text-xs text-muted-foreground hover:bg-background"
+                  title={asset.logical_path}
+                >
+                  <span className="truncate">{asset.logical_path}</span>
+                </button>
+              ))}
+              {pressure.heavy_assets.length > 3 && (
+                <span className="text-xs text-muted-foreground">
+                  +{pressure.heavy_assets.length - 3}
+                </span>
+              )}
+            </div>
+          )}
+        </div>
+        <button
+          type="button"
+          onClick={onDismiss}
+          className="shrink-0 rounded p-1 text-muted-foreground hover:bg-background/60"
+          aria-label="关闭提示"
+        >
+          <X className="size-3.5" aria-hidden="true" />
+        </button>
+      </div>
+    </div>
   );
 }
 

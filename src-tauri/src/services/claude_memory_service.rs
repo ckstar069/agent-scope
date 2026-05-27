@@ -5,8 +5,9 @@ use crate::app_state::AppState;
 use crate::collectors::claude_memory::health_checker::compute_health_report;
 use crate::collectors::claude_memory::load_chain::simulate_load_chain;
 use crate::collectors::claude_memory::models::{
-    SerClaudeMemoryScanResult, SerLoadChain, SerMemoryHealthReport,
+    SerClaudeMemoryScanResult, SerContextPressure, SerLoadChain, SerMemoryHealthReport,
 };
+use crate::collectors::claude_memory::pressure::compute_context_pressure;
 use crate::collectors::claude_memory::path_resolver::resolve_claude_config_dir;
 use crate::collectors::claude_memory::scanner::{scan_claude_memory, scan_project_level};
 use crate::collectors::claude_memory::secret_scanner::SecretScanner;
@@ -184,6 +185,16 @@ pub fn get_memory_health_report_service(
 ) -> Result<SerMemoryHealthReport, String> {
     let scan_result = get_claude_memory_overview_service(project_path, force, state)?;
     Ok(compute_health_report(&scan_result.assets))
+}
+
+/// 获取上下文压力报告
+pub fn get_context_pressure_service(
+    project_path: Option<String>,
+    force: bool,
+    state: &AppState,
+) -> Result<SerContextPressure, String> {
+    let scan_result = get_claude_memory_overview_service(project_path, force, state)?;
+    Ok(compute_context_pressure(&scan_result.assets))
 }
 
 // ─── 辅助：重建 summary ───

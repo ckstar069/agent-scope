@@ -169,3 +169,33 @@ export interface MemoryHealthReport {
   stale_assets: MemoryStaleness[];
   duplicate_groups: MemoryDuplicateGroup[];
 }
+
+// ─── Context Pressure (Phase 3 Batch 1) ───
+
+export interface PressureHeavyAsset {
+  asset_id: string;
+  asset_type: string;
+  logical_path: string;
+  line_count: number | null;
+  byte_size: number | null;
+}
+
+export interface PressureAlert {
+  metric: string;
+  current: number;
+  threshold: number;
+  severity: string;
+  message: string;
+}
+
+export interface ContextPressure {
+  total_assets: number;
+  existing_assets: number;
+  total_lines: number;
+  total_bytes: number;
+  estimated_tokens: number;
+  pressure_ratio: number;
+  level: string;
+  heavy_assets: PressureHeavyAsset[];
+  alerts: PressureAlert[];
+}

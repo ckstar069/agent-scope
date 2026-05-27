@@ -48,3 +48,7 @@ export function simulateClaudeMemoryLoadChain<T = unknown>(cwd: string) {
 export function getMemoryHealthReport<T = unknown>(projectPath?: string, force = false) {
   return tauriInvoke<T>("get_memory_health_report", { projectPath, force });
 }
+
+export function getContextPressure<T = unknown>(projectPath?: string, force = false) {
+  return tauriInvoke<T>("get_context_pressure", { projectPath, force });
+}

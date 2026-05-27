@@ -1,8 +1,8 @@
 import { useCallback, useEffect, useState } from "react";
 
-import { getClaudeMemoryFileContent, getClaudeMemoryOverview, getMemoryHealthReport } from "@/lib/api";
+import { getClaudeMemoryFileContent, getClaudeMemoryOverview, getContextPressure, getMemoryHealthReport } from "@/lib/api";
 
-import type { ClaudeMemoryOverview, ClaudeMemoryAsset, MemoryHealthReport } from "../types";
+import type { ClaudeMemoryOverview, ClaudeMemoryAsset, MemoryHealthReport, ContextPressure } from "../types";
 
 interface UseClaudeMemoryResult {
   overview: ClaudeMemoryOverview | null;
@@ -90,7 +90,7 @@ interface UseMemoryHealthResult {
   report: MemoryHealthReport | null;
   isLoading: boolean;
   error: string | null;
-  refresh: () => Promise<void>;
+  refresh: (force?: boolean) => Promise<void>;
 }
 
 export function useMemoryHealth(projectPath?: string): UseMemoryHealthResult {
@@ -98,11 +98,11 @@ export function useMemoryHealth(projectPath?: string): UseMemoryHealthResult {
   const [isLoading, setIsLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
-  const refresh = useCallback(async () => {
+  const refresh = useCallback(async (force = true) => {
     setIsLoading(true);
     setError(null);
     try {
-      const result = await getMemoryHealthReport<MemoryHealthReport>(projectPath);
+      const result = await getMemoryHealthReport<MemoryHealthReport>(projectPath, force);
       setReport(result);
     } catch (err) {
       setError(err instanceof Error ? err.message : String(err));
@@ -112,8 +112,40 @@ export function useMemoryHealth(projectPath?: string): UseMemoryHealthResult {
   }, [projectPath]);
 
   useEffect(() => {
-    refresh();
+    refresh(true);
   }, [refresh]);
 
   return { report, isLoading, error, refresh };
+}
+
+interface UseContextPressureResult {
+  pressure: ContextPressure | null;
+  isLoading: boolean;
+  error: string | null;
+  refresh: (force?: boolean) => Promise<void>;
+}
+
+export function useContextPressure(projectPath?: string): UseContextPressureResult {
+  const [pressure, setPressure] = useState<ContextPressure | null>(null);
+  const [isLoading, setIsLoading] = useState(false);
+  const [error, setError] = useState<string | null>(null);
+
+  const refresh = useCallback(async (force = true) => {
+    setIsLoading(true);
+    setError(null);
+    try {
+      const result = await getContextPressure<ContextPressure>(projectPath, force);
+      setPressure(result);
+    } catch (err) {
+      setError(err instanceof Error ? err.message : String(err));
+    } finally {
+      setIsLoading(false);
+    }
+  }, [projectPath]);
+
+  useEffect(() => {
+    refresh(true);
+  }, [refresh]);
+
+  return { pressure, isLoading, error, refresh };
 }
