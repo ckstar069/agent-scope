@@ -30,9 +30,10 @@
 | 分发形式 | 文件示例 | 使用方式 |
 |---------|---------|---------|
 | **.app Bundle** | `AgentScope.app` | 双击运行，或从 Launchpad 启动 |
-| **.dmg** | `AgentScope_0.3.1_x64.dmg` | 挂载后拖入 `Applications` 文件夹 |
+| **DMG 安装包** | `AgentScope_0.3.5_aarch64.dmg` | 挂载后拖入 `Applications` 文件夹 |
+| **Portable ZIP** | `AgentScope_0.3.5_aarch64_portable.zip` | 解压后直接运行 `AgentScope.app` |
 
-> **注意**：macOS 构建目前未集成到 GitLab CI 自动发布链中，需手动执行 `npm run tauri build`。正式 Release 产物以 Linux（deb + AppImage）和 Windows（NSIS exe + portable zip）为主。
+> **注意**：macOS 构建目前未集成到 GitLab CI 自动发布链中，需使用 `scripts/release-macos.sh` 在本机手动构建并上传。详见 `docs/release-macos.md`。
 
 ### 运行时文件
 
@@ -71,7 +72,7 @@
 
 ## 各形式对比
 
-| 特性 | AppImage / Portable zip | deb | NSIS exe | .app / .dmg |
+| 特性 | AppImage / Portable zip | deb | NSIS exe | DMG / .app (zip) |
 |-----|------------------------|-----|---------|-------------|
 | 是否需要安装 | 否 | 是 | 是 | 是（.app 可直接运行） |
 | 是否需要管理员权限 | 否 | 是 | 是 | 否 |

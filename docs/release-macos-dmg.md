@@ -1,5 +1,9 @@
 # macOS DMG 手动构建与发布
 
+> **此文档已废弃。** 请改用 [`docs/release-macos.md`](release-macos.md)，其中包含 DMG + Portable ZIP 两种产物的完整说明。
+> 
+> `scripts/release-macos-dmg.sh` 也已废弃，请改用 `scripts/release-macos.sh`。
+
 本文档说明如何在本地 macOS 机器上构建 AgentScope DMG 安装包，并手动上传到 GitLab Package Registry 和 Release。
 
 ## 前提条件

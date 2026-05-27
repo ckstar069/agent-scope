@@ -1146,21 +1146,18 @@ release:
 
 ### 9.9 macOS 手动构建说明
 
-macOS 产物（`.dmg`）不参与 CI，需要在本机手动构建：
+macOS 产物（DMG + Portable ZIP）不参与 CI，需要在本机使用 `scripts/release-macos.sh` 手动构建并上传：
 
 ```bash
-# 在本机执行
-npm ci
-npm run build
-cd src-tauri
-cargo tauri build --target aarch64-apple-darwin  # Apple Silicon
-cargo tauri build --target x86_64-apple-darwin   # Intel（如需要）
+# 完整构建+上传到 GitLab Package Registry 和 Release
+GITLAB_TOKEN=xxx GITLAB_PROJECT_ID=123 ./scripts/release-macos.sh --tag v0.3.5
 ```
 
-产物位置（Apple Silicon）：`src-tauri/target/aarch64-apple-darwin/release/bundle/dmg/*.dmg`
-产物位置（Intel）：`src-tauri/target/x86_64-apple-darwin/release/bundle/dmg/*.dmg`
+产物：
+- DMG：`src-tauri/target/*/release/bundle/dmg/AgentScope_{version}_{arch}.dmg`
+- Portable ZIP：`src-tauri/target/*/release/bundle/macos/AgentScope_{version}_{arch}_portable.zip`
 
-如需将 macOS 产物加入 GitLab Release，可手动上传到同一 Release 页面。
+详见 `docs/release-macos.md`。
 
 ---
 
