@@ -7,8 +7,8 @@ use crate::collectors::claude_memory::load_chain::simulate_load_chain;
 use crate::collectors::claude_memory::models::{
     SerClaudeMemoryScanResult, SerContextPressure, SerLoadChain, SerMemoryHealthReport,
 };
-use crate::collectors::claude_memory::pressure::compute_context_pressure;
 use crate::collectors::claude_memory::path_resolver::resolve_claude_config_dir;
+use crate::collectors::claude_memory::pressure::compute_context_pressure;
 use crate::collectors::claude_memory::scanner::{scan_claude_memory, scan_project_level};
 use crate::collectors::claude_memory::secret_scanner::SecretScanner;
 

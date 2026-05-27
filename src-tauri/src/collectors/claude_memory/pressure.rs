@@ -1,4 +1,6 @@
-use super::models::{SerClaudeMemoryAsset, SerContextPressure, SerPressureAlert, SerPressureHeavyAsset};
+use super::models::{
+    SerClaudeMemoryAsset, SerContextPressure, SerPressureAlert, SerPressureHeavyAsset,
+};
 
 /// 预估 token 上限（Claude 上下文窗口参考值）
 const TOKEN_BUDGET: f64 = 200_000.0;
@@ -25,15 +27,9 @@ pub fn compute_context_pressure(assets: &[SerClaudeMemoryAsset]) -> SerContextPr
     let existing_assets: Vec<&SerClaudeMemoryAsset> = assets.iter().filter(|a| a.exists).collect();
     let existing_count = existing_assets.len();
 
-    let total_lines: usize = existing_assets
-        .iter()
-        .filter_map(|a| a.line_count)
-        .sum();
+    let total_lines: usize = existing_assets.iter().filter_map(|a| a.line_count).sum();
 
-    let total_bytes: u64 = existing_assets
-        .iter()
-        .filter_map(|a| a.byte_size)
-        .sum();
+    let total_bytes: u64 = existing_assets.iter().filter_map(|a| a.byte_size).sum();
 
     // 保守估算：每字节约 0.5 个 token
     let estimated_tokens = ((total_bytes as f64) / 2.0).ceil() as usize;
@@ -95,7 +91,10 @@ pub fn compute_context_pressure(assets: &[SerClaudeMemoryAsset]) -> SerContextPr
             current: total_lines as f64,
             threshold: CRITICAL_LINES_THRESHOLD as f64,
             severity: "critical".to_string(),
-            message: format!("记忆文件总行数 {}，超过 {} 行建议拆分", total_lines, CRITICAL_LINES_THRESHOLD),
+            message: format!(
+                "记忆文件总行数 {}，超过 {} 行建议拆分",
+                total_lines, CRITICAL_LINES_THRESHOLD
+            ),
         });
     } else if total_lines >= WARNING_LINES_THRESHOLD {
         alerts.push(SerPressureAlert {
@@ -103,7 +102,10 @@ pub fn compute_context_pressure(assets: &[SerClaudeMemoryAsset]) -> SerContextPr
             current: total_lines as f64,
             threshold: WARNING_LINES_THRESHOLD as f64,
             severity: "warning".to_string(),
-            message: format!("记忆文件总行数 {}，超过 {} 行建议审查", total_lines, WARNING_LINES_THRESHOLD),
+            message: format!(
+                "记忆文件总行数 {}，超过 {} 行建议审查",
+                total_lines, WARNING_LINES_THRESHOLD
+            ),
         });
     }
 
@@ -171,8 +173,8 @@ pub fn compute_context_pressure(assets: &[SerClaudeMemoryAsset]) -> SerContextPr
 
 #[cfg(test)]
 mod tests {
-    use super::*;
     use super::super::models::SerClaudeMemoryAsset;
+    use super::*;
 
     fn make_asset(
         id: &str,
@@ -234,13 +236,15 @@ mod tests {
         // 60 个资产，每个 100 行 = 6000 行，超过 5000 警告线
         // bytes 设小一点避免触发 pressure_ratio critical
         let assets: Vec<SerClaudeMemoryAsset> = (0..60)
-            .map(|i| make_asset(
-                &format!("a{}", i),
-                "project_rule",
-                true,
-                Some(100),
-                Some(1_000),
-            ))
+            .map(|i| {
+                make_asset(
+                    &format!("a{}", i),
+                    "project_rule",
+                    true,
+                    Some(100),
+                    Some(1_000),
+                )
+            })
             .collect();
         let pressure = compute_context_pressure(&assets);
         assert_eq!(pressure.total_lines, 6_000);
@@ -256,18 +260,27 @@ mod tests {
         // estimated_tokens = 24000K / 2 = 12000K
         // pressure_ratio = 12000K / 200K = 60.0 → 远远超过 0.6 critical 线
         let assets: Vec<SerClaudeMemoryAsset> = (0..120)
-            .map(|i| make_asset(
-                &format!("a{}", i),
-                "project_rule",
-                true,
-                Some(100),
-                Some(200_000),
-            ))
+            .map(|i| {
+                make_asset(
+                    &format!("a{}", i),
+                    "project_rule",
+                    true,
+                    Some(100),
+                    Some(200_000),
+                )
+            })
             .collect();
         let pressure = compute_context_pressure(&assets);
-        assert!(pressure.pressure_ratio >= CRITICAL_RATIO_THRESHOLD, "pressure_ratio 应达到 critical: {}", pressure.pressure_ratio);
+        assert!(
+            pressure.pressure_ratio >= CRITICAL_RATIO_THRESHOLD,
+            "pressure_ratio 应达到 critical: {}",
+            pressure.pressure_ratio
+        );
         assert_eq!(pressure.level, "critical");
-        let ratio_alert = pressure.alerts.iter().find(|a| a.metric == "pressure_ratio");
+        let ratio_alert = pressure
+            .alerts
+            .iter()
+            .find(|a| a.metric == "pressure_ratio");
         assert!(ratio_alert.is_some(), "应有 pressure_ratio critical alert");
         assert_eq!(ratio_alert.unwrap().severity, "critical");
     }
@@ -277,14 +290,36 @@ mod tests {
         let assets = vec![
             make_asset("small", "project_claude_md", true, Some(50), Some(5_000)),
             make_asset("heavy_lines", "project_rule", true, Some(250), Some(50_000)),
-            make_asset("heavy_bytes", "global_skill", true, Some(100), Some(150_000)),
-            make_asset("both_heavy", "auto_memory_index", true, Some(300), Some(200_000)),
-            make_asset("missing", "project_claude_md", false, Some(500), Some(500_000)),
+            make_asset(
+                "heavy_bytes",
+                "global_skill",
+                true,
+                Some(100),
+                Some(150_000),
+            ),
+            make_asset(
+                "both_heavy",
+                "auto_memory_index",
+                true,
+                Some(300),
+                Some(200_000),
+            ),
+            make_asset(
+                "missing",
+                "project_claude_md",
+                false,
+                Some(500),
+                Some(500_000),
+            ),
         ];
         let pressure = compute_context_pressure(&assets);
         // 不存在的资产不应计入
         assert_eq!(pressure.heavy_assets.len(), 3);
-        let ids: Vec<&str> = pressure.heavy_assets.iter().map(|h| h.asset_id.as_str()).collect();
+        let ids: Vec<&str> = pressure
+            .heavy_assets
+            .iter()
+            .map(|h| h.asset_id.as_str())
+            .collect();
         assert!(ids.contains(&"heavy_lines"));
         assert!(ids.contains(&"heavy_bytes"));
         assert!(ids.contains(&"both_heavy"));
@@ -296,13 +331,15 @@ mod tests {
     fn test_warning_by_heavy_assets_count() {
         // 5 个重资产（行数 ≥200 触发 heavy），bytes 设小避免触发 pressure_ratio critical
         let assets: Vec<SerClaudeMemoryAsset> = (0..5)
-            .map(|i| make_asset(
-                &format!("heavy{}", i),
-                "project_rule",
-                true,
-                Some(250),
-                Some(1_000),
-            ))
+            .map(|i| {
+                make_asset(
+                    &format!("heavy{}", i),
+                    "project_rule",
+                    true,
+                    Some(250),
+                    Some(1_000),
+                )
+            })
             .collect();
         let pressure = compute_context_pressure(&assets);
         assert_eq!(pressure.heavy_assets.len(), 5);
@@ -316,7 +353,13 @@ mod tests {
     fn test_nonexistent_assets_excluded() {
         let assets = vec![
             make_asset("exists", "project_claude_md", true, Some(100), Some(10_000)),
-            make_asset("missing", "project_claude_md", false, Some(500), Some(500_000)),
+            make_asset(
+                "missing",
+                "project_claude_md",
+                false,
+                Some(500),
+                Some(500_000),
+            ),
         ];
         let pressure = compute_context_pressure(&assets);
         assert_eq!(pressure.existing_assets, 1);
@@ -329,20 +372,30 @@ mod tests {
     fn test_critical_lines_and_ratio_combined() {
         // 150 个资产，每个 100 行 200KB → 15000 行 + pressure_ratio > 0.6
         let assets: Vec<SerClaudeMemoryAsset> = (0..150)
-            .map(|i| make_asset(
-                &format!("a{}", i),
-                "project_rule",
-                true,
-                Some(100),
-                Some(200_000),
-            ))
+            .map(|i| {
+                make_asset(
+                    &format!("a{}", i),
+                    "project_rule",
+                    true,
+                    Some(100),
+                    Some(200_000),
+                )
+            })
             .collect();
         let pressure = compute_context_pressure(&assets);
         assert_eq!(pressure.total_lines, 15_000);
         assert!(pressure.pressure_ratio >= CRITICAL_RATIO_THRESHOLD);
         assert_eq!(pressure.level, "critical");
         // 应同时有 lines 和 ratio 两个 critical alerts
-        let critical_alerts: Vec<&SerPressureAlert> = pressure.alerts.iter().filter(|a| a.severity == "critical").collect();
-        assert!(critical_alerts.len() >= 2, "应至少有 2 个 critical alert: {:?}", critical_alerts);
+        let critical_alerts: Vec<&SerPressureAlert> = pressure
+            .alerts
+            .iter()
+            .filter(|a| a.severity == "critical")
+            .collect();
+        assert!(
+            critical_alerts.len() >= 2,
+            "应至少有 2 个 critical alert: {:?}",
+            critical_alerts
+        );
     }
 }

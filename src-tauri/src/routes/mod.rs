@@ -10,8 +10,8 @@ pub use agent::{
     search_sessions_cmd, start_watching_cmd, stop_watching_cmd,
 };
 pub use claude_memory::{
-    get_claude_memory_file_content_cmd, get_claude_memory_overview_cmd,
-    get_context_pressure_cmd, get_memory_health_report_cmd, simulate_claude_memory_load_chain_cmd,
+    get_claude_memory_file_content_cmd, get_claude_memory_overview_cmd, get_context_pressure_cmd,
+    get_memory_health_report_cmd, simulate_claude_memory_load_chain_cmd,
 };
 pub use history::{
     delete_claude_session_cmd, export_claude_session_cmd, get_claude_session_detail_cmd,
