@@ -252,7 +252,6 @@ release:
       [ -z "$EXE" ] && echo "Missing Windows NSIS exe" && missing=1
       [ -z "$ZIP" ] && echo "Missing Windows portable zip" && missing=1
       [ "$missing" -ne 0 ] && echo "FATAL: one or more required artifacts missing" && exit 1
-      # export 使变量在子进程 node process.env 中可见
       export DEB_NAME=$(basename "$DEB")
       export APPIMAGE_NAME=$(basename "$APPIMAGE")
       export EXE_NAME=$(basename "$EXE")
@@ -275,7 +274,7 @@ release:
       upload_pkg "$APPIMAGE" "AppImage"
       upload_pkg "$EXE"      "exe"
       upload_pkg "$ZIP"      "zip"
-    - echo "=== 创建 GitLab Release ==="
+    - echo "=== 幂等创建/确认 GitLab Release ==="
     - |
       VERSION=${CI_COMMIT_TAG#v}
       PKG_URL="${CI_API_V4_URL}/projects/${CI_PROJECT_ID}/packages/generic/agent-scope/${VERSION}"
@@ -288,30 +287,89 @@ release:
       export APPIMAGE_NAME=$(basename "$APPIMAGE")
       export EXE_NAME=$(basename "$EXE")
       export ZIP_NAME=$(basename "$ZIP")
+      # 生成 Release 基本信息（不含 assets.links）
       RELEASE_JSON=$(node -e '
-        const links = [];
-        const pkg = process.env.PKG_URL;
         const tag = process.env.CI_COMMIT_TAG;
         const deb = process.env.DEB_NAME;
         const appimage = process.env.APPIMAGE_NAME;
         const exe = process.env.EXE_NAME;
         const zip = process.env.ZIP_NAME;
         let desc = "## AgentScope " + tag + "\n\n### Linux\n";
-        if (deb) { desc += "- deb: `" + deb + "`\n"; links.push({name:"Linux deb",url:pkg+"/"+deb,link_type:"package"}); }
-        if (appimage) { desc += "- AppImage (免安装): `" + appimage + "`\n"; links.push({name:"Linux AppImage",url:pkg+"/"+appimage,link_type:"package"}); }
+        if (deb) { desc += "- deb: `" + deb + "`\n"; }
+        if (appimage) { desc += "- AppImage (免安装): `" + appimage + "`\n"; }
         desc += "\n### Windows\n";
-        if (exe) { desc += "- Installer: `" + exe + "`\n"; links.push({name:"Windows Installer",url:pkg+"/"+exe,link_type:"package"}); }
-        if (zip) { desc += "- Portable (免安装): `" + zip + "`\n"; links.push({name:"Windows Portable",url:pkg+"/"+zip,link_type:"package"}); }
+        if (exe) { desc += "- Installer: `" + exe + "`\n"; }
+        if (zip) { desc += "- Portable (免安装): `" + zip + "`\n"; }
         desc += "\n---\n各平台安装包已上传至 GitLab Package Registry，点击下方 Assets 下载。";
-        const payload = {name:"AgentScope "+tag,tag_name:tag,description:desc,assets:{links}};
+        const payload = {name: "AgentScope " + tag, tag_name: tag, description: desc};
         process.stdout.write(JSON.stringify(payload));
       ')
-      # 创建 Release（-k 跳过自签名证书验证）
-      curl -k --fail --request POST \
+      RELEASE_API="${CI_API_V4_URL}/projects/${CI_PROJECT_ID}/releases/${CI_COMMIT_TAG}"
+      # 检查 Release 是否存在
+      HTTP_CODE=$(curl -k -s -o /dev/null -w "%{http_code}" \
         --header "JOB-TOKEN: ${CI_JOB_TOKEN}" \
-        --header "Content-Type: application/json" \
-        --data "$RELEASE_JSON" \
-        "${CI_API_V4_URL}/projects/${CI_PROJECT_ID}/releases"
-      echo "Release created successfully"
+        "$RELEASE_API")
+      echo "Release check: HTTP $HTTP_CODE"
+      if [ "$HTTP_CODE" = "200" ]; then
+        echo "Release ${CI_COMMIT_TAG} already exists, skipping creation"
+      elif [ "$HTTP_CODE" = "404" ]; then
+        echo "Creating release ${CI_COMMIT_TAG}..."
+        curl -k --fail --request POST \
+          --header "JOB-TOKEN: ${CI_JOB_TOKEN}" \
+          --header "Content-Type: application/json" \
+          --data "$RELEASE_JSON" \
+          "${CI_API_V4_URL}/projects/${CI_PROJECT_ID}/releases"
+        echo "Release created successfully"
+      else
+        echo "FATAL: unexpected HTTP code $HTTP_CODE when checking release"
+        exit 1
+      fi
+    - echo "=== 同步 Linux/Windows asset links ==="
+    - |
+      VERSION=${CI_COMMIT_TAG#v}
+      PKG_URL="${CI_API_V4_URL}/projects/${CI_PROJECT_ID}/packages/generic/agent-scope/${VERSION}"
+      # 收集产物（每个 script step 是独立 shell，需重新 find）
+      DEB=$(find . -name "*.deb" | head -1)
+      APPIMAGE=$(find . -name "*.AppImage" | head -1)
+      EXE=$(find . -name "*.exe" | head -1)
+      ZIP=$(find . -name "*.zip" | head -1)
+      export DEB_NAME=$(basename "$DEB")
+      export APPIMAGE_NAME=$(basename "$APPIMAGE")
+      export EXE_NAME=$(basename "$EXE")
+      export ZIP_NAME=$(basename "$ZIP")
+      ASSET_API="${CI_API_V4_URL}/projects/${CI_PROJECT_ID}/releases/${CI_COMMIT_TAG}/assets/links"
+      # 获取现有 asset links（Release 不存在时返回 [] 兜底）
+      EXISTING_LINKS=$(curl -k -s --header "JOB-TOKEN: ${CI_JOB_TOKEN}" "$ASSET_API" || echo "[]")
+      # 辅助函数：同步单个 asset link（幂等：存在则删除后重建）
+      sync_link() {
+        local link_name="$1"
+        local filename="$2"
+        local link_url="${PKG_URL}/${filename}"
+        # 查找同名 link 的 ID
+        local link_id=$(echo "$EXISTING_LINKS" | node -e "
+          const links = JSON.parse(require('fs').readFileSync(0, 'utf-8'));
+          const found = links.find(l => l.name === '$link_name');
+          console.log(found ? found.id : '');
+        " 2>/dev/null || echo "")
+        if [ -n "$link_id" ]; then
+          echo "Deleting existing '$link_name' link (id=$link_id)"
+          curl -k -s -o /dev/null --fail --request DELETE \
+            --header "JOB-TOKEN: ${CI_JOB_TOKEN}" \
+            "${ASSET_API}/${link_id}" || echo "Warning: failed to delete old $link_name link"
+        fi
+        echo "Creating '$link_name' link -> $link_url"
+        curl -k -s -o /dev/null --fail --request POST \
+          --header "JOB-TOKEN: ${CI_JOB_TOKEN}" \
+          --data-urlencode "name=${link_name}" \
+          --data-urlencode "url=${link_url}" \
+          --data-urlencode "link_type=package" \
+          "$ASSET_API" || echo "Warning: failed to create $link_name link"
+        echo "OK: $link_name"
+      }
+      sync_link "Linux deb" "$DEB_NAME"
+      sync_link "Linux AppImage" "$APPIMAGE_NAME"
+      sync_link "Windows Installer" "$EXE_NAME"
+      sync_link "Windows Portable" "$ZIP_NAME"
+      echo "Asset links sync completed"
   rules:
-    - if: '$CI_COMMIT_TAG =~ /^v\d+\.\d+\.\d+$/'
+    - if: '$CI_COMMIT_TAG =~ /^v\d+\.\d+\.\d+(-[0-9A-Za-z.-]+)?$/'
