@@ -13,7 +13,6 @@ interface FileAuditEntry {
 }
 
 const MAX_VISIBLE_ENTRIES = 50;
-const MAX_PATH_CHARS = 30;
 
 const operationStyles: Record<string, string> = {
   R: "bg-blue-100 text-blue-700 dark:bg-blue-500/15 dark:text-blue-300",
@@ -61,7 +60,7 @@ export function AgentFileAudit({ file_accesses }: AgentFileAuditProps) {
         </p>
       </div>
 
-      <div className="space-y-1.5">
+      <div className="max-h-[360px] space-y-1.5 overflow-auto">
         {hiddenCount > 0 && (
           <p className="rounded-md border border-dashed border-border bg-muted/30 px-2.5 py-1.5 text-xs text-muted-foreground">
             …及另外 {hiddenCount} 条
@@ -91,22 +90,12 @@ function FileAuditRow({ entry }: FileAuditRowProps) {
       >
         {entry.operation || "-"}
       </span>
-      <span className="min-w-0 truncate font-mono text-foreground/90">{truncatePath(entry.path)}</span>
+      <span className="min-w-0 truncate font-mono text-foreground/90" title={entry.path}>
+        {entry.path}
+      </span>
       <span className="shrink-0 rounded-full bg-background px-2 py-0.5 font-mono text-[0.7rem] text-muted-foreground">
         turn {entry.turn_index}
       </span>
     </div>
   );
-}
-
-function truncatePath(path: string) {
-  if (!path) {
-    return "未知文件";
-  }
-
-  if (path.length <= MAX_PATH_CHARS) {
-    return path;
-  }
-
-  return `...${path.slice(-MAX_PATH_CHARS)}`;
 }

@@ -43,7 +43,7 @@ export function AgentToolTimeline({ tool_calls, pending_since_ms = 0, thinking_s
         </div>
       )}
 
-      <div className="space-y-1.5">
+      <div className="max-h-[360px] space-y-1.5 overflow-auto">
         {tool_calls.map((toolCall) => {
           const label = TOOL_LABEL_MAP[toolCall.name] ?? toolCall.name;
           const colorClass = TOOL_COLOR_MAP[label] ?? "bg-muted-foreground";
@@ -54,19 +54,19 @@ export function AgentToolTimeline({ tool_calls, pending_since_ms = 0, thinking_s
           return (
             <div
               key={`${toolCall.name}-${toolCall.arg}-${toolCall.duration_ms}`}
-              className="grid items-center gap-2 rounded-md px-2 py-1.5 text-xs transition-colors hover:bg-muted/35 sm:grid-cols-[4.75rem_minmax(0,1fr)_3.5rem_minmax(5rem,8rem)_0.75rem]"
+              className="grid items-center gap-2 rounded-md px-2 py-1.5 text-xs transition-colors hover:bg-muted/35 sm:grid-cols-[4.5rem_1fr_4rem_6rem_1rem]"
             >
               <span className={cn("inline-flex w-fit items-center rounded-full px-2 py-0.5 font-mono text-[0.7rem] font-semibold text-white shadow-xs", colorClass)}>
                 {label}
               </span>
               <span className="min-w-0 truncate font-mono text-muted-foreground" title={toolCall.arg}>
-                {truncateArg(toolCall.arg)}
+                {toolCall.arg}
               </span>
-              <span className="font-mono font-semibold text-foreground">{formatDuration(toolCall.duration_ms)}</span>
+              <span className="text-right font-mono font-semibold text-foreground">{formatDuration(toolCall.duration_ms)}</span>
               <div className="h-2 overflow-hidden rounded-full bg-muted">
                 <div className={cn("h-full w-[var(--tool-width)] rounded-full transition-[width] duration-500", colorClass)} style={barStyle} />
               </div>
-              <span className="font-mono font-semibold text-primary" title={isLongest ? "最长工具调用" : undefined}>
+              <span className="text-right font-mono font-semibold text-primary" title={isLongest ? "最长工具调用" : undefined}>
                 {isLongest ? "*" : ""}
               </span>
             </div>
@@ -75,14 +75,6 @@ export function AgentToolTimeline({ tool_calls, pending_since_ms = 0, thinking_s
       </div>
     </div>
   );
-}
-
-function truncateArg(arg: string): string {
-  if (arg.length <= 20) {
-    return arg;
-  }
-
-  return `${arg.slice(0, 20)}…`;
 }
 
 function formatDuration(ms: number): string {
