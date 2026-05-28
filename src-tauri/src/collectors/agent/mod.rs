@@ -655,12 +655,20 @@ fn build_payload(
 
     let total_sessions = sessions.len();
 
-    // 清理已结束 session 的历史采样数据
+    // 清理已结束 session 的所有 token 相关状态
     let active_session_ids: std::collections::HashSet<String> =
         sessions.iter().map(|s| s.session_id.clone()).collect();
     {
+        let mut last = last_tokens.lock().unwrap();
+        last.retain(|session_id, _| active_session_ids.contains(session_id));
+    }
+    {
         let mut history = token_history_samples.lock().unwrap();
         history.retain(|session_id, _| active_session_ids.contains(session_id));
+    }
+    {
+        let mut baselines = observed_baselines.lock().unwrap();
+        baselines.retain(|session_id, _| active_session_ids.contains(session_id));
     }
 
     AgentUpdatePayload {
@@ -782,23 +790,26 @@ mod tests {
         assert_eq!(info.pid, 1234);
         assert_eq!(info.status, SerializableStatus::Thinking);
         assert_eq!(info.token_rate, 0.0); // 首次采集，无历史记录
-                                          // 首次采集时只有一个采样点，1m/5m 窗口不足，回退到 session average
-                                          // started_at 为 0 时 elapsed() 返回从 epoch 至今的时长，session_rate 为极小的正数
-        assert!(
-            info.token_rate_1m < 1e-5,
-            "token_rate_1m expected near-zero, got {}",
+        // 首次采集时只有一个采样点，1m/5m 窗口不足，返回 insufficient_samples
+        assert_eq!(
+            info.token_rate_1m, 0.0,
+            "token_rate_1m expected 0.0 (insufficient_samples), got {}",
             info.token_rate_1m
         );
-        assert!(
-            info.token_rate_5m < 1e-5,
-            "token_rate_5m expected near-zero, got {}",
+        assert_eq!(
+            info.token_rate_5m, 0.0,
+            "token_rate_5m expected 0.0 (insufficient_samples), got {}",
             info.token_rate_5m
         );
-        assert!(
-            info.token_rate_total < 1e-5,
-            "token_rate_total expected near-zero, got {}",
+        // total: 观察期太短（≤1秒），标记为 warming_up
+        assert_eq!(
+            info.token_rate_total, 0.0,
+            "token_rate_total expected 0.0 (warming_up), got {}",
             info.token_rate_total
         );
+        assert_eq!(info.token_rate_1m_reason, "insufficient_samples");
+        assert_eq!(info.token_rate_5m_reason, "insufficient_samples");
+        assert_eq!(info.token_rate_total_reason, "warming_up");
         assert_eq!(info.children.len(), 1);
         assert_eq!(info.children[0].port, Some(3000));
         // 新增字段验证

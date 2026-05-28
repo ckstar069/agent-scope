@@ -476,24 +476,23 @@ function AgentSessionRow({ agent, rateUnit, rateType, isExpanded, onToggle }: Om
   const displayStatus = toDisplayStatus(agent.status);
   const isIdle = displayStatus === "Idle" || displayStatus === "Offline";
 
-  // 根据 reason 判断当前 rateType 是否有效；无效时回退到 realtime
-  function rateReady(type: RateType): boolean {
+  // 根据用户选择的 rateType 获取用于染色的速率值；reason 无效时返回 0，不使用 fallback
+  function getRateForColor(type: RateType): number {
     switch (type) {
-      case "realtime":
-        return agent.token_rate > 0;
       case "1min":
-        return agent.token_rate_1m_reason === "fixed_window";
+        return agent.token_rate_1m_reason === "fixed_window" ? getDisplayRate(agent, "1min", "minute") : 0;
       case "5min":
-        return agent.token_rate_5m_reason === "fixed_window";
+        return agent.token_rate_5m_reason === "fixed_window" ? getDisplayRate(agent, "5min", "minute") : 0;
       case "total":
-        return agent.token_rate_total_reason === "observed_baseline";
+        return agent.token_rate_total_reason === "observed_baseline" ? getDisplayRate(agent, "total", "minute") : 0;
+      case "realtime":
+        return agent.token_rate > 0 ? getDisplayRate(agent, "realtime", "minute") : 0;
       default:
-        return false;
+        return 0;
     }
   }
 
-  const currentRateType: RateType = rateReady(rateType) ? rateType : "realtime";
-  const rateForColor = getDisplayRate(agent, currentRateType, "minute");
+  const rateForColor = getRateForColor(rateType);
   const rateColor = getRateColor(rateForColor);
   const context = getContextUsage(agent);
   const ctxColor = getContextColor(context.percent);
@@ -537,7 +536,7 @@ function AgentSessionRow({ agent, rateUnit, rateType, isExpanded, onToggle }: Om
                 <span className={cn("font-mono font-semibold", rateColor.text)}>
                   {isIdle
                     ? `Idle · ${formatIdleRate(agent, rateUnit)}`
-                    : formatActiveRate(agent, currentRateType, rateUnit)}
+                    : formatActiveRate(agent, rateType, rateUnit)}
                 </span>
               </div>
               <div className="mt-0.5 h-1.5 overflow-hidden rounded-full bg-muted"
@@ -606,7 +605,7 @@ function AgentSessionRow({ agent, rateUnit, rateType, isExpanded, onToggle }: Om
                 <span className={cn("font-mono font-semibold", rateColor.text)}>
                   {isIdle
                     ? `Idle · ${formatIdleRate(agent, rateUnit)}`
-                    : formatActiveRate(agent, currentRateType, rateUnit)}
+                    : formatActiveRate(agent, rateType, rateUnit)}
                 </span>
               </div>
               <div className="mt-1 h-2 overflow-hidden rounded-full bg-muted"
