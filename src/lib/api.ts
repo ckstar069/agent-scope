@@ -53,6 +53,10 @@ export function getContextPressure<T = unknown>(projectPath?: string, force = fa
   return tauriInvoke<T>("get_context_pressure", { projectPath, force });
 }
 
+export function getClaudeMemoryDashboard<T = unknown>(projectPath?: string, force = false) {
+  return tauriInvoke<T>("get_claude_memory_dashboard", { projectPath, force });
+}
+
 // Review Queue API
 export function getReviewQueue<T = unknown>(projectPath?: string, filter?: string) {
   return tauriInvoke<T>("get_review_queue", { projectPath, filter });
@@ -76,5 +80,9 @@ export function getReviewQueueCounts<T = unknown>(projectPath?: string) {
 }
 
 export function getAgentSnapshot<T = unknown>() {
-  return tauriInvoke<T>("get_agent_snapshot_cmd");
+  return tauriInvoke<T>("get_agent_snapshot")
+    .catch((err) => {
+      console.warn("[getAgentSnapshot] 读取快照失败:", err);
+      return null;
+    });
 }

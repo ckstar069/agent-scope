@@ -15,6 +15,39 @@ async function openClaudeMemory(page: Page) {
   await page.locator('nav[aria-label="子导航"]').getByRole("button", { name: "记忆资产" }).click();
 }
 
+const mockHealthReport = {
+  overall_score: 85,
+  freshness: { name: "freshness", score: 90, reason: "All assets are fresh", contributing_assets: [] },
+  quality: { name: "quality", score: 80, reason: "Good quality", contributing_assets: [] },
+  coverage: { name: "coverage", score: 85, reason: "Good coverage", contributing_assets: [] },
+  cleanliness: { name: "cleanliness", score: 88, reason: "Clean", contributing_assets: [] },
+  safety: { name: "safety", score: 82, reason: "Safe", contributing_assets: [] },
+  top_issues: [],
+  stale_assets: [],
+  duplicate_groups: [],
+};
+
+const mockContextPressure = {
+  total_assets: 3,
+  existing_assets: 3,
+  total_lines: 27,
+  total_bytes: 624,
+  estimated_tokens: 156,
+  pressure_ratio: 0.00078,
+  level: "normal",
+  heavy_assets: [],
+  alerts: [],
+};
+
+const mockReviewQueue = {
+  items: [],
+  pending_count: 0,
+  reviewed_count: 0,
+  ignored_count: 0,
+  snoozed_count: 0,
+  last_sync_at: null,
+};
+
 const mockOverview = {
   scanned_at_ms: Date.now(),
   host_profile: {
@@ -212,10 +245,16 @@ const mockOverview = {
 
 async function mockClaudeMemoryInvoke(page: Page, options?: { rejectFileContent?: boolean }) {
   const mockData = JSON.stringify(mockOverview);
+  const mockHealth = JSON.stringify(mockHealthReport);
+  const mockPressure = JSON.stringify(mockContextPressure);
+  const mockQueue = JSON.stringify(mockReviewQueue);
   const shouldReject = options?.rejectFileContent ?? false;
   await page.addInitScript(
-    ({ data, reject }) => {
+    ({ data, health, pressure, queue, reject }) => {
       const overview = JSON.parse(data);
+      const healthReport = JSON.parse(health);
+      const contextPressure = JSON.parse(pressure);
+      const reviewQueue = JSON.parse(queue);
       const win = window as unknown as {
         __TAURI_INTERNALS__: {
           invoke: (command: string, args?: Record<string, unknown>) => Promise<unknown>;
@@ -224,6 +263,14 @@ async function mockClaudeMemoryInvoke(page: Page, options?: { rejectFileContent?
 
       win.__TAURI_INTERNALS__ = {
         invoke: (command, _args) => {
+          if (command === "get_claude_memory_dashboard") {
+            return Promise.resolve({
+              overview,
+              health_report: healthReport,
+              context_pressure: contextPressure,
+              review_queue: reviewQueue,
+            });
+          }
           if (command === "get_claude_memory_overview") {
             return Promise.resolve(overview);
           }
@@ -233,11 +280,14 @@ async function mockClaudeMemoryInvoke(page: Page, options?: { rejectFileContent?
             }
             return Promise.resolve("# Mock Content\n\nThis is mock file content for testing.\n");
           }
+          if (command === "get_review_queue") {
+            return Promise.resolve(reviewQueue);
+          }
           return Promise.reject(new Error(`未模拟的 Tauri 命令: ${command}`));
         },
       };
     },
-    { data: mockData, reject: shouldReject },
+    { data: mockData, health: mockHealth, pressure: mockPressure, queue: mockQueue, reject: shouldReject },
   );
 }
 

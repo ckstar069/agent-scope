@@ -2,14 +2,15 @@ use tauri::State;
 
 use crate::app_state::AppState;
 use crate::collectors::claude_memory::models::{
-    SerClaudeMemoryScanResult, SerContextPressure, SerLoadChain, SerMemoryHealthReport,
-    SerReviewItem, SerReviewQueue, SerReviewQueueCounts, SerReviewQueueSyncResult,
+    SerClaudeMemoryDashboard, SerClaudeMemoryScanResult, SerContextPressure, SerLoadChain,
+    SerMemoryHealthReport, SerReviewItem, SerReviewQueue, SerReviewQueueCounts,
+    SerReviewQueueSyncResult,
 };
 use crate::services::claude_memory_service::{
-    get_claude_memory_file_content_service, get_claude_memory_overview_service,
-    get_context_pressure_service, get_memory_health_report_service,
-    get_review_queue_counts_service, get_review_queue_service, simulate_load_chain_service,
-    sync_review_queue_service, update_review_item_state_service,
+    get_claude_memory_dashboard_service, get_claude_memory_file_content_service,
+    get_claude_memory_overview_service, get_context_pressure_service,
+    get_memory_health_report_service, get_review_queue_counts_service, get_review_queue_service,
+    simulate_load_chain_service, sync_review_queue_service, update_review_item_state_service,
 };
 
 #[tauri::command(rename = "get_claude_memory_overview")]
@@ -19,6 +20,15 @@ pub fn get_claude_memory_overview_cmd(
     state: State<'_, AppState>,
 ) -> Result<SerClaudeMemoryScanResult, String> {
     get_claude_memory_overview_service(project_path, force, state.inner())
+}
+
+#[tauri::command(rename = "get_claude_memory_dashboard")]
+pub fn get_claude_memory_dashboard_cmd(
+    project_path: Option<String>,
+    force: bool,
+    state: State<'_, AppState>,
+) -> Result<SerClaudeMemoryDashboard, String> {
+    get_claude_memory_dashboard_service(project_path, force, state.inner())
 }
 
 #[tauri::command(rename = "get_claude_memory_file_content")]

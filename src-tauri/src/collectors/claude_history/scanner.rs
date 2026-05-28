@@ -355,11 +355,44 @@ pub fn preview_claude_session(session_id: &str) -> Result<SerSessionPreview, Str
         }
     }
 
+    // Clean：相邻重复折叠 + last-prompt 与最近 user 去重
+    let messages = clean_preview_messages(messages);
+
     Ok(SerSessionPreview {
         session_id: session_id.to_string(),
         messages,
         total_turns,
     })
+}
+
+/// 清理预览消息：
+/// 1. 相邻完全相同的 role + content 做折叠（保留第一条）
+/// 2. last-prompt 与最近一条 user 内容相同时跳过
+fn clean_preview_messages(messages: Vec<SerPreviewMessage>) -> Vec<SerPreviewMessage> {
+    let mut cleaned: Vec<SerPreviewMessage> = Vec::new();
+
+    for msg in messages {
+        // 规则 2：last-prompt 与最近一条 user 内容相同则跳过
+        if msg.role == "user" {
+            if let Some(last) = cleaned.last() {
+                if last.role == "user" && last.content.trim() == msg.content.trim() {
+                    // 当前是重复的 last-prompt（ role 被解析为 user），跳过
+                    continue;
+                }
+            }
+        }
+
+        // 规则 1：相邻完全相同折叠
+        if let Some(last) = cleaned.last() {
+            if last.role == msg.role && last.content == msg.content {
+                continue;
+            }
+        }
+
+        cleaned.push(msg);
+    }
+
+    cleaned
 }
 
 fn jsonl_to_markdown(path: &std::path::Path, session_id: &str) -> Result<String, String> {
@@ -709,6 +742,7 @@ fn extract_session_name(jsonl_path: &Path) -> Option<String> {
     let mut ai_title: Option<String> = None;
     let mut first_user_prompt: Option<String> = None;
     let mut line_count = 0;
+    let mut bytes_read_total: usize = 0;
 
     loop {
         if line_count >= MAX_NAME_SCAN_LINES {
@@ -723,9 +757,9 @@ fn extract_session_name(jsonl_path: &Path) -> Option<String> {
         }
         line_count += 1;
 
-        // 字节上限检查
-        let bytes_read = line.len();
-        if bytes_read > MAX_NAME_SCAN_BYTES as usize {
+        // 累计字节上限检查
+        bytes_read_total += line.len();
+        if bytes_read_total > MAX_NAME_SCAN_BYTES as usize {
             break;
         }
 

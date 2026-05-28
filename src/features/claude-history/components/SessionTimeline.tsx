@@ -1,9 +1,13 @@
 import { useEffect, useRef, useState } from "react";
-import { Circle, Download, Trash2, ChevronDown, ChevronUp, Wrench, FileCode } from "lucide-react";
+import { Circle, Download, Trash2, ChevronDown, ChevronUp, Wrench, FileCode, ArrowUpDown } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { cn } from "@/lib/utils";
 
 import type { SessionTimelineProps, SessionPreview, ToolCallStat, FileReference } from "../types";
+
+type PreviewOrder = "newest-first" | "oldest-first";
+
+const ORDER_STORAGE_KEY = "claude-history-preview-order";
 
 function formatDate(timestamp: number | null): string {
   if (!timestamp) return "未知时间";
@@ -69,6 +73,11 @@ function ExportMenu({ sessionId, onExport }: { sessionId: string; onExport: (ses
 }
 
 function PreviewPanel({ preview }: { preview: SessionPreview }) {
+  const [order, setOrder] = useState<PreviewOrder>(() => {
+    const saved = localStorage.getItem(ORDER_STORAGE_KEY);
+    return (saved as PreviewOrder) || "newest-first";
+  });
+
   const roleLabel: Record<string, string> = {
     user: "用户",
     assistant: "助手",
@@ -81,13 +90,35 @@ function PreviewPanel({ preview }: { preview: SessionPreview }) {
     tool: "text-amber-600",
   };
 
+  const toggleOrder = () => {
+    const next = order === "newest-first" ? "oldest-first" : "newest-first";
+    setOrder(next);
+    localStorage.setItem(ORDER_STORAGE_KEY, next);
+  };
+
+  const displayMessages =
+    order === "newest-first" ? [...preview.messages].reverse() : preview.messages;
+
   return (
     <div className="mt-3 rounded-xl border border-border bg-tile p-3">
-      <p className="mb-2 text-xs text-muted-foreground">
-        预览（共 {preview.total_turns} 轮对话）
-      </p>
+      <div className="mb-2 flex items-center justify-between">
+        <p className="text-xs text-muted-foreground">
+          预览（共 {preview.total_turns} 轮对话）
+        </p>
+        <Button
+          type="button"
+          variant="ghost"
+          size="sm"
+          className="h-6 gap-1 px-2 text-xs text-muted-foreground hover:text-foreground"
+          onClick={toggleOrder}
+          title={order === "newest-first" ? "当前：最新在上" : "当前：最早在上"}
+        >
+          <ArrowUpDown className="size-3" />
+          {order === "newest-first" ? "最新在上" : "最早在上"}
+        </Button>
+      </div>
       <div className="flex max-h-[600px] flex-col gap-4 overflow-y-auto pr-1">
-        {preview.messages.map((msg, idx) => (
+        {displayMessages.map((msg, idx) => (
           <div key={idx} className="rounded-lg border border-transparent bg-card/70 p-2 text-sm hover:border-border hover:bg-card">
             <span
               className={cn(

@@ -5,8 +5,9 @@ use crate::app_state::AppState;
 use crate::collectors::claude_memory::health_checker::compute_health_report;
 use crate::collectors::claude_memory::load_chain::simulate_load_chain;
 use crate::collectors::claude_memory::models::{
-    SerClaudeMemoryScanResult, SerContextPressure, SerLoadChain, SerMemoryHealthReport,
-    SerReviewItem, SerReviewQueue, SerReviewQueueCounts, SerReviewQueueSyncResult, SerReviewState,
+    SerClaudeMemoryDashboard, SerClaudeMemoryScanResult, SerContextPressure, SerLoadChain,
+    SerMemoryHealthReport, SerReviewItem, SerReviewQueue, SerReviewQueueCounts,
+    SerReviewQueueSyncResult, SerReviewState,
 };
 use crate::collectors::claude_memory::path_resolver::resolve_claude_config_dir;
 use crate::collectors::claude_memory::pressure::compute_context_pressure;
@@ -197,6 +198,33 @@ pub fn get_context_pressure_service(
 ) -> Result<SerContextPressure, String> {
     let scan_result = get_claude_memory_overview_service(project_path, force, state)?;
     Ok(compute_context_pressure(&scan_result.assets))
+}
+
+/// 获取记忆资产 Dashboard（组合接口）
+/// 一次扫描返回 overview + health + pressure + review_queue
+pub fn get_claude_memory_dashboard_service(
+    project_path: Option<String>,
+    _force: bool,
+    state: &AppState,
+) -> Result<SerClaudeMemoryDashboard, String> {
+    // 1. 只扫描一次
+    let overview = get_claude_memory_overview_service(project_path.clone(), false, state)?;
+
+    // 2. 基于同一份 assets 计算 health 和 pressure
+    let health_report = compute_health_report(&overview.assets);
+    let context_pressure = compute_context_pressure(&overview.assets);
+
+    // 3. 读取 review_queue（不触发 sync）
+    let project_id = canonicalize_project_id(project_path.as_deref());
+    let store = state.review_queue.lock().map_err(|e| e.to_string())?;
+    let review_queue = store.get_queue(&project_id, None);
+
+    Ok(SerClaudeMemoryDashboard {
+        overview,
+        health_report,
+        context_pressure,
+        review_queue,
+    })
 }
 
 /// 获取审阅队列

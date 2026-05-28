@@ -19,7 +19,7 @@ import { Switch } from "@/components/ui/switch";
 import { cn } from "@/lib/utils";
 
 import type { ClaudeMemoryAsset, ContextPressure, MemoryDuplicateGroup, MemoryHealthReport } from "./types";
-import { useClaudeMemory, useContextPressure, useMemoryHealth, useReviewQueue } from "./hooks/useClaudeMemory";
+import { useClaudeMemoryDashboard, useReviewQueue } from "./hooks/useClaudeMemory";
 
 import { LoadChainSimulator } from "./components/LoadChainSimulator";
 import { MemoryAssetDetail } from "./components/MemoryAssetDetail";
@@ -74,9 +74,10 @@ export function ClaudeMemory({ projectPath, page = "assets" }: ClaudeMemoryProps
 }
 
 function ClaudeMemoryAssets({ projectPath }: { projectPath?: string }) {
-  const { overview, isLoading, error, refresh: refreshOverview } = useClaudeMemory(projectPath);
-  const { report: healthReport, isLoading: healthLoading, refresh: refreshHealth } = useMemoryHealth(projectPath);
-  const { pressure, isLoading: pressureLoading, refresh: refreshPressure } = useContextPressure(projectPath);
+  const { dashboard, isLoading, error, refresh: refreshDashboard } = useClaudeMemoryDashboard(projectPath);
+  const overview = dashboard?.overview ?? null;
+  const healthReport = dashboard?.health_report ?? null;
+  const pressure = dashboard?.context_pressure ?? null;
   const { queue, isLoading: rqLoading, error: rqError, sync: syncQueue, updateState } = useReviewQueue(projectPath);
   const [bannerDismissed, setBannerDismissed] = useState(false);
   const healthSets = useMemo(() => deriveHealthSets(healthReport, overview?.assets ?? []), [healthReport, overview?.assets]);
@@ -88,7 +89,7 @@ function ClaudeMemoryAssets({ projectPath }: { projectPath?: string }) {
   const [hideMissing, setHideMissing] = useState(true);
   const [healthFilter, setHealthFilter] = useState<"all" | "stale" | "duplicate" | "issue" | "secret">("all");
   const [assetsCollapsed, setAssetsCollapsed] = useState(false);
-  const isRefreshing = isLoading || healthLoading || pressureLoading || rqLoading;
+  const isRefreshing = isLoading || rqLoading;
 
   const visibleAssets = useMemo(() => {
     if (!overview) return [];
@@ -143,9 +144,7 @@ function ClaudeMemoryAssets({ projectPath }: { projectPath?: string }) {
           disabled={isRefreshing}
           onClick={() => {
             void Promise.all([
-              refreshOverview(true),
-              refreshHealth(true),
-              refreshPressure(true),
+              refreshDashboard(true),
               syncQueue(true),
             ]);
           }}

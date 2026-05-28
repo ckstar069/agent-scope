@@ -309,3 +309,13 @@ pub struct SerReviewQueueSyncResult {
     pub expired_snoozes: usize,
     pub queue: SerReviewQueue,
 }
+
+/// 记忆资产 Dashboard 组合数据
+/// 一次扫描返回 overview + health + pressure + review_queue
+#[derive(Debug, Clone, Serialize)]
+pub struct SerClaudeMemoryDashboard {
+    pub overview: SerClaudeMemoryScanResult,
+    pub health_report: SerMemoryHealthReport,
+    pub context_pressure: SerContextPressure,
+    pub review_queue: SerReviewQueue,
+}

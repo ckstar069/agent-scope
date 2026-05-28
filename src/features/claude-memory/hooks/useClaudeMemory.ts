@@ -1,6 +1,7 @@
 import { useCallback, useEffect, useState } from "react";
 
 import {
+  getClaudeMemoryDashboard,
   getClaudeMemoryFileContent,
   getClaudeMemoryOverview,
   getContextPressure,
@@ -14,6 +15,7 @@ import {
 import type {
   ClaudeMemoryOverview,
   ClaudeMemoryAsset,
+  ClaudeMemoryDashboard,
   MemoryHealthReport,
   ContextPressure,
   ReviewQueue,
@@ -259,4 +261,38 @@ export function useReviewQueueCounts(projectPath?: string): UseReviewQueueCounts
   }, [refresh]);
 
   return { counts, isLoading, error, refresh };
+}
+
+// ─── Combined Dashboard Hook (Phase 3 Batch 3) ───
+
+interface UseClaudeMemoryDashboardResult {
+  dashboard: ClaudeMemoryDashboard | null;
+  isLoading: boolean;
+  error: string | null;
+  refresh: (force?: boolean) => Promise<void>;
+}
+
+export function useClaudeMemoryDashboard(projectPath?: string): UseClaudeMemoryDashboardResult {
+  const [dashboard, setDashboard] = useState<ClaudeMemoryDashboard | null>(null);
+  const [isLoading, setIsLoading] = useState(false);
+  const [error, setError] = useState<string | null>(null);
+
+  const refresh = useCallback(async (force = true) => {
+    setIsLoading(true);
+    setError(null);
+    try {
+      const result = await getClaudeMemoryDashboard<ClaudeMemoryDashboard>(projectPath, force);
+      setDashboard(result);
+    } catch (err) {
+      setError(err instanceof Error ? err.message : String(err));
+    } finally {
+      setIsLoading(false);
+    }
+  }, [projectPath]);
+
+  useEffect(() => {
+    refresh(true);
+  }, [refresh]);
+
+  return { dashboard, isLoading, error, refresh };
 }

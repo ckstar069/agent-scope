@@ -239,6 +239,13 @@ export interface ReviewQueueCounts {
   total: number;
 }
 
+export interface ClaudeMemoryDashboard {
+  overview: ClaudeMemoryOverview;
+  health_report: MemoryHealthReport;
+  context_pressure: ContextPressure;
+  review_queue: ReviewQueue;
+}
+
 export interface ReviewQueueSyncResult {
   created: number;
   updated: number;
