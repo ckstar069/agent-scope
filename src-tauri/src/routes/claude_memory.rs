@@ -7,9 +7,9 @@ use crate::collectors::claude_memory::models::{
 };
 use crate::services::claude_memory_service::{
     get_claude_memory_file_content_service, get_claude_memory_overview_service,
-    get_context_pressure_service, get_memory_health_report_service, simulate_load_chain_service,
-    get_review_queue_counts_service, get_review_queue_service, sync_review_queue_service,
-    update_review_item_state_service,
+    get_context_pressure_service, get_memory_health_report_service,
+    get_review_queue_counts_service, get_review_queue_service, simulate_load_chain_service,
+    sync_review_queue_service, update_review_item_state_service,
 };
 
 #[tauri::command(rename = "get_claude_memory_overview")]

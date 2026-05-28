@@ -80,10 +80,22 @@ impl ReviewQueueStore {
             .collect();
 
         // counts 基于全量 items（不受 filter 影响）
-        let pending_count = all_items.iter().filter(|i| i.state == SerReviewState::Pending).count();
-        let reviewed_count = all_items.iter().filter(|i| i.state == SerReviewState::Reviewed).count();
-        let ignored_count = all_items.iter().filter(|i| i.state == SerReviewState::Ignored).count();
-        let snoozed_count = all_items.iter().filter(|i| i.state == SerReviewState::Snoozed).count();
+        let pending_count = all_items
+            .iter()
+            .filter(|i| i.state == SerReviewState::Pending)
+            .count();
+        let reviewed_count = all_items
+            .iter()
+            .filter(|i| i.state == SerReviewState::Reviewed)
+            .count();
+        let ignored_count = all_items
+            .iter()
+            .filter(|i| i.state == SerReviewState::Ignored)
+            .count();
+        let snoozed_count = all_items
+            .iter()
+            .filter(|i| i.state == SerReviewState::Snoozed)
+            .count();
 
         // filter 只影响返回的 items 列表
         let mut items = all_items;
@@ -120,10 +132,22 @@ impl ReviewQueueStore {
             .filter(|i| i.project_id == project_id)
             .collect();
 
-        let pending = items.iter().filter(|i| i.state == SerReviewState::Pending).count();
-        let reviewed = items.iter().filter(|i| i.state == SerReviewState::Reviewed).count();
-        let ignored = items.iter().filter(|i| i.state == SerReviewState::Ignored).count();
-        let snoozed = items.iter().filter(|i| i.state == SerReviewState::Snoozed).count();
+        let pending = items
+            .iter()
+            .filter(|i| i.state == SerReviewState::Pending)
+            .count();
+        let reviewed = items
+            .iter()
+            .filter(|i| i.state == SerReviewState::Reviewed)
+            .count();
+        let ignored = items
+            .iter()
+            .filter(|i| i.state == SerReviewState::Ignored)
+            .count();
+        let snoozed = items
+            .iter()
+            .filter(|i| i.state == SerReviewState::Snoozed)
+            .count();
 
         SerReviewQueueCounts {
             pending,
@@ -224,8 +248,7 @@ impl ReviewQueueStore {
                         &health_report.duplicate_groups,
                         &issue.asset_ids,
                     ) {
-                        let source_key =
-                            make_duplicate_source_key(project_id, &group.group_id);
+                        let source_key = make_duplicate_source_key(project_id, &group.group_id);
                         processed_keys.insert(source_key.clone());
 
                         if existing_keys.contains(&source_key) {
@@ -241,13 +264,8 @@ impl ReviewQueueStore {
                                 unchanged += 1;
                             }
                         } else {
-                            let new_item = create_duplicate_item(
-                                project_id,
-                                &source_key,
-                                issue,
-                                group,
-                                now,
-                            );
+                            let new_item =
+                                create_duplicate_item(project_id, &source_key, issue, group, now);
                             self.data.items.push(new_item);
                             created += 1;
                         }
@@ -264,9 +282,7 @@ impl ReviewQueueStore {
                                 .data
                                 .items
                                 .iter_mut()
-                                .find(|i| {
-                                    i.project_id == project_id && i.source_key == source_key
-                                })
+                                .find(|i| i.project_id == project_id && i.source_key == source_key)
                                 .unwrap();
                             if update_item_if_mutable(item, issue, now) {
                                 updated += 1;
@@ -291,8 +307,7 @@ impl ReviewQueueStore {
 
         // 5. 从 stale_assets 生成（仅当 top_issues 未覆盖时）
         for stale in &health_report.stale_assets {
-            let source_key =
-                make_asset_issue_source_key(project_id, &stale.asset_id, "stale");
+            let source_key = make_asset_issue_source_key(project_id, &stale.asset_id, "stale");
             if processed_keys.contains(&source_key) {
                 continue;
             }
@@ -305,8 +320,7 @@ impl ReviewQueueStore {
                     .iter_mut()
                     .find(|i| i.project_id == project_id && i.source_key == source_key)
                     .unwrap();
-                if item.state == SerReviewState::Pending || item.state == SerReviewState::Snoozed
-                {
+                if item.state == SerReviewState::Pending || item.state == SerReviewState::Snoozed {
                     let message = format_stale_message(stale);
                     if item.message != message {
                         item.message = message;
@@ -345,8 +359,7 @@ impl ReviewQueueStore {
         // 7. 按 asset 聚合 secret_issues
         let asset_secret_map = collect_secret_issues_by_asset(assets);
         for (asset_id, _) in asset_secret_map {
-            let source_key =
-                make_asset_issue_source_key(project_id, &asset_id, "secret");
+            let source_key = make_asset_issue_source_key(project_id, &asset_id, "secret");
             if processed_keys.contains(&source_key) {
                 continue;
             }
@@ -500,7 +513,8 @@ fn create_stale_item(
         issue_type: "stale".to_string(),
         severity: "warning".to_string(),
         message: format_stale_message(stale),
-        suggestion: "在 IDE 中打开确认内容是否仍有效；如已废弃，考虑从 load chain 中移除或归档。".to_string(),
+        suggestion: "在 IDE 中打开确认内容是否仍有效；如已废弃，考虑从 load chain 中移除或归档。"
+            .to_string(),
         asset_ids: vec![stale.asset_id.clone()],
         primary_asset_id: stale.asset_id.clone(),
         group_id: None,
@@ -554,7 +568,9 @@ fn create_secret_item(
         issue_type: "secret".to_string(),
         severity: "critical".to_string(),
         message: "检测到疑似凭证的高熵字符串".to_string(),
-        suggestion: "确认是否为真实凭证；如是，立即从文件中移除并轮换该凭证；考虑使用环境变量替代硬编码。".to_string(),
+        suggestion:
+            "确认是否为真实凭证；如是，立即从文件中移除并轮换该凭证；考虑使用环境变量替代硬编码。"
+                .to_string(),
         asset_ids: vec![asset_id.to_string()],
         primary_asset_id: asset_id.to_string(),
         group_id: None,
@@ -602,10 +618,7 @@ fn update_item_if_mutable(
 
 fn format_stale_message(stale: &SerMemoryStaleness) -> String {
     match stale.stale_days {
-        Some(days) => format!(
-            "{} 已 {} 天未更新",
-            stale.logical_path, days
-        ),
+        Some(days) => format!("{} 已 {} 天未更新", stale.logical_path, days),
         None => format!("{} 可能已过期", stale.logical_path),
     }
 }
@@ -773,7 +786,9 @@ mod tests {
 
         // 标记为 reviewed
         let item_id = store.get_queue("proj1", None).items[0].id.clone();
-        store.update_state(&item_id, SerReviewState::Reviewed, None, None).unwrap();
+        store
+            .update_state(&item_id, SerReviewState::Reviewed, None, None)
+            .unwrap();
 
         // 第二次 sync，同一问题
         let result = store.sync("proj1", &report, &assets).unwrap();
@@ -808,7 +823,9 @@ mod tests {
 
         let item_id = store.get_queue("proj1", None).items[0].id.clone();
         // 设置 snooze 为 0 天（立即过期）
-        store.update_state(&item_id, SerReviewState::Snoozed, Some(0), None).unwrap();
+        store
+            .update_state(&item_id, SerReviewState::Snoozed, Some(0), None)
+            .unwrap();
 
         // sync 应触发过期
         let result = store.sync("proj1", &report, &assets).unwrap();
@@ -827,7 +844,9 @@ mod tests {
         store.sync("proj1", &report, &assets).unwrap();
 
         let item_id = store.get_queue("proj1", None).items[0].id.clone();
-        store.update_state(&item_id, SerReviewState::Reviewed, None, None).unwrap();
+        store
+            .update_state(&item_id, SerReviewState::Reviewed, None, None)
+            .unwrap();
 
         let pending = store.get_queue("proj1", Some("pending"));
         assert_eq!(pending.items.len(), 0);
@@ -846,10 +865,7 @@ mod tests {
 
     #[test]
     fn test_canonicalize_project_id() {
-        assert_eq!(
-            canonicalize_project_id(None),
-            "__global__"
-        );
+        assert_eq!(canonicalize_project_id(None), "__global__");
         // 存在的路径
         let tmp = std::env::temp_dir();
         let result = canonicalize_project_id(Some(tmp.to_string_lossy().as_ref()));
@@ -922,7 +938,9 @@ mod tests {
             .unwrap()
             .id
             .clone();
-        store.update_state(&item_id, SerReviewState::Reviewed, None, None).unwrap();
+        store
+            .update_state(&item_id, SerReviewState::Reviewed, None, None)
+            .unwrap();
 
         // 全量队列：2 items，1 pending, 1 reviewed
         let all = store.get_queue("proj1", None);
@@ -933,8 +951,8 @@ mod tests {
         // filter=reviewed 时：items 列表只有 1 个，但 counts 仍为全量
         let filtered = store.get_queue("proj1", Some("reviewed"));
         assert_eq!(filtered.items.len(), 1);
-        assert_eq!(filtered.pending_count, 1);    // 全量 pending count
-        assert_eq!(filtered.reviewed_count, 1);   // 全量 reviewed count
+        assert_eq!(filtered.pending_count, 1); // 全量 pending count
+        assert_eq!(filtered.reviewed_count, 1); // 全量 reviewed count
     }
 
     #[test]
@@ -949,48 +967,44 @@ mod tests {
     fn test_orphan_cleanup_only_for_missing_exists() {
         let (mut store, _) = temp_store();
         let report = make_health_report_with_issue("stale", vec!["a1".to_string()]);
-        let assets_exists = vec![
-            SerClaudeMemoryAsset {
-                id: "a1".to_string(),
-                scope: "project".to_string(),
-                asset_type: "project_rule".to_string(),
-                logical_path: "/test/a1".to_string(),
-                native_path: "/test/a1".to_string(),
-                content_hash: None,
-                content_preview: None,
-                content_truncated: false,
-                line_count: Some(50),
-                byte_size: Some(5000),
-                mtime_ms: Some(unix_now() * 1000),
-                frontmatter: None,
-                secret_issues: Vec::new(),
-                exists: true,
-            },
-        ];
+        let assets_exists = vec![SerClaudeMemoryAsset {
+            id: "a1".to_string(),
+            scope: "project".to_string(),
+            asset_type: "project_rule".to_string(),
+            logical_path: "/test/a1".to_string(),
+            native_path: "/test/a1".to_string(),
+            content_hash: None,
+            content_preview: None,
+            content_truncated: false,
+            line_count: Some(50),
+            byte_size: Some(5000),
+            mtime_ms: Some(unix_now() * 1000),
+            frontmatter: None,
+            secret_issues: Vec::new(),
+            exists: true,
+        }];
         // sync 时 exists=true，创建 pending item
         store.sync("proj1", &report, &assets_exists).unwrap();
         let queue = store.get_queue("proj1", None);
         assert_eq!(queue.items.len(), 1);
 
         // 再次 sync，但 a1 变为 exists=false，pending item 应被清理
-        let assets_missing = vec![
-            SerClaudeMemoryAsset {
-                id: "a1".to_string(),
-                scope: "project".to_string(),
-                asset_type: "project_rule".to_string(),
-                logical_path: "/test/a1".to_string(),
-                native_path: "/test/a1".to_string(),
-                content_hash: None,
-                content_preview: None,
-                content_truncated: false,
-                line_count: Some(50),
-                byte_size: Some(5000),
-                mtime_ms: Some(unix_now() * 1000),
-                frontmatter: None,
-                secret_issues: Vec::new(),
-                exists: false,
-            },
-        ];
+        let assets_missing = vec![SerClaudeMemoryAsset {
+            id: "a1".to_string(),
+            scope: "project".to_string(),
+            asset_type: "project_rule".to_string(),
+            logical_path: "/test/a1".to_string(),
+            native_path: "/test/a1".to_string(),
+            content_hash: None,
+            content_preview: None,
+            content_truncated: false,
+            line_count: Some(50),
+            byte_size: Some(5000),
+            mtime_ms: Some(unix_now() * 1000),
+            frontmatter: None,
+            secret_issues: Vec::new(),
+            exists: false,
+        }];
         let empty_report = SerMemoryHealthReport {
             overall_score: 100,
             freshness: SerHealthDimension {
@@ -1029,54 +1043,56 @@ mod tests {
         };
         store.sync("proj1", &empty_report, &assets_missing).unwrap();
         let queue = store.get_queue("proj1", None);
-        assert_eq!(queue.items.len(), 0, "exists=false 的 pending item 应被清理");
+        assert_eq!(
+            queue.items.len(),
+            0,
+            "exists=false 的 pending item 应被清理"
+        );
     }
 
     #[test]
     fn test_orphan_retains_reviewed_for_missing_exists() {
         let (mut store, _) = temp_store();
         let report = make_health_report_with_issue("stale", vec!["a1".to_string()]);
-        let assets = vec![
-            SerClaudeMemoryAsset {
-                id: "a1".to_string(),
-                scope: "project".to_string(),
-                asset_type: "project_rule".to_string(),
-                logical_path: "/test/a1".to_string(),
-                native_path: "/test/a1".to_string(),
-                content_hash: None,
-                content_preview: None,
-                content_truncated: false,
-                line_count: Some(50),
-                byte_size: Some(5000),
-                mtime_ms: Some(unix_now() * 1000),
-                frontmatter: None,
-                secret_issues: Vec::new(),
-                exists: true,
-            },
-        ];
+        let assets = vec![SerClaudeMemoryAsset {
+            id: "a1".to_string(),
+            scope: "project".to_string(),
+            asset_type: "project_rule".to_string(),
+            logical_path: "/test/a1".to_string(),
+            native_path: "/test/a1".to_string(),
+            content_hash: None,
+            content_preview: None,
+            content_truncated: false,
+            line_count: Some(50),
+            byte_size: Some(5000),
+            mtime_ms: Some(unix_now() * 1000),
+            frontmatter: None,
+            secret_issues: Vec::new(),
+            exists: true,
+        }];
         store.sync("proj1", &report, &assets).unwrap();
         let item_id = store.get_queue("proj1", None).items[0].id.clone();
-        store.update_state(&item_id, SerReviewState::Reviewed, None, None).unwrap();
+        store
+            .update_state(&item_id, SerReviewState::Reviewed, None, None)
+            .unwrap();
 
         // 变为 exists=false，但 reviewed 应保留
-        let assets_missing = vec![
-            SerClaudeMemoryAsset {
-                id: "a1".to_string(),
-                scope: "project".to_string(),
-                asset_type: "project_rule".to_string(),
-                logical_path: "/test/a1".to_string(),
-                native_path: "/test/a1".to_string(),
-                content_hash: None,
-                content_preview: None,
-                content_truncated: false,
-                line_count: Some(50),
-                byte_size: Some(5000),
-                mtime_ms: Some(unix_now() * 1000),
-                frontmatter: None,
-                secret_issues: Vec::new(),
-                exists: false,
-            },
-        ];
+        let assets_missing = vec![SerClaudeMemoryAsset {
+            id: "a1".to_string(),
+            scope: "project".to_string(),
+            asset_type: "project_rule".to_string(),
+            logical_path: "/test/a1".to_string(),
+            native_path: "/test/a1".to_string(),
+            content_hash: None,
+            content_preview: None,
+            content_truncated: false,
+            line_count: Some(50),
+            byte_size: Some(5000),
+            mtime_ms: Some(unix_now() * 1000),
+            frontmatter: None,
+            secret_issues: Vec::new(),
+            exists: false,
+        }];
         let empty_report = SerMemoryHealthReport {
             overall_score: 100,
             freshness: SerHealthDimension {
