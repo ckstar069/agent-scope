@@ -112,7 +112,7 @@ impl ReviewQueueStore {
         }
 
         // 默认按 updated_at 倒序
-        items.sort_by(|a, b| b.updated_at.cmp(&a.updated_at));
+        items.sort_by_key(|b| std::cmp::Reverse(b.updated_at));
 
         SerReviewQueue {
             items,
