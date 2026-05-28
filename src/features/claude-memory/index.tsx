@@ -16,6 +16,7 @@ import {
 import { Button } from "@/components/ui/button";
 import { Card, CardContent } from "@/components/ui/card";
 import { Switch } from "@/components/ui/switch";
+import { InfoHint } from "@/components/InfoHint";
 import { cn } from "@/lib/utils";
 
 import type { ClaudeMemoryAsset, ContextPressure, MemoryDuplicateGroup, MemoryHealthReport } from "./types";
@@ -222,6 +223,7 @@ function ClaudeMemoryAssets({ projectPath }: { projectPath?: string }) {
                       : "danger"
                   : "default"
               }
+              hint="基于新鲜度、质量、覆盖率、整洁度和安全性的综合评分。"
             />
             <StatCard
               icon={FolderOpen}
@@ -481,8 +483,9 @@ function ContextPressureBanner({
         <Zap className={`mt-0.5 size-4 shrink-0 ${iconClass}`} aria-hidden="true" />
         <div className="min-w-0 flex-1 space-y-2">
           <div className="flex items-center gap-2">
-            <span className={`text-sm font-semibold ${textClass}`}>
+            <span className={`flex items-center gap-1 text-sm font-semibold ${textClass}`}>
               上下文压力 {pressure.level === "critical" ? "过高" : "偏高"}
+              <InfoHint content="估算当前记忆资产对 Claude 上下文窗口的占用压力。过高会挤占对话空间。" />
             </span>
             <span className="text-xs text-muted-foreground">
               {pressure.estimated_tokens >= 1000
@@ -540,12 +543,14 @@ function StatCard({
   value,
   tone = "default",
   isText = false,
+  hint,
 }: {
   icon: typeof Brain;
   label: string;
   value: string | number;
   tone?: "default" | "warning" | "danger";
   isText?: boolean;
+  hint?: string;
 }) {
   const toneClass =
     tone === "danger"
@@ -578,7 +583,10 @@ function StatCard({
     >
       <div className="flex items-center justify-between gap-2">
         <div className="min-w-0">
-          <span className="text-[10px] text-muted-foreground">{label}</span>
+          <span className="flex items-center gap-1 text-[10px] text-muted-foreground">
+            {label}
+            {hint && <InfoHint content={hint} />}
+          </span>
           <p
             data-stat={label}
             className={`mt-0.5 truncate font-semibold tracking-tight ${isText ? "font-mono text-[10px]" : "text-lg"} ${valueClass}`}

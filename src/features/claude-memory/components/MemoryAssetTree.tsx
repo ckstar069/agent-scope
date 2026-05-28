@@ -1,6 +1,7 @@
 import { AlertTriangle, FileText, FileWarning, FolderOpen } from "lucide-react";
 
 import { ScrollArea } from "@/components/ui/scroll-area";
+import { InfoHint } from "@/components/InfoHint";
 import { cn } from "@/lib/utils";
 
 import type { AssetGroup, ClaudeMemoryAsset, GroupedAssets } from "../types";
@@ -166,8 +167,9 @@ export function MemoryAssetTree({
                       {asset.exists && (staleAssetIds?.has(asset.id) || duplicateAssetIds?.has(asset.id) || secretAssetIds?.has(asset.id)) && (
                         <span className="flex shrink-0 items-center gap-1">
                           {staleAssetIds?.has(asset.id) && (
-                            <span className="rounded bg-amber-100 px-1 text-[10px] font-medium text-amber-700 dark:bg-amber-900/40 dark:text-amber-400">
+                            <span className="inline-flex items-center gap-0.5 rounded bg-amber-100 px-1 text-[10px] font-medium text-amber-700 dark:bg-amber-900/40 dark:text-amber-400">
                               stale
+                              <InfoHint content="该资产超过阈值天数未更新，可能已经过时。" />
                             </span>
                           )}
                           {duplicateAssetIds?.has(asset.id) && (
@@ -176,8 +178,9 @@ export function MemoryAssetTree({
                             </span>
                           )}
                           {secretAssetIds?.has(asset.id) && (
-                            <span className="rounded bg-red-100 px-1 text-[10px] font-medium text-red-700 dark:bg-red-900/40 dark:text-red-400">
+                            <span className="inline-flex items-center gap-0.5 rounded bg-red-100 px-1 text-[10px] font-medium text-red-700 dark:bg-red-900/40 dark:text-red-400">
                               secret
+                              <InfoHint content="检测到该资产可能包含 API Key、密码等敏感信息。" />
                             </span>
                           )}
                         </span>

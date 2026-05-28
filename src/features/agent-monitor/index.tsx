@@ -6,6 +6,7 @@ import { getAgentSnapshot } from "@/lib/api";
 import { AgentFileAudit } from "@/components/AgentFileAudit";
 import { AgentSubTree } from "@/components/AgentSubTree";
 import { AgentToolTimeline } from "@/components/AgentToolTimeline";
+import { InfoHint } from "@/components/InfoHint";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
@@ -210,6 +211,7 @@ export function AgentMonitor() {
         <div className="flex flex-wrap items-center gap-3">
           <div className="flex items-center gap-1">
             <span className="text-xs font-medium text-muted-foreground mr-1">速率类型</span>
+            <InfoHint content="选择 Token 消耗速率的统计窗口。采样不足时会显示「采样中」。" />
             {(["5min", "1min", "total", "realtime"] as RateType[]).map((type) => (
               <Button
                 key={type}
@@ -266,10 +268,10 @@ export function AgentMonitor() {
       {totalCount > 0 && (
         <>
           <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-4">
-            <TokenStatTile label="Input Tokens" value={tokenStats.input} color="text-stage-l1" />
-            <TokenStatTile label="Output Tokens" value={tokenStats.output} color="text-stage-l3" />
-            <TokenStatTile label="Cache Read" value={tokenStats.cacheRead} color="text-stage-l5" />
-            <TokenStatTile label="Cache Create" value={tokenStats.cacheCreate} color="text-primary" />
+            <TokenStatTile label="Input Tokens" value={tokenStats.input} color="text-stage-l1" hint="会话累计接收的输入 token 总量，通常来自用户消息和上下文。" />
+            <TokenStatTile label="Output Tokens" value={tokenStats.output} color="text-stage-l3" hint="会话累计生成的输出 token 总量，来自模型回复内容。" />
+            <TokenStatTile label="Cache Read" value={tokenStats.cacheRead} color="text-stage-l5" hint="从缓存中读取的 token 数，命中缓存通常可降低实际调用成本。" />
+            <TokenStatTile label="Cache Create" value={tokenStats.cacheCreate} color="text-primary" hint="新写入缓存的 token 数，首次写入通常会产生额外成本。" />
           </div>
           {agentTypeStats.size > 0 && (
             <div className="flex flex-wrap items-center gap-2">
@@ -368,14 +370,18 @@ interface TokenStatTileProps {
   label: string;
   value: number;
   color: string;
+  hint?: string;
 }
 
-function TokenStatTile({ label, value, color }: TokenStatTileProps) {
+function TokenStatTile({ label, value, color, hint }: TokenStatTileProps) {
   return (
     <Card className="shadow-xs">
       <CardContent className="space-y-3 p-4">
         <div className="flex items-center justify-between gap-3">
-          <p className="text-xs text-muted-foreground">{label}</p>
+          <div className="flex items-center gap-1">
+            <p className="text-xs text-muted-foreground">{label}</p>
+            {hint && <InfoHint content={hint} />}
+          </div>
           <span className={cn("size-1.5 rounded-full bg-current", color)} aria-hidden="true" />
         </div>
         <p className={cn("text-2xl font-semibold tracking-tight", color)}>{formatTokens(value)}</p>
@@ -552,7 +558,7 @@ function AgentSessionRow({ agent, rateUnit, rateType, isExpanded, onToggle }: Om
 >
               <div className="flex items-center justify-between gap-1 text-[10px]"
 >
-                <span className="text-muted-foreground">上下文</span>
+                <span className="flex items-center gap-1 text-muted-foreground">上下文<InfoHint content="当前会话已使用的上下文比例，接近上限时可能触发压缩或影响后续对话质量。" /></span>
                 <span className={cn("font-mono font-semibold", ctxColor.text)}>
                   {formatRate(context.percent)}%
                 </span>
