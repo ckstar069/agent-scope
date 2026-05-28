@@ -78,7 +78,8 @@ function ClaudeMemoryAssets({ projectPath }: { projectPath?: string }) {
   const overview = dashboard?.overview ?? null;
   const healthReport = dashboard?.health_report ?? null;
   const pressure = dashboard?.context_pressure ?? null;
-  const { queue, isLoading: rqLoading, error: rqError, sync: syncQueue, updateState } = useReviewQueue(projectPath);
+  // dashboard 已包含 review_queue，但 sync/updateState 仍需独立 hook
+  const { sync: syncQueue, updateState } = useReviewQueue(projectPath);
   const [bannerDismissed, setBannerDismissed] = useState(false);
   const healthSets = useMemo(() => deriveHealthSets(healthReport, overview?.assets ?? []), [healthReport, overview?.assets]);
   const assetsById = useMemo(() => {
@@ -89,7 +90,10 @@ function ClaudeMemoryAssets({ projectPath }: { projectPath?: string }) {
   const [hideMissing, setHideMissing] = useState(true);
   const [healthFilter, setHealthFilter] = useState<"all" | "stale" | "duplicate" | "issue" | "secret">("all");
   const [assetsCollapsed, setAssetsCollapsed] = useState(false);
-  const isRefreshing = isLoading || rqLoading;
+  const isRefreshing = isLoading;
+
+  // 优先使用 dashboard 中的 review_queue
+  const queue = dashboard?.review_queue ?? null;
 
   const visibleAssets = useMemo(() => {
     if (!overview) return [];
@@ -143,10 +147,7 @@ function ClaudeMemoryAssets({ projectPath }: { projectPath?: string }) {
           variant="outline"
           disabled={isRefreshing}
           onClick={() => {
-            void Promise.all([
-              refreshDashboard(true),
-              syncQueue(true),
-            ]);
+            void refreshDashboard(true);
           }}
         >
           {isRefreshing ? (
@@ -259,9 +260,9 @@ function ClaudeMemoryAssets({ projectPath }: { projectPath?: string }) {
           <div className="shrink-0">
             <ReviewQueuePanel
               queue={queue}
-              isLoading={rqLoading}
-              error={rqError}
-              onSync={() => void syncQueue(false)}
+              isLoading={isLoading}
+              error={error}
+              onSync={() => void syncQueue(false).then(() => refreshDashboard(true))}
               onUpdateState={updateState}
               assetsById={assetsById}
               onSelectAsset={selectAssetFromExternalLink}

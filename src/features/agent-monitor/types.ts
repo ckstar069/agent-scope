@@ -30,6 +30,9 @@ export interface AgentInfo {
   token_rate_1m: number;
   token_rate_5m: number;
   token_rate_total: number;
+  token_rate_1m_reason: string;
+  token_rate_5m_reason: string;
+  token_rate_total_reason: string;
   pid: number;
   version: string;
   effort: string;

@@ -476,11 +476,24 @@ function AgentSessionRow({ agent, rateUnit, rateType, isExpanded, onToggle }: Om
   const displayStatus = toDisplayStatus(agent.status);
   const isIdle = displayStatus === "Idle" || displayStatus === "Offline";
 
-  // Idle 状态使用 session average 显示，避免展示 0 rate
-  // Idle 固定使用 token/min，不受全局 unit 切换影响
-  const effectiveRateType: RateType = isIdle && rateType !== "total" ? "total" : rateType;
-  const displayRate = getDisplayRate(agent, effectiveRateType, isIdle ? "minute" : rateUnit);
-  const rateForColor = getDisplayRate(agent, effectiveRateType, "minute"); // 统一用 token/min 分级
+  // 根据 reason 判断当前 rateType 是否有效；无效时回退到 realtime
+  function rateReady(type: RateType): boolean {
+    switch (type) {
+      case "realtime":
+        return agent.token_rate > 0;
+      case "1min":
+        return agent.token_rate_1m_reason === "fixed_window";
+      case "5min":
+        return agent.token_rate_5m_reason === "fixed_window";
+      case "total":
+        return agent.token_rate_total_reason === "observed_baseline";
+      default:
+        return false;
+    }
+  }
+
+  const currentRateType: RateType = rateReady(rateType) ? rateType : "realtime";
+  const rateForColor = getDisplayRate(agent, currentRateType, "minute");
   const rateColor = getRateColor(rateForColor);
   const context = getContextUsage(agent);
   const ctxColor = getContextColor(context.percent);
@@ -522,7 +535,9 @@ function AgentSessionRow({ agent, rateUnit, rateType, isExpanded, onToggle }: Om
 >
                 <span className="text-muted-foreground">速率</span>
                 <span className={cn("font-mono font-semibold", rateColor.text)}>
-                  {isIdle ? `Idle · 均速 ${formatRate(displayRate)}` : formatRate(displayRate)}
+                  {isIdle
+                    ? `Idle · ${formatIdleRate(agent, rateUnit)}`
+                    : formatActiveRate(agent, currentRateType, rateUnit)}
                 </span>
               </div>
               <div className="mt-0.5 h-1.5 overflow-hidden rounded-full bg-muted"
@@ -589,7 +604,9 @@ function AgentSessionRow({ agent, rateUnit, rateType, isExpanded, onToggle }: Om
 >
                 <span className="text-muted-foreground">Token 消耗速率</span>
                 <span className={cn("font-mono font-semibold", rateColor.text)}>
-                  {isIdle ? `Idle · 全程均速 ${formatRate(displayRate)} token/min` : `${formatRate(displayRate)} ${rateUnit === "second" ? "token/s" : "token/min"}`}
+                  {isIdle
+                    ? `Idle · ${formatIdleRate(agent, rateUnit)}`
+                    : formatActiveRate(agent, currentRateType, rateUnit)}
                 </span>
               </div>
               <div className="mt-1 h-2 overflow-hidden rounded-full bg-muted"
@@ -744,6 +761,61 @@ function getDisplayRate(agent: AgentInfo, rateType: RateType, unit: TokenRateUni
       break;
   }
   return unit === "second" ? baseRate : baseRate * 60;
+}
+
+function formatActiveRate(agent: AgentInfo, rateType: RateType, unit: TokenRateUnit): string {
+  const rate = getDisplayRate(agent, rateType, unit);
+  const suffix = unit === "second" ? "token/s" : "token/min";
+
+  switch (rateType) {
+    case "1min":
+      if (agent.token_rate_1m_reason === "insufficient_samples") return "采样中";
+      if (agent.token_rate_1m_reason === "short_span") return "采样中";
+      if (agent.token_rate_1m_reason === "no_activity") return `0 ${suffix}`;
+      break;
+    case "5min":
+      if (agent.token_rate_5m_reason === "insufficient_samples") return "采样中";
+      if (agent.token_rate_5m_reason === "short_span") return "采样中";
+      if (agent.token_rate_5m_reason === "no_activity") return `0 ${suffix}`;
+      break;
+    case "total":
+      if (agent.token_rate_total_reason === "warming_up") return "采样中";
+      if (agent.token_rate_total_reason === "no_activity") return `0 ${suffix}`;
+      break;
+    case "realtime":
+      if (rate <= 0) return `0 ${suffix}`;
+      break;
+  }
+
+  return `${formatRate(rate)} ${suffix}`;
+}
+
+function formatIdleRate(agent: AgentInfo, unit: TokenRateUnit): string {
+  const suffix = unit === "second" ? "token/s" : "token/min";
+
+  // Idle 状态下优先检查 5min / 1min 是否有固定窗口数据
+  if (agent.token_rate_5m_reason === "fixed_window") {
+    const r = getDisplayRate(agent, "5min", unit);
+    return r > 0 ? `5m 均速 ${formatRate(r)} ${suffix}` : "当前无消耗";
+  }
+  if (agent.token_rate_1m_reason === "fixed_window") {
+    const r = getDisplayRate(agent, "1min", unit);
+    return r > 0 ? `1m 均速 ${formatRate(r)} ${suffix}` : "当前无消耗";
+  }
+  if (agent.token_rate_total_reason === "observed_baseline") {
+    const r = getDisplayRate(agent, "total", unit);
+    return r > 0 ? `观察期均速 ${formatRate(r)} ${suffix}` : "当前无消耗";
+  }
+
+  // 所有窗口都无效
+  if (
+    agent.token_rate_1m_reason === "insufficient_samples" ||
+    agent.token_rate_5m_reason === "insufficient_samples"
+  ) {
+    return "采样中";
+  }
+
+  return "当前无消耗";
 }
 
 function getContextUsage(agent: AgentInfo) {
