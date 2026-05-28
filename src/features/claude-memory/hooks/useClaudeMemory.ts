@@ -174,8 +174,8 @@ interface UseReviewQueueResult {
   queue: ReviewQueue | null;
   isLoading: boolean;
   error: string | null;
-  refresh: (force?: boolean) => Promise<void>;
-  sync: () => Promise<void>;
+  refresh: () => Promise<void>;
+  sync: (force?: boolean) => Promise<void>;
   updateState: (itemId: string, newState: string, snoozeDays?: number, note?: string) => Promise<void>;
 }
 
@@ -197,11 +197,11 @@ export function useReviewQueue(projectPath?: string): UseReviewQueueResult {
     }
   }, [projectPath]);
 
-  const sync = useCallback(async () => {
+  const sync = useCallback(async (force = false) => {
     setIsLoading(true);
     setError(null);
     try {
-      const result = await syncReviewQueue<ReviewQueueSyncResult>(projectPath);
+      const result = await syncReviewQueue<ReviewQueueSyncResult>(projectPath, force);
       setQueue(result.queue);
     } catch (err) {
       setError(err instanceof Error ? err.message : String(err));
@@ -214,7 +214,6 @@ export function useReviewQueue(projectPath?: string): UseReviewQueueResult {
     async (itemId: string, newState: string, snoozeDays?: number, note?: string) => {
       try {
         await updateReviewItemState<ReviewItem>(itemId, newState, snoozeDays, note);
-        // 更新成功后刷新队列
         await refresh();
       } catch (err) {
         setError(err instanceof Error ? err.message : String(err));

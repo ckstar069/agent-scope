@@ -18,11 +18,12 @@ import { Switch } from "@/components/ui/switch";
 import { cn } from "@/lib/utils";
 
 import type { ClaudeMemoryAsset, ContextPressure, MemoryDuplicateGroup, MemoryHealthReport } from "./types";
-import { useClaudeMemory, useContextPressure, useMemoryHealth } from "./hooks/useClaudeMemory";
+import { useClaudeMemory, useContextPressure, useMemoryHealth, useReviewQueue } from "./hooks/useClaudeMemory";
 
 import { LoadChainSimulator } from "./components/LoadChainSimulator";
 import { MemoryAssetDetail } from "./components/MemoryAssetDetail";
 import { MemoryAssetTree } from "./components/MemoryAssetTree";
+import { ReviewQueuePanel } from "./components/ReviewQueuePanel";
 
 /** 从 healthReport 派生各资产的健康标记 */
 function deriveHealthSets(report: MemoryHealthReport | null, assets: ClaudeMemoryAsset[]) {
@@ -75,12 +76,17 @@ function ClaudeMemoryAssets({ projectPath }: { projectPath?: string }) {
   const { overview, isLoading, error, refresh: refreshOverview } = useClaudeMemory(projectPath);
   const { report: healthReport, isLoading: healthLoading, refresh: refreshHealth } = useMemoryHealth(projectPath);
   const { pressure, isLoading: pressureLoading, refresh: refreshPressure } = useContextPressure(projectPath);
+  const { queue, isLoading: rqLoading, error: rqError, sync: syncQueue, updateState } = useReviewQueue(projectPath);
   const [bannerDismissed, setBannerDismissed] = useState(false);
   const healthSets = useMemo(() => deriveHealthSets(healthReport, overview?.assets ?? []), [healthReport, overview?.assets]);
+  const assetsById = useMemo(() => {
+    if (!overview) return new Map<string, ClaudeMemoryAsset>();
+    return new Map(overview.assets.map((a) => [a.id, a]));
+  }, [overview]);
   const [selectedAsset, setSelectedAsset] = useState<ClaudeMemoryAsset | null>(null);
   const [hideMissing, setHideMissing] = useState(true);
   const [healthFilter, setHealthFilter] = useState<"all" | "stale" | "duplicate" | "issue" | "secret">("all");
-  const isRefreshing = isLoading || healthLoading || pressureLoading;
+  const isRefreshing = isLoading || healthLoading || pressureLoading || rqLoading;
 
   const visibleAssets = useMemo(() => {
     if (!overview) return [];
@@ -141,6 +147,7 @@ function ClaudeMemoryAssets({ projectPath }: { projectPath?: string }) {
               refreshOverview(true),
               refreshHealth(true),
               refreshPressure(true),
+              syncQueue(true),
             ]);
           }}
         >
@@ -250,6 +257,17 @@ function ClaudeMemoryAssets({ projectPath }: { projectPath?: string }) {
             </div>
           )}
 
+          {/* Review Queue */}
+          <ReviewQueuePanel
+            queue={queue}
+            isLoading={rqLoading}
+            error={rqError}
+            onSync={() => void syncQueue(false)}
+            onUpdateState={updateState}
+            assetsById={assetsById}
+            onSelectAsset={selectAssetFromExternalLink}
+          />
+
           {/* 主内容：资产树 + 详情 */}
           <div className="flex flex-1 gap-4 overflow-hidden">
             <Card className="flex w-72 shrink-0 flex-col overflow-hidden shadow-xs">
@@ -314,7 +332,7 @@ function ClaudeMemoryAssets({ projectPath }: { projectPath?: string }) {
                   isDuplicate={selectedAsset ? healthSets.duplicateAssetIds.has(selectedAsset.id) : false}
                   isSecretRisk={selectedAsset ? healthSets.secretAssetIds.has(selectedAsset.id) : false}
                   duplicateGroupsForAsset={selectedAsset ? healthSets.duplicateGroupsByAssetId.get(selectedAsset.id) : undefined}
-                  assetsById={overview ? new Map(overview.assets.map((a) => [a.id, a])) : undefined}
+                  assetsById={assetsById}
                   onSelectAsset={setSelectedAsset}
                 />
               </CardContent>
