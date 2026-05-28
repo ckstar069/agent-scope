@@ -1,6 +1,8 @@
 import { useEffect, useMemo, useState } from "react";
 import { Activity, AlertTriangle, Bot, ChevronDown, ChevronRight, Clock, Radio, Search, X } from "lucide-react";
 
+import { getAgentSnapshot } from "@/lib/api";
+
 import { AgentFileAudit } from "@/components/AgentFileAudit";
 import { AgentSubTree } from "@/components/AgentSubTree";
 import { AgentToolTimeline } from "@/components/AgentToolTimeline";
@@ -47,6 +49,17 @@ export function AgentMonitor() {
   useEffect(() => {
     let isMounted = true;
     let unlisten: (() => void) | undefined;
+
+    // 先读取最近一次快照，避免等待下一次 2 秒轮询
+    getAgentSnapshot<AgentUpdatePayload>()
+      .then((payload) => {
+        if (isMounted && payload) {
+          setSnapshot(payload);
+        }
+      })
+      .catch(() => {
+        // 静默忽略，后续事件流会补数据
+      });
 
     listen<AgentUpdatePayload>("agent-update", (event) => {
       setSnapshot(event.payload);

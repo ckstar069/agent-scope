@@ -74,3 +74,7 @@ export function updateReviewItemState<T = unknown>(
 export function getReviewQueueCounts<T = unknown>(projectPath?: string) {
   return tauriInvoke<T>("get_review_queue_counts", { projectPath });
 }
+
+export function getAgentSnapshot<T = unknown>() {
+  return tauriInvoke<T>("get_agent_snapshot_cmd");
+}

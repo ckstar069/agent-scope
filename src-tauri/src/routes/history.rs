@@ -8,8 +8,11 @@ use crate::services::history_service::{
 };
 
 #[tauri::command]
-pub fn list_claude_sessions_cmd() -> Result<Vec<SerProjectSessionGroup>, String> {
-    list_claude_sessions_service()
+pub async fn list_claude_sessions_cmd() -> Result<Vec<SerProjectSessionGroup>, String> {
+    // 使用 spawn_blocking 避免全量 JSONL 扫描阻塞 Tauri 主事件循环
+    tauri::async_runtime::spawn_blocking(list_claude_sessions_service)
+        .await
+        .map_err(|e| format!("扫描任务被取消: {}", e))?
 }
 
 #[tauri::command]

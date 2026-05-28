@@ -31,15 +31,19 @@ export function useClaudeHistory() {
     try {
       const groups = await listClaudeSessions<ProjectSessionGroup[]>();
       setProjectGroups(groups);
-      if (groups.length > 0 && !selectedProject) {
-        setSelectedProject(groups[0].project_path);
-      }
+      // 只在之前没有选中项目时才设置默认值，避免循环依赖
+      setSelectedProject((prev) => {
+        if (groups.length > 0 && !prev) {
+          return groups[0].project_path;
+        }
+        return prev;
+      });
     } catch (e) {
       setError(String(e));
     } finally {
       setIsLoading(false);
     }
-  }, [selectedProject]);
+  }, []);
 
   const deleteSessionHandler = useCallback(async (sessionId: string) => {
     if (!confirm("此操作不可逆，删除后无法通过 /resume 恢复该会话。确定删除吗？")) {
@@ -91,21 +95,9 @@ export function useClaudeHistory() {
 
   useEffect(() => {
     fetchSessions();
-    const interval = setInterval(() => {
-      // 自动轮询时不显示 loading，避免闪烁
-      listClaudeSessions<ProjectSessionGroup[]>()
-        .then((groups) => {
-          setProjectGroups(groups);
-          if (groups.length > 0 && !selectedProject) {
-            setSelectedProject(groups[0].project_path);
-          }
-        })
-        .catch(() => {
-          // 静默忽略轮询错误，避免打扰用户
-        });
-    }, 5000);
-    return () => clearInterval(interval);
-  }, [fetchSessions, selectedProject]);
+    // 移除 5 秒全量轮询：会话管理是历史浏览页，不应频繁全量扫描 JSONL
+    // 用户可通过手动刷新按钮重新加载
+  }, [fetchSessions]);
 
   const filteredGroups = projectGroups.filter((group) => {
     const query = searchQuery.toLowerCase();

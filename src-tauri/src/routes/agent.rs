@@ -40,3 +40,9 @@ pub fn get_session_transcript_cmd(
 ) -> Result<SerTranscript, String> {
     agent_service::get_session_transcript(path, session_id)
 }
+
+#[tauri::command(rename = "get_agent_snapshot")]
+pub fn get_agent_snapshot_cmd(state: State<'_, AppState>) -> Result<Option<crate::collectors::agent::AgentUpdatePayload>, String> {
+    let collector = state.agent_collector.lock().map_err(|e| e.to_string())?;
+    Ok(collector.latest_snapshot())
+}

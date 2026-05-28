@@ -6,8 +6,8 @@ pub mod project;
 pub mod settings;
 
 pub use agent::{
-    get_latest_session_cmd, get_session_transcript_cmd, list_project_sessions_cmd,
-    search_sessions_cmd, start_watching_cmd, stop_watching_cmd,
+    get_agent_snapshot_cmd, get_latest_session_cmd, get_session_transcript_cmd,
+    list_project_sessions_cmd, search_sessions_cmd, start_watching_cmd, stop_watching_cmd,
 };
 pub use claude_memory::{
     get_claude_memory_file_content_cmd, get_claude_memory_overview_cmd, get_context_pressure_cmd,

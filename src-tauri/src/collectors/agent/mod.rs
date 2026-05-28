@@ -207,6 +207,8 @@ pub struct AgentCollector {
     /// 每个 session 的 token 历史采样：[(timestamp, total_tokens), ...]
     /// 保留最近 5 分钟的采样（150 个点，每 2 秒一个）
     token_history_samples: TokenHistorySamples,
+    /// 最近一次 AgentUpdatePayload 缓存，供前端首屏立即展示
+    last_payload: Arc<Mutex<Option<AgentUpdatePayload>>>,
 }
 
 impl AgentCollector {
@@ -217,6 +219,7 @@ impl AgentCollector {
             running: Arc::new(AtomicBool::new(false)),
             last_tokens: Arc::new(Mutex::new(HashMap::new())),
             token_history_samples: Arc::new(Mutex::new(HashMap::new())),
+            last_payload: Arc::new(Mutex::new(None)),
         }
     }
 
@@ -255,6 +258,7 @@ impl AgentCollector {
         let registered_paths = self.registered_paths.clone();
         let last_tokens = self.last_tokens.clone();
         let token_history_samples = self.token_history_samples.clone();
+        let last_payload = self.last_payload.clone();
 
         thread::Builder::new()
             .name("agent-scope-agent-collector".into())
@@ -279,6 +283,10 @@ impl AgentCollector {
                                 &token_history_samples,
                             );
 
+                            {
+                                let mut cache = last_payload.lock().unwrap();
+                                *cache = Some(payload.clone());
+                            }
                             if let Err(e) = app_handle.emit("agent-update", &payload) {
                                 eprintln!("[agent-collector] 发送 Tauri event 失败: {}", e);
                             }
@@ -317,6 +325,11 @@ impl AgentCollector {
     /// 检查是否正在运行
     pub fn is_running(&self) -> bool {
         self.running.load(Ordering::SeqCst)
+    }
+
+    /// 获取最近一次采集的 AgentUpdatePayload 快照
+    pub fn latest_snapshot(&self) -> Option<AgentUpdatePayload> {
+        self.last_payload.lock().unwrap().clone()
     }
 }
 

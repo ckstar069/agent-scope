@@ -13,7 +13,7 @@ use collectors::claude_memory::review_queue::ReviewQueueStore;
 use registry::ProjectRegistry;
 use routes::{
     add_project_cmd, delete_claude_session_cmd, export_claude_session_cmd,
-    get_claude_memory_file_content_cmd, get_claude_memory_overview_cmd,
+    get_agent_snapshot_cmd, get_claude_memory_file_content_cmd, get_claude_memory_overview_cmd,
     get_claude_session_detail_cmd, get_context_pressure_cmd, get_latest_session_cmd,
     get_memory_health_report_cmd, get_project_data_cmd, get_project_file_content_cmd,
     get_project_files_cmd, get_review_queue_cmd, get_review_queue_counts_cmd,
@@ -91,6 +91,7 @@ pub fn run() {
             start_watching_cmd,
             stop_watching_cmd,
             get_latest_session_cmd,
+            get_agent_snapshot_cmd,
             list_project_sessions_cmd,
             search_sessions_cmd,
             get_session_transcript_cmd,

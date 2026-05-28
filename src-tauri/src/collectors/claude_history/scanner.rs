@@ -617,7 +617,9 @@ fn scan_projects(
                 .and_then(|t| t.duration_since(std::time::SystemTime::UNIX_EPOCH).ok())
                 .map(|d| d.as_secs() * 1000);
 
-            let turn_count = count_user_turns(&file_path).ok();
+            // 列表页不统计 turn_count，避免逐行读取整个 JSONL
+            // turn_count 只在 preview_claude_session 中按需统计
+            let turn_count = None;
 
             let (name, status, started_at, updated_at, is_active) =
                 if let Some(active) = active_sessions.get(&session_id) {
@@ -695,20 +697,45 @@ fn parse_status(status: &str) -> SerSessionStatus {
     }
 }
 
+/// 读取上限：最多 200 行，或前 256KB，二者先到为准
+const MAX_NAME_SCAN_LINES: usize = 200;
+const MAX_NAME_SCAN_BYTES: u64 = 256 * 1024;
+
 fn extract_session_name(jsonl_path: &Path) -> Option<String> {
     let file = fs::File::open(jsonl_path).ok()?;
-    let reader = BufReader::new(file);
+    let mut reader = BufReader::new(file);
 
     let mut custom_title: Option<String> = None;
     let mut ai_title: Option<String> = None;
     let mut first_user_prompt: Option<String> = None;
+    let mut line_count = 0;
 
-    for line in reader.lines() {
-        let line = line.ok()?;
+    loop {
+        if line_count >= MAX_NAME_SCAN_LINES {
+            break;
+        }
+
+        let mut line = String::new();
+        match reader.read_line(&mut line) {
+            Ok(0) => break,
+            Ok(_) => {}
+            Err(_) => break,
+        }
+        line_count += 1;
+
+        // 字节上限检查
+        let bytes_read = line.len();
+        if bytes_read > MAX_NAME_SCAN_BYTES as usize {
+            break;
+        }
+
         if line.trim().is_empty() {
             continue;
         }
-        let value: Value = serde_json::from_str(&line).ok()?;
+        let value: Value = match serde_json::from_str(&line) {
+            Ok(v) => v,
+            Err(_) => continue,
+        };
 
         let msg_type = value.get("type").and_then(|v| v.as_str()).unwrap_or("");
 
