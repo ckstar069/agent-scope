@@ -254,7 +254,7 @@ test.describe("ClaudeMemory", () => {
     await openClaudeMemory(page);
 
     await expect(page.getByRole("heading", { name: "Claude 记忆" })).toBeVisible();
-    await expect(page.getByText("扫描本机 Claude Code 记忆文件")).toBeVisible();
+    await expect(page.getByText("扫描 Instruction、Rules、Skills、Agents 和 Auto Memory")).toBeVisible();
     await expect(page.getByRole("button", { name: "刷新" })).toBeVisible();
   });
 
@@ -287,7 +287,7 @@ test.describe("ClaudeMemory", () => {
     await openClaudeMemory(page);
 
     // 等待加载完成
-    await expect(page.getByRole("heading", { name: "记忆资产" })).toBeVisible();
+    await expect(page.getByText("记忆资产").first()).toBeVisible();
 
     // 验证分组标题（使用 heading role 避免匹配到副标题中的文字）
     await expect(page.getByRole("heading", { name: "Instruction" })).toBeVisible();
@@ -300,7 +300,7 @@ test.describe("ClaudeMemory", () => {
     await mockClaudeMemoryInvoke(page);
     await openClaudeMemory(page);
 
-    await expect(page.getByRole("heading", { name: "记忆资产" })).toBeVisible();
+    await expect(page.getByText("记忆资产").first()).toBeVisible();
 
     // 验证具体资产项
     await expect(page.getByText("CLAUDE.md").first()).toBeVisible();
@@ -313,7 +313,7 @@ test.describe("ClaudeMemory", () => {
     await mockClaudeMemoryInvoke(page);
     await openClaudeMemory(page);
 
-    await expect(page.getByRole("heading", { name: "记忆资产" })).toBeVisible();
+    await expect(page.getByText("记忆资产").first()).toBeVisible();
 
     // 过长标记
     await expect(page.getByText("过长")).toBeVisible();
@@ -323,7 +323,7 @@ test.describe("ClaudeMemory", () => {
     await mockClaudeMemoryInvoke(page);
     await openClaudeMemory(page);
 
-    await expect(page.getByRole("heading", { name: "记忆资产" })).toBeVisible();
+    await expect(page.getByText("记忆资产").first()).toBeVisible();
 
     // 点击第一个资产
     await page.getByText("CLAUDE.md").first().click();
@@ -338,7 +338,7 @@ test.describe("ClaudeMemory", () => {
     await mockClaudeMemoryInvoke(page);
     await openClaudeMemory(page);
 
-    await expect(page.getByRole("heading", { name: "记忆资产" })).toBeVisible();
+    await expect(page.getByText("记忆资产").first()).toBeVisible();
 
     // secret issue 徽章
     await expect(page.getByText("1 项风险")).toBeVisible();
@@ -348,7 +348,7 @@ test.describe("ClaudeMemory", () => {
     await mockClaudeMemoryInvoke(page);
     await openClaudeMemory(page);
 
-    await expect(page.getByRole("heading", { name: "记忆资产" })).toBeVisible();
+    await expect(page.getByText("记忆资产").first()).toBeVisible();
 
     // 点击有 secret issue 的 rule 资产
     await page.getByText("style.md").click();
@@ -363,7 +363,7 @@ test.describe("ClaudeMemory", () => {
     await mockClaudeMemoryInvoke(page);
     await openClaudeMemory(page);
 
-    await expect(page.getByRole("heading", { name: "记忆资产" })).toBeVisible();
+    await expect(page.getByText("记忆资产").first()).toBeVisible();
 
     // 点击 skill 资产
     await page.getByText("SKILL.md").click();
@@ -378,7 +378,7 @@ test.describe("ClaudeMemory", () => {
     await mockClaudeMemoryInvoke(page);
     await openClaudeMemory(page);
 
-    await expect(page.getByRole("heading", { name: "记忆资产" })).toBeVisible();
+    await expect(page.getByText("记忆资产").first()).toBeVisible();
 
     // 点击 rule 资产
     await page.getByText("style.md").click();
@@ -392,7 +392,7 @@ test.describe("ClaudeMemory", () => {
     await mockClaudeMemoryInvoke(page);
     await openClaudeMemory(page);
 
-    await expect(page.getByRole("heading", { name: "记忆资产" })).toBeVisible();
+    await expect(page.getByText("记忆资产").first()).toBeVisible();
 
     // 点击无 frontmatter 的 rule 资产
     await page.getByText("no-frontmatter.md").click();
@@ -407,7 +407,7 @@ test.describe("ClaudeMemory", () => {
     await mockClaudeMemoryInvoke(page);
     await openClaudeMemory(page);
 
-    await expect(page.getByRole("heading", { name: "记忆资产" })).toBeVisible();
+    await expect(page.getByText("记忆资产").first()).toBeVisible();
 
     // 点击 project rule 资产，验证副标题显示 "project" 而非 "rules"
     await page.getByText("01-project-rule.md").click();
@@ -424,7 +424,7 @@ test.describe("ClaudeMemory", () => {
     await mockClaudeMemoryInvoke(page, { rejectFileContent: true });
     await openClaudeMemory(page);
 
-    await expect(page.getByRole("heading", { name: "记忆资产" })).toBeVisible();
+    await expect(page.getByText("记忆资产").first()).toBeVisible();
 
     // 点击截断文件
     await page.getByText("BIG.md").click();
@@ -447,7 +447,7 @@ test.describe("ClaudeMemory", () => {
     await mockClaudeMemoryInvoke(page);
     await openClaudeMemory(page);
 
-    await expect(page.getByRole("heading", { name: "记忆资产" })).toBeVisible();
+    await expect(page.getByText("记忆资产").first()).toBeVisible();
 
     // missing.md 默认不应显示
     await expect(page.getByText("missing.md")).not.toBeVisible();
@@ -459,7 +459,7 @@ test.describe("ClaudeMemory", () => {
     await mockClaudeMemoryInvoke(page);
     await openClaudeMemory(page);
 
-    await expect(page.getByRole("heading", { name: "记忆资产" })).toBeVisible();
+    await expect(page.getByText("记忆资产").first()).toBeVisible();
 
     // 默认隐藏
     await expect(page.getByText("missing.md")).not.toBeVisible();
@@ -479,7 +479,7 @@ test.describe("ClaudeMemory", () => {
     await mockClaudeMemoryInvoke(page);
     await openClaudeMemory(page);
 
-    await expect(page.getByRole("heading", { name: "记忆资产" })).toBeVisible();
+    await expect(page.getByText("记忆资产").first()).toBeVisible();
 
     // 关闭隐藏不存在，点击 missing.md
     await page.locator('button[role="switch"]').click();
@@ -492,6 +492,6 @@ test.describe("ClaudeMemory", () => {
     await page.locator('button[role="switch"]').click();
 
     // missing.md 被隐藏，右侧应回到空状态
-    await expect(page.getByText("点击左侧资产查看详情")).toBeVisible();
+    await expect(page.getByText("选择左侧记忆资产查看内容")).toBeVisible();
   });
 });

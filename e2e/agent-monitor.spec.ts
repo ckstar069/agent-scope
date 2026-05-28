@@ -27,7 +27,7 @@ test.describe("AgentMonitor", () => {
   test("显示汇总指标卡片", async ({ page }) => {
     // 即使无 Agent，汇总卡片仍渲染
     await expect(page.getByText("会话总数")).toBeVisible();
-    await expect(page.getByText("已注册项目")).toBeVisible();
+    await expect(page.getByText("活动目录")).toBeVisible();
     await expect(page.getByText("刷新时间")).toBeVisible();
   });
 
@@ -100,7 +100,7 @@ test.describe("AgentMonitor", () => {
 
     // 汇总卡片可见
     await expect(page.getByText("会话总数")).toBeVisible();
-    await expect(page.getByText("已注册项目")).toBeVisible();
+    await expect(page.getByText("活动目录")).toBeVisible();
     await expect(page.getByText("刷新时间")).toBeVisible();
 
     // 主题按钮可见
@@ -108,14 +108,16 @@ test.describe("AgentMonitor", () => {
     await expect(themeButton).toBeVisible();
   });
 
-  test("mock 数据下显示其他工作目录标题和描述", async ({ page }) => {
+  test("mock 数据下按 cwd 显示平级卡片", async ({ page }) => {
     await mockAgentUpdateEvent(page);
     await openAgentMonitor(page);
 
-    // 其他工作目录卡片标题
-    await expect(page.getByText("其他工作目录")).toBeVisible({ timeout: 8000 });
-    // 未匹配描述文本
-    await expect(page.getByText("未匹配模板项目中已注册的项目路径")).toBeVisible();
+    // 已注册项目卡片
+    await expect(page.getByRole("heading", { name: "sample-project" })).toBeVisible({ timeout: 8000 });
+    // 未匹配 cwd 卡片（按 basename 显示）
+    await expect(page.getByRole("heading", { name: "other-workspace" })).toBeVisible();
+    // 不再出现旧的聚合描述
+    await expect(page.getByText("未匹配模板项目中已注册的项目路径")).not.toBeVisible();
   });
 });
 
