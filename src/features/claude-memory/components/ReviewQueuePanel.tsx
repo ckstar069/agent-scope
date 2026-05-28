@@ -1,5 +1,5 @@
 import { useCallback, useState } from "react";
-import { Loader2, RefreshCw } from "lucide-react";
+import { ChevronDown, Loader2, RefreshCw } from "lucide-react";
 
 import { Button } from "@/components/ui/button";
 import { cn } from "@/lib/utils";
@@ -53,6 +53,7 @@ export function ReviewQueuePanel({
   assetsById,
   onSelectAsset,
 }: ReviewQueuePanelProps) {
+  const [collapsed, setCollapsed] = useState(true);
   const [filter, setFilter] = useState<ReviewState | "all">("pending");
   const [expandedId, setExpandedId] = useState<string | null>(null);
   const [updatingItemId, setUpdatingItemId] = useState<string | null>(null);
@@ -78,13 +79,21 @@ export function ReviewQueuePanel({
     [onUpdateState],
   );
 
+  const pendingHint = queue && queue.pending_count > 0
+    ? <span className="ml-1.5 rounded bg-amber-100 px-1.5 py-0 text-[10px] font-medium text-amber-700 dark:bg-amber-950/40 dark:text-amber-400">{queue.pending_count} 项待处理</span>
+    : null;
+
   return (
     <div className="rounded-xl border border-border bg-card shadow-xs">
-      {/* Header */}
-      <div className="flex items-center justify-between border-b border-border px-4 py-3">
-        <div className="flex items-center gap-3">
+      {/* Header — 可点击折叠 */}
+      <button
+        type="button"
+        onClick={() => setCollapsed((c) => !c)}
+        className="flex w-full items-center justify-between px-4 py-2.5 text-left hover:bg-muted/30 transition-colors"
+      >
+        <div className="flex items-center gap-2">
           <h2 className="text-sm font-semibold">审阅队列</h2>
-          {queue && (
+          {collapsed ? pendingHint : queue && (
             <div className="flex items-center gap-2 text-xs text-muted-foreground">
               <span>待处理 {queue.pending_count}</span>
               <span>已标记 {queue.reviewed_count}</span>
@@ -94,86 +103,99 @@ export function ReviewQueuePanel({
           )}
         </div>
         <div className="flex items-center gap-2">
-          {queue?.last_sync_at && (
+          {queue?.last_sync_at && !collapsed && (
             <span className="text-xs text-muted-foreground">
               上次同步：{formatDate(queue.last_sync_at)}
             </span>
           )}
-          <Button
-            type="button"
-            variant="outline"
-            size="sm"
-            disabled={isLoading}
-            onClick={onSync}
-          >
-            {isLoading ? (
-              <Loader2
-                className="mr-1 size-3.5 animate-spin"
-                aria-hidden="true"
-              />
-            ) : (
-              <RefreshCw className="mr-1 size-3.5" aria-hidden="true" />
-            )}
-            同步
-          </Button>
-        </div>
-      </div>
-
-      {/* Filter Tabs */}
-      <div className="flex items-center gap-1 border-b border-border px-4 py-2">
-        {FILTERS.map((f) => (
-          <button
-            key={f.key}
-            type="button"
-            onClick={() => setFilter(f.key)}
+          {!collapsed && (
+            <Button
+              type="button"
+              variant="outline"
+              size="sm"
+              disabled={isLoading}
+              onClick={(e) => { e.stopPropagation(); onSync(); }}
+            >
+              {isLoading ? (
+                <Loader2
+                  className="mr-1 size-3.5 animate-spin"
+                  aria-hidden="true"
+                />
+              ) : (
+                <RefreshCw className="mr-1 size-3.5" aria-hidden="true" />
+              )}
+              同步
+            </Button>
+          )}
+          <ChevronDown
             className={cn(
-              "rounded-md px-2.5 py-1 text-xs font-medium transition-colors",
-              filter === f.key
-                ? "bg-primary/10 text-primary"
-                : "text-muted-foreground hover:bg-muted/60",
+              "size-4 text-muted-foreground transition-transform",
+              !collapsed && "rotate-180"
             )}
-          >
-            {f.label}
-          </button>
-        ))}
-      </div>
+            aria-hidden="true"
+          />
+        </div>
+      </button>
 
-      {/* Content */}
-      <div className="max-h-[320px] overflow-auto">
-        {error && (
-          <div className="flex items-center gap-2 p-4 text-xs text-destructive">
-            <span>加载失败：{error}</span>
-          </div>
-        )}
-
-        {!error && filteredItems.length === 0 && (
-          <div className="flex flex-col items-center justify-center gap-2 py-8 text-sm text-muted-foreground">
-            <p>
-              {filter === "all"
-                ? "当前没有审阅项"
-                : `当前没有${FILTERS.find((f) => f.key === filter)?.label ?? ""}的审阅项`}
-            </p>
-          </div>
-        )}
-
-        {!error && filteredItems.length > 0 && (
-          <div className="divide-y divide-border">
-            {filteredItems.map((item) => (
-              <ReviewItemRow
-                key={item.id}
-                item={item}
-                assetsById={assetsById}
-                expanded={expandedId === item.id}
-                onToggle={() => handleToggle(item.id)}
-                onSelectAsset={onSelectAsset}
-                onUpdateState={handleUpdateState}
-                isMutating={updatingItemId === item.id}
-                isLoading={isLoading}
-              />
+      {!collapsed && (
+        <div className="flex flex-col max-h-[220px] overflow-hidden">
+          {/* Filter Tabs */}
+          <div className="shrink-0 flex items-center gap-1 border-b border-border px-4 py-2">
+            {FILTERS.map((f) => (
+              <button
+                key={f.key}
+                type="button"
+                onClick={() => setFilter(f.key)}
+                className={cn(
+                  "rounded-md px-2.5 py-1 text-xs font-medium transition-colors",
+                  filter === f.key
+                    ? "bg-primary/10 text-primary"
+                    : "text-muted-foreground hover:bg-muted/60",
+                )}
+              >
+                {f.label}
+              </button>
             ))}
           </div>
-        )}
-      </div>
+
+          {/* Content */}
+          <div className="flex-1 overflow-auto">
+            {error && (
+              <div className="flex items-center gap-2 p-4 text-xs text-destructive">
+                <span>加载失败：{error}</span>
+              </div>
+            )}
+
+            {!error && filteredItems.length === 0 && (
+              <div className="flex flex-col items-center justify-center gap-2 py-8 text-sm text-muted-foreground">
+                <p>
+                  {filter === "all"
+                    ? "当前没有审阅项"
+                    : `当前没有${FILTERS.find((f) => f.key === filter)?.label ?? ""}的审阅项`}
+                </p>
+              </div>
+            )}
+
+            {!error && filteredItems.length > 0 && (
+              <div className="divide-y divide-border">
+                {filteredItems.map((item) => (
+                  <ReviewItemRow
+                    key={item.id}
+                    item={item}
+                    assetsById={assetsById}
+                    expanded={expandedId === item.id}
+                    onToggle={() => handleToggle(item.id)}
+                    onSelectAsset={onSelectAsset}
+                    onUpdateState={handleUpdateState}
+                    isMutating={updatingItemId === item.id}
+                    isLoading={isLoading}
+                  />
+                ))}
+              </div>
+            )}
+          </div>
+        </div>
+      )}
     </div>
   );
 }

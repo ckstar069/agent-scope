@@ -18,15 +18,45 @@ interface MemoryAssetDetailProps {
   duplicateGroupsForAsset?: MemoryDuplicateGroup[];
   assetsById?: Map<string, ClaudeMemoryAsset>;
   onSelectAsset?: (asset: ClaudeMemoryAsset) => void;
+  visibleAssetsCount?: number;
+  totalAssetsCount?: number;
+  currentFilter?: string;
 }
 
-export function MemoryAssetDetail({ asset, projectPath, isStale, staleDays, isDuplicate, isSecretRisk, duplicateGroupsForAsset, assetsById, onSelectAsset }: MemoryAssetDetailProps) {
+export function MemoryAssetDetail({
+  asset,
+  projectPath,
+  isStale,
+  staleDays,
+  isDuplicate,
+  isSecretRisk,
+  duplicateGroupsForAsset,
+  assetsById,
+  onSelectAsset,
+  visibleAssetsCount,
+  totalAssetsCount,
+  currentFilter,
+}: MemoryAssetDetailProps) {
   const { content, isLoading, error } = useClaudeMemoryFile(asset, projectPath);
 
   if (!asset) {
     return (
-      <div className="flex h-full items-center justify-center text-sm text-muted-foreground">
-        点击左侧资产查看详情
+      <div className="flex h-full flex-col items-center justify-center gap-3 p-8 text-center">
+        <div className="flex size-12 items-center justify-center rounded-xl bg-muted text-muted-foreground">
+          <FileWarning className="size-6" aria-hidden="true" />
+        </div>
+        <div className="space-y-1">
+          <p className="text-sm font-medium text-muted-foreground">
+            选择左侧记忆资产查看内容
+          </p>
+          {visibleAssetsCount !== undefined && totalAssetsCount !== undefined && (
+            <p className="text-xs text-muted-foreground">
+              {currentFilter && currentFilter !== "all"
+                ? `当前筛选「${currentFilter}」显示 ${visibleAssetsCount} / ${totalAssetsCount} 个资产`
+                : `共 ${totalAssetsCount} 个记忆资产`}
+            </p>
+          )}
+        </div>
       </div>
     );
   }
@@ -90,12 +120,14 @@ export function MemoryAssetDetail({ asset, projectPath, isStale, staleDays, isDu
       )}
       {/* Duplicate Groups */}
       {duplicateGroupsForAsset && duplicateGroupsForAsset.length > 0 && assetsById && (
-        <DuplicateGroupView
-          groups={duplicateGroupsForAsset}
-          currentAssetId={asset.id}
-          assetsById={assetsById}
-          onSelectAsset={onSelectAsset}
-        />
+        <div className="shrink-0 border-t border-border bg-muted/20 p-4">
+          <DuplicateGroupView
+            groups={duplicateGroupsForAsset}
+            currentAssetId={asset.id}
+            assetsById={assetsById}
+            onSelectAsset={onSelectAsset}
+          />
+        </div>
       )}
     </div>
   );

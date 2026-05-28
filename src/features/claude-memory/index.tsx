@@ -2,6 +2,7 @@ import { useEffect, useMemo, useState } from "react";
 import {
   AlertTriangle,
   Brain,
+  ChevronDown,
   EyeOff,
   FolderOpen,
   Heart,
@@ -13,7 +14,7 @@ import {
 } from "lucide-react";
 
 import { Button } from "@/components/ui/button";
-import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
+import { Card, CardContent } from "@/components/ui/card";
 import { Switch } from "@/components/ui/switch";
 import { cn } from "@/lib/utils";
 
@@ -86,6 +87,7 @@ function ClaudeMemoryAssets({ projectPath }: { projectPath?: string }) {
   const [selectedAsset, setSelectedAsset] = useState<ClaudeMemoryAsset | null>(null);
   const [hideMissing, setHideMissing] = useState(true);
   const [healthFilter, setHealthFilter] = useState<"all" | "stale" | "duplicate" | "issue" | "secret">("all");
+  const [assetsCollapsed, setAssetsCollapsed] = useState(false);
   const isRefreshing = isLoading || healthLoading || pressureLoading || rqLoading;
 
   const visibleAssets = useMemo(() => {
@@ -126,16 +128,13 @@ function ClaudeMemoryAssets({ projectPath }: { projectPath?: string }) {
   };
 
   return (
-    <section className="flex h-full flex-col gap-4">
+    <section className="flex h-[calc(100dvh-3.5rem)] min-h-0 flex-col gap-3 overflow-hidden">
       {/* 页面标题 */}
-      <div className="flex flex-col gap-4 lg:flex-row lg:items-end lg:justify-between">
-        <div className="space-y-2">
-          <p className="text-sm font-medium text-muted-foreground">
-            Claude Code
-          </p>
-          <h1 className="text-3xl font-semibold tracking-tight">Claude 记忆</h1>
-          <p className="max-w-2xl text-sm text-muted-foreground">
-            扫描本机 Claude Code 记忆文件，包括 Instruction、Rules、Skills、Agents 和 Auto Memory。
+      <div className="flex flex-col gap-2 lg:flex-row lg:items-center lg:justify-between shrink-0">
+        <div>
+          <h1 className="text-xl font-semibold tracking-tight">Claude 记忆</h1>
+          <p className="text-xs text-muted-foreground">
+            扫描 Instruction、Rules、Skills、Agents 和 Auto Memory
           </p>
         </div>
         <Button
@@ -178,7 +177,7 @@ function ClaudeMemoryAssets({ projectPath }: { projectPath?: string }) {
 
       {/* 内容 */}
       {overview && (
-        <div className="flex flex-1 flex-col gap-4 overflow-hidden">
+        <div className="flex min-h-0 flex-1 flex-col gap-4 overflow-hidden">
           {/* Context Pressure Banner */}
           {pressure && !bannerDismissed && pressure.level !== "normal" && (
             <ContextPressureBanner
@@ -189,7 +188,7 @@ function ClaudeMemoryAssets({ projectPath }: { projectPath?: string }) {
           )}
 
           {/* 顶部统计 */}
-          <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-5">
+          <div className="grid gap-2 sm:grid-cols-2 lg:grid-cols-5 shrink-0">
             <StatCard
               icon={Brain}
               label="总资产"
@@ -258,166 +257,199 @@ function ClaudeMemoryAssets({ projectPath }: { projectPath?: string }) {
           )}
 
           {/* Review Queue */}
-          <ReviewQueuePanel
-            queue={queue}
-            isLoading={rqLoading}
-            error={rqError}
-            onSync={() => void syncQueue(false)}
-            onUpdateState={updateState}
-            assetsById={assetsById}
-            onSelectAsset={selectAssetFromExternalLink}
-          />
-
-          {/* 主内容：资产树 + 详情 */}
-          <div className="flex flex-1 gap-4 overflow-hidden">
-            <Card className="flex w-72 shrink-0 flex-col overflow-hidden shadow-xs">
-              <CardHeader className="flex flex-row items-center justify-between border-b border-border bg-tile/70 py-3">
-                <CardTitle className="text-sm font-medium">
-                  记忆资产
-                </CardTitle>
-                <div className="flex items-center gap-2">
-                  <EyeOff className="size-3.5 text-muted-foreground" aria-hidden="true" />
-                  <span className="text-xs text-muted-foreground">隐藏不存在</span>
-                  <Switch
-                    checked={hideMissing}
-                    onCheckedChange={setHideMissing}
-                    aria-label="隐藏不存在的资产"
-                  />
-                </div>
-              </CardHeader>
-              <CardContent className="flex-1 p-0">
-                <div className="flex items-center gap-1 border-b border-border px-3 py-2">
-                  {(["all", "stale", "duplicate", "issue", "secret"] as const).map((f) => {
-                    const labels: Record<typeof f, string> = {
-                      all: "全部",
-                      stale: "stale",
-                      duplicate: "duplicate",
-                      issue: "有问题",
-                      secret: "secret",
-                    };
-                    return (
-                      <button
-                        key={f}
-                        type="button"
-                        onClick={() => setHealthFilter(f)}
-                        className={cn(
-                          "rounded-md px-2 py-1 text-xs font-medium transition-colors",
-                          healthFilter === f
-                            ? "bg-primary/10 text-primary"
-                            : "text-muted-foreground hover:bg-muted/60",
-                        )}
-                      >
-                        {labels[f]}
-                      </button>
-                    );
-                  })}
-                </div>
-                <MemoryAssetTree
-                  assets={visibleAssets}
-                  selectedAsset={selectedAsset}
-                  onSelectAsset={setSelectedAsset}
-                  staleAssetIds={healthSets.staleAssetIds}
-                  duplicateAssetIds={healthSets.duplicateAssetIds}
-                  secretAssetIds={healthSets.secretAssetIds}
-                />
-              </CardContent>
-            </Card>
-            <Card className="flex flex-1 flex-col overflow-hidden shadow-xs">
-              <CardContent className="flex-1 overflow-auto p-0">
-                <MemoryAssetDetail
-                  asset={selectedAsset}
-                  projectPath={projectPath}
-                  isStale={selectedAsset ? healthSets.staleAssetIds.has(selectedAsset.id) : false}
-                  staleDays={selectedAsset ? healthSets.staleDaysByAssetId.get(selectedAsset.id) : undefined}
-                  isDuplicate={selectedAsset ? healthSets.duplicateAssetIds.has(selectedAsset.id) : false}
-                  isSecretRisk={selectedAsset ? healthSets.secretAssetIds.has(selectedAsset.id) : false}
-                  duplicateGroupsForAsset={selectedAsset ? healthSets.duplicateGroupsByAssetId.get(selectedAsset.id) : undefined}
-                  assetsById={assetsById}
-                  onSelectAsset={setSelectedAsset}
-                />
-              </CardContent>
-            </Card>
+          <div className="shrink-0">
+            <ReviewQueuePanel
+              queue={queue}
+              isLoading={rqLoading}
+              error={rqError}
+              onSync={() => void syncQueue(false)}
+              onUpdateState={updateState}
+              assetsById={assetsById}
+              onSelectAsset={selectAssetFromExternalLink}
+            />
           </div>
 
-          {/* Health Details */}
-          {healthReport && (
-            <details className="group rounded-xl border border-border bg-card shadow-xs">
-              <summary className="flex cursor-pointer items-center gap-2 p-4 text-sm font-medium select-none">
-                <span className="text-muted-foreground">健康诊断详情</span>
-                <span className="text-xs text-muted-foreground">（启发式评估，非绝对质量分）</span>
-                <span className="ml-auto text-xs text-muted-foreground group-open:rotate-180 transition-transform">▼</span>
-              </summary>
-              <div className="space-y-4 border-t border-border p-4">
-                <div className="grid gap-3 sm:grid-cols-5">
-                  {([healthReport.freshness, healthReport.quality, healthReport.coverage, healthReport.cleanliness, healthReport.safety] as const).map((dim) => (
-                    <div key={dim.name} className="space-y-1">
-                      <div className="flex items-center justify-between text-xs">
-                        <span className="text-muted-foreground capitalize">{dim.name}</span>
-                        <span className={`font-semibold ${dim.score >= 80 ? "text-green-600" : dim.score >= 60 ? "text-amber-600" : "text-red-600"}`}>{dim.score}</span>
-                      </div>
-                      <div className="h-2 rounded-full bg-muted overflow-hidden">
-                        <div
-                          className={`h-full rounded-full ${dim.score >= 80 ? "bg-green-500" : dim.score >= 60 ? "bg-amber-500" : "bg-red-500"}`}
-                          style={{ width: `${dim.score}%` }}
-                        />
-                      </div>
-                      <p className="text-xs text-muted-foreground truncate" title={dim.reason}>{dim.reason}</p>
+          {/* 主内容：资产树 + 详情 */}
+          <Card className={cn("flex flex-col overflow-hidden", assetsCollapsed ? "" : "flex-1 min-h-0")}>
+            <button
+              type="button"
+              onClick={() => setAssetsCollapsed((c) => !c)}
+              className="shrink-0 flex items-center justify-between border-b border-border px-4 py-3 text-left hover:bg-muted/30 transition-colors"
+            >
+              <div className="flex items-center gap-2">
+                <span className="text-sm font-semibold">记忆资产</span>
+                <span className="text-xs text-muted-foreground">
+                  {visibleAssets.length} / {overview.assets.length}
+                </span>
+                {selectedAsset && (
+                  <span className="hidden sm:inline text-xs text-muted-foreground truncate max-w-[200px]" title={selectedAsset.logical_path}>
+                    · {selectedAsset.logical_path}
+                  </span>
+                )}
+              </div>
+              <ChevronDown
+                className={cn(
+                  "size-4 text-muted-foreground transition-transform",
+                  !assetsCollapsed && "rotate-180"
+                )}
+                aria-hidden="true"
+              />
+            </button>
+
+            {!assetsCollapsed && (
+              <CardContent className="flex flex-1 min-h-0 gap-0 overflow-hidden p-0">
+                {/* 左侧资产树 */}
+                <div className="flex h-full min-h-0 w-72 shrink-0 flex-col overflow-hidden border-r border-border">
+                  <div className="shrink-0 flex items-center justify-between border-b border-border px-3 py-2">
+                    <div className="flex items-center gap-2">
+                      <EyeOff className="size-3.5 text-muted-foreground" aria-hidden="true" />
+                      <span className="text-xs text-muted-foreground">隐藏不存在</span>
+                      <Switch
+                        checked={hideMissing}
+                        onCheckedChange={setHideMissing}
+                        aria-label="隐藏不存在的资产"
+                      />
                     </div>
-                  ))}
-                </div>
-                {healthReport.top_issues.length > 0 && (
-                  <div className="space-y-2">
-                    <p className="text-xs font-medium text-muted-foreground">主要问题</p>
-                    {healthReport.top_issues.map((issue, i) => {
-                      const locatableCount = overview
-                        ? issue.asset_ids.filter((id) =>
-                            overview.assets.some((a) => a.exists && a.id === id),
-                          ).length
-                        : 0;
-                      const canLocate = locatableCount > 0;
+                  </div>
+                  <div className="shrink-0 flex items-center gap-1 border-b border-border px-3 py-2">
+                    {(["all", "stale", "duplicate", "issue", "secret"] as const).map((f) => {
+                      const labels: Record<typeof f, string> = {
+                        all: "全部",
+                        stale: "过期",
+                        duplicate: "重复",
+                        issue: "问题",
+                        secret: "敏感",
+                      };
                       return (
-                        <div
-                          key={i}
+                        <button
+                          key={f}
+                          type="button"
+                          onClick={() => setHealthFilter(f)}
                           className={cn(
-                            "flex items-start gap-2 rounded-lg border p-2 text-xs",
-                            issue.severity === "critical"
-                              ? "border-red-200 bg-red-50 dark:border-red-900/50 dark:bg-red-950/20"
-                              : issue.severity === "warning"
-                                ? "border-amber-200 bg-amber-50 dark:border-amber-900/50 dark:bg-amber-950/20"
-                                : "border-border bg-muted/30",
-                            canLocate && "cursor-pointer hover:brightness-95",
+                            "rounded-md px-1.5 py-0.5 text-[10px] font-medium transition-colors whitespace-nowrap",
+                            healthFilter === f
+                              ? "bg-primary/10 text-primary"
+                              : "text-muted-foreground hover:bg-muted/60",
                           )}
-                          role={canLocate ? "button" : undefined}
-                          tabIndex={canLocate ? 0 : undefined}
-                          onClick={canLocate ? () => selectFirstIssueAsset(issue.asset_ids) : undefined}
-                          onKeyDown={
-                            canLocate
-                              ? (e) => {
-                                  if (e.key === "Enter" || e.key === " ") {
-                                    e.preventDefault();
-                                    selectFirstIssueAsset(issue.asset_ids);
-                                  }
-                                }
-                              : undefined
-                          }
                         >
-                          <span className={`shrink-0 font-medium ${issue.severity === "critical" ? "text-red-600" : issue.severity === "warning" ? "text-amber-600" : "text-muted-foreground"}`}>{issue.severity}</span>
-                          <div className="min-w-0 flex-1">
-                            <p className="truncate" title={issue.message}>{issue.message}</p>
-                            <p className="text-muted-foreground truncate" title={issue.suggestion}>→ {issue.suggestion}</p>
-                          </div>
-                          {issue.asset_ids.length > 0 && (
-                            <span className="shrink-0 text-muted-foreground">{locatableCount} 个资产</span>
-                          )}
-                        </div>
+                          {labels[f]}
+                        </button>
                       );
                     })}
                   </div>
-                )}
-              </div>
-            </details>
-          )}
-        </div>
+                  <div className="flex-1 overflow-hidden">
+                    <MemoryAssetTree
+                      assets={visibleAssets}
+                      selectedAsset={selectedAsset}
+                      onSelectAsset={setSelectedAsset}
+                      staleAssetIds={healthSets.staleAssetIds}
+                      duplicateAssetIds={healthSets.duplicateAssetIds}
+                      secretAssetIds={healthSets.secretAssetIds}
+                    />
+                  </div>
+                </div>
+
+                {/* 右侧详情 */}
+                <div className="flex h-full min-h-0 flex-1 flex-col overflow-hidden">
+                  <div className="flex-1 overflow-auto">
+                    <MemoryAssetDetail
+                      asset={selectedAsset}
+                      projectPath={projectPath}
+                      isStale={selectedAsset ? healthSets.staleAssetIds.has(selectedAsset.id) : false}
+                      staleDays={selectedAsset ? healthSets.staleDaysByAssetId.get(selectedAsset.id) : undefined}
+                      isDuplicate={selectedAsset ? healthSets.duplicateAssetIds.has(selectedAsset.id) : false}
+                      isSecretRisk={selectedAsset ? healthSets.secretAssetIds.has(selectedAsset.id) : false}
+                      duplicateGroupsForAsset={selectedAsset ? healthSets.duplicateGroupsByAssetId.get(selectedAsset.id) : undefined}
+                      assetsById={assetsById}
+                      onSelectAsset={setSelectedAsset}
+                      visibleAssetsCount={visibleAssets.length}
+                      totalAssetsCount={overview.assets.length}
+                      currentFilter={healthFilter}
+                    />
+                  </div>
+                  {/* Health Details */}
+                  {healthReport && (
+                    <details className="shrink-0 group border-t border-border bg-card">
+                      <summary className="flex cursor-pointer items-center gap-2 px-4 py-2.5 text-xs font-medium select-none hover:bg-muted/30">
+                        <span className="text-muted-foreground">健康诊断</span>
+                        <span className="text-[10px] text-muted-foreground">（启发式评估）</span>
+                        <span className="ml-auto text-[10px] text-muted-foreground group-open:rotate-180 transition-transform">▼</span>
+                      </summary>
+                      <div className="max-h-[220px] overflow-auto border-t border-border p-3 space-y-3">
+                        <div className="grid gap-2 sm:grid-cols-5">
+                          {([healthReport.freshness, healthReport.quality, healthReport.coverage, healthReport.cleanliness, healthReport.safety] as const).map((dim) => (
+                            <div key={dim.name} className="space-y-1">
+                              <div className="flex items-center justify-between text-xs">
+                                <span className="text-muted-foreground capitalize">{dim.name}</span>
+                                <span className={`font-semibold ${dim.score >= 80 ? "text-green-600" : dim.score >= 60 ? "text-amber-600" : "text-red-600"}`}>{dim.score}</span>
+                              </div>
+                              <div className="h-2 rounded-full bg-muted overflow-hidden">
+                                <div
+                                  className={`h-full rounded-full ${dim.score >= 80 ? "bg-green-500" : dim.score >= 60 ? "bg-amber-500" : "bg-red-500"}`}
+                                  style={{ width: `${dim.score}%` }}
+                                />
+                              </div>
+                              <p className="text-xs text-muted-foreground truncate" title={dim.reason}>{dim.reason}</p>
+                            </div>
+                          ))}
+                        </div>
+                        {healthReport.top_issues.length > 0 && (
+                          <div className="space-y-2">
+                            <p className="text-xs font-medium text-muted-foreground">主要问题</p>
+                            {healthReport.top_issues.map((issue, i) => {
+                              const locatableCount = overview
+                                ? issue.asset_ids.filter((id) =>
+                                    overview.assets.some((a) => a.exists && a.id === id),
+                                  ).length
+                                : 0;
+                              const canLocate = locatableCount > 0;
+                              return (
+                                <div
+                                  key={i}
+                                  className={cn(
+                                    "flex items-start gap-2 rounded-lg border p-2 text-xs",
+                                    issue.severity === "critical"
+                                      ? "border-red-200 bg-red-50 dark:border-red-900/50 dark:bg-red-950/20"
+                                      : issue.severity === "warning"
+                                        ? "border-amber-200 bg-amber-50 dark:border-amber-900/50 dark:bg-amber-950/20"
+                                        : "border-border bg-muted/30",
+                                    canLocate && "cursor-pointer hover:brightness-95",
+                                  )}
+                                  role={canLocate ? "button" : undefined}
+                                  tabIndex={canLocate ? 0 : undefined}
+                                  onClick={canLocate ? () => selectFirstIssueAsset(issue.asset_ids) : undefined}
+                                  onKeyDown={
+                                    canLocate
+                                      ? (e) => {
+                                          if (e.key === "Enter" || e.key === " ") {
+                                            e.preventDefault();
+                                            selectFirstIssueAsset(issue.asset_ids);
+                                          }
+                                        }
+                                      : undefined
+                                  }
+                                >
+                                  <span className={`shrink-0 font-medium ${issue.severity === "critical" ? "text-red-600" : issue.severity === "warning" ? "text-amber-600" : "text-muted-foreground"}`}>{issue.severity}</span>
+                                  <div className="min-w-0 flex-1">
+                                    <p className="truncate" title={issue.message}>{issue.message}</p>
+                                    <p className="text-muted-foreground truncate" title={issue.suggestion}>→ {issue.suggestion}</p>
+                                  </div>
+                                  {issue.asset_ids.length > 0 && (
+                                    <span className="shrink-0 text-muted-foreground">{locatableCount} 个资产</span>
+                                  )}
+                                </div>
+                              );
+                            })}
+                          </div>
+                        )}
+                      </div>
+                    </details>
+                  )}
+                </div>
+              </CardContent>
+            )}
+          </Card>
+      </div>
       )}
     </section>
   );
@@ -542,23 +574,23 @@ function StatCard({
 
   return (
     <div
-      className={`rounded-xl border p-4 shadow-xs ${toneClass}`}
+      className={`rounded-lg border p-2.5 shadow-xs ${toneClass}`}
     >
-      <div className="flex min-h-20 items-start justify-between gap-3">
+      <div className="flex items-center justify-between gap-2">
         <div className="min-w-0">
-          <span className="text-xs text-muted-foreground">{label}</span>
+          <span className="text-[10px] text-muted-foreground">{label}</span>
           <p
             data-stat={label}
-            className={`mt-2 truncate font-semibold tracking-tight ${isText ? "font-mono text-xs" : "text-2xl"} ${valueClass}`}
+            className={`mt-0.5 truncate font-semibold tracking-tight ${isText ? "font-mono text-[10px]" : "text-lg"} ${valueClass}`}
           >
             {value}
           </p>
         </div>
         <span
-          className={`flex size-8 shrink-0 items-center justify-center rounded-md border ${iconBorderClass}`}
+          className={`flex size-6 shrink-0 items-center justify-center rounded-md border ${iconBorderClass}`}
         >
           <Icon
-            className={`size-4 ${iconClass}`}
+            className={`size-3 ${iconClass}`}
             aria-hidden="true"
           />
         </span>
