@@ -6,9 +6,11 @@ use crate::collectors::claude_memory::health_checker::compute_health_report;
 use crate::collectors::claude_memory::load_chain::simulate_load_chain;
 use crate::collectors::claude_memory::models::{
     SerClaudeMemoryScanResult, SerContextPressure, SerLoadChain, SerMemoryHealthReport,
+    SerReviewItem, SerReviewQueue, SerReviewQueueCounts, SerReviewQueueSyncResult, SerReviewState,
 };
 use crate::collectors::claude_memory::path_resolver::resolve_claude_config_dir;
 use crate::collectors::claude_memory::pressure::compute_context_pressure;
+use crate::collectors::claude_memory::review_queue::canonicalize_project_id;
 use crate::collectors::claude_memory::scanner::{scan_claude_memory, scan_project_level};
 use crate::collectors::claude_memory::secret_scanner::SecretScanner;
 
@@ -197,6 +199,60 @@ pub fn get_context_pressure_service(
     Ok(compute_context_pressure(&scan_result.assets))
 }
 
+/// 获取审阅队列
+pub fn get_review_queue_service(
+    project_path: Option<String>,
+    filter: Option<String>,
+    state: &AppState,
+) -> Result<SerReviewQueue, String> {
+    let project_id = canonicalize_project_id(project_path.as_deref());
+    let store = state.review_queue.lock().map_err(|e| e.to_string())?;
+    Ok(store.get_queue(&project_id, filter.as_deref()))
+}
+
+/// 同步审阅队列（先扫描再锁 store）
+pub fn sync_review_queue_service(
+    project_path: Option<String>,
+    force: bool,
+    state: &AppState,
+) -> Result<SerReviewQueueSyncResult, String> {
+    let project_id = canonicalize_project_id(project_path.as_deref());
+    let scan_result = get_claude_memory_overview_service(project_path, force, state)?;
+    let health_report = compute_health_report(&scan_result.assets);
+    let mut store = state.review_queue.lock().map_err(|e| e.to_string())?;
+    store.sync(&project_id, &health_report, &scan_result.assets)
+}
+
+/// 更新审阅项状态
+pub fn update_review_item_state_service(
+    item_id: String,
+    new_state: String,
+    snooze_days: Option<u32>,
+    note: Option<String>,
+    state: &AppState,
+) -> Result<SerReviewItem, String> {
+    let state_enum = match new_state.as_str() {
+        "pending" => SerReviewState::Pending,
+        "reviewed" => SerReviewState::Reviewed,
+        "ignored" => SerReviewState::Ignored,
+        "snoozed" => SerReviewState::Snoozed,
+        _ => return Err(format!("无效状态: {}", new_state)),
+    };
+
+    let mut store = state.review_queue.lock().map_err(|e| e.to_string())?;
+    store.update_state(&item_id, state_enum, snooze_days, note)
+}
+
+/// 获取审阅队列计数
+pub fn get_review_queue_counts_service(
+    project_path: Option<String>,
+    state: &AppState,
+) -> Result<SerReviewQueueCounts, String> {
+    let project_id = canonicalize_project_id(project_path.as_deref());
+    let store = state.review_queue.lock().map_err(|e| e.to_string())?;
+    Ok(store.get_counts(&project_id))
+}
+
 // ─── 辅助：重建 summary ───
 
 use crate::collectors::claude_memory::models::SerMemorySummary;
@@ -233,16 +289,21 @@ fn build_summary(
 #[cfg(test)]
 mod tests {
     use super::*;
+    use crate::collectors::claude_memory::review_queue::ReviewQueueStore;
     use crate::registry::ProjectRegistry;
     use std::fs;
 
     fn test_state(registry: ProjectRegistry) -> AppState {
+        let rq_store = ReviewQueueStore::new(
+            std::env::temp_dir().join(format!("agent-scope-test-rq-{}", std::process::id())),
+        );
         AppState {
             registry: std::sync::Mutex::new(registry),
             watchers: std::sync::Mutex::new(std::collections::HashMap::new()),
             agent_collector: std::sync::Mutex::new(crate::collectors::agent::AgentCollector::new()),
             template_path: std::sync::Mutex::new(None),
             template_fingerprint: std::sync::Mutex::new(None),
+            review_queue: std::sync::Mutex::new(rq_store),
         }
     }
 

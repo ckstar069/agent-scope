@@ -1,8 +1,26 @@
 import { useCallback, useEffect, useState } from "react";
 
-import { getClaudeMemoryFileContent, getClaudeMemoryOverview, getContextPressure, getMemoryHealthReport } from "@/lib/api";
+import {
+  getClaudeMemoryFileContent,
+  getClaudeMemoryOverview,
+  getContextPressure,
+  getMemoryHealthReport,
+  getReviewQueue,
+  getReviewQueueCounts,
+  syncReviewQueue,
+  updateReviewItemState,
+} from "@/lib/api";
 
-import type { ClaudeMemoryOverview, ClaudeMemoryAsset, MemoryHealthReport, ContextPressure } from "../types";
+import type {
+  ClaudeMemoryOverview,
+  ClaudeMemoryAsset,
+  MemoryHealthReport,
+  ContextPressure,
+  ReviewQueue,
+  ReviewQueueCounts,
+  ReviewQueueSyncResult,
+  ReviewItem,
+} from "../types";
 
 interface UseClaudeMemoryResult {
   overview: ClaudeMemoryOverview | null;
@@ -148,4 +166,98 @@ export function useContextPressure(projectPath?: string): UseContextPressureResu
   }, [refresh]);
 
   return { pressure, isLoading, error, refresh };
+}
+
+// ─── Review Queue Hooks (Phase 3 Batch 2) ───
+
+interface UseReviewQueueResult {
+  queue: ReviewQueue | null;
+  isLoading: boolean;
+  error: string | null;
+  refresh: (force?: boolean) => Promise<void>;
+  sync: () => Promise<void>;
+  updateState: (itemId: string, newState: string, snoozeDays?: number, note?: string) => Promise<void>;
+}
+
+export function useReviewQueue(projectPath?: string): UseReviewQueueResult {
+  const [queue, setQueue] = useState<ReviewQueue | null>(null);
+  const [isLoading, setIsLoading] = useState(false);
+  const [error, setError] = useState<string | null>(null);
+
+  const refresh = useCallback(async () => {
+    setIsLoading(true);
+    setError(null);
+    try {
+      const result = await getReviewQueue<ReviewQueue>(projectPath);
+      setQueue(result);
+    } catch (err) {
+      setError(err instanceof Error ? err.message : String(err));
+    } finally {
+      setIsLoading(false);
+    }
+  }, [projectPath]);
+
+  const sync = useCallback(async () => {
+    setIsLoading(true);
+    setError(null);
+    try {
+      const result = await syncReviewQueue<ReviewQueueSyncResult>(projectPath);
+      setQueue(result.queue);
+    } catch (err) {
+      setError(err instanceof Error ? err.message : String(err));
+    } finally {
+      setIsLoading(false);
+    }
+  }, [projectPath]);
+
+  const updateState = useCallback(
+    async (itemId: string, newState: string, snoozeDays?: number, note?: string) => {
+      try {
+        await updateReviewItemState<ReviewItem>(itemId, newState, snoozeDays, note);
+        // 更新成功后刷新队列
+        await refresh();
+      } catch (err) {
+        setError(err instanceof Error ? err.message : String(err));
+      }
+    },
+    [refresh],
+  );
+
+  useEffect(() => {
+    refresh();
+  }, [refresh]);
+
+  return { queue, isLoading, error, refresh, sync, updateState };
+}
+
+interface UseReviewQueueCountsResult {
+  counts: ReviewQueueCounts | null;
+  isLoading: boolean;
+  error: string | null;
+  refresh: () => Promise<void>;
+}
+
+export function useReviewQueueCounts(projectPath?: string): UseReviewQueueCountsResult {
+  const [counts, setCounts] = useState<ReviewQueueCounts | null>(null);
+  const [isLoading, setIsLoading] = useState(false);
+  const [error, setError] = useState<string | null>(null);
+
+  const refresh = useCallback(async () => {
+    setIsLoading(true);
+    setError(null);
+    try {
+      const result = await getReviewQueueCounts<ReviewQueueCounts>(projectPath);
+      setCounts(result);
+    } catch (err) {
+      setError(err instanceof Error ? err.message : String(err));
+    } finally {
+      setIsLoading(false);
+    }
+  }, [projectPath]);
+
+  useEffect(() => {
+    refresh();
+  }, [refresh]);
+
+  return { counts, isLoading, error, refresh };
 }

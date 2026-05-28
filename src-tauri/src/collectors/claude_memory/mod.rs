@@ -5,6 +5,7 @@ pub mod load_chain;
 pub mod models;
 pub mod path_resolver;
 pub mod pressure;
+pub mod review_queue;
 pub mod scanner;
 pub mod secret_scanner;
 pub mod settings_reader;

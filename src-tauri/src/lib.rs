@@ -9,17 +9,20 @@ pub mod watcher;
 
 use app_state::init_app_state;
 use collectors::agent::AgentCollector;
+use collectors::claude_memory::review_queue::ReviewQueueStore;
 use registry::ProjectRegistry;
 use routes::{
     add_project_cmd, delete_claude_session_cmd, export_claude_session_cmd,
     get_claude_memory_file_content_cmd, get_claude_memory_overview_cmd,
     get_claude_session_detail_cmd, get_context_pressure_cmd, get_latest_session_cmd,
     get_memory_health_report_cmd, get_project_data_cmd, get_project_file_content_cmd,
-    get_project_files_cmd, get_session_transcript_cmd, get_template_path_cmd,
-    list_claude_sessions_cmd, list_project_sessions_cmd, list_projects_cmd,
-    preview_claude_session_cmd, remove_project_cmd, save_candidate_memory_cmd,
-    search_claude_history_cmd, search_sessions_cmd, set_template_path_cmd,
-    simulate_claude_memory_load_chain_cmd, start_watching_cmd, stop_watching_cmd,
+    get_project_files_cmd, get_review_queue_cmd, get_review_queue_counts_cmd,
+    get_session_transcript_cmd, get_template_path_cmd, list_claude_sessions_cmd,
+    list_project_sessions_cmd, list_projects_cmd, preview_claude_session_cmd,
+    remove_project_cmd, save_candidate_memory_cmd, search_claude_history_cmd,
+    search_sessions_cmd, set_template_path_cmd, simulate_claude_memory_load_chain_cmd,
+    start_watching_cmd, stop_watching_cmd, sync_review_queue_cmd,
+    update_review_item_state_cmd,
 };
 
 #[tauri::command]
@@ -71,7 +74,10 @@ pub fn run() {
             let agent_handle = app.handle().clone();
             let _join_handle = agent_collector.start(agent_handle);
 
-            init_app_state(app, registry, agent_collector);
+            let review_queue_path = data_dir.join("memory_reviews.json");
+            let review_queue = ReviewQueueStore::load_or_default(review_queue_path);
+
+            init_app_state(app, registry, agent_collector, review_queue);
 
             Ok(())
         })
@@ -103,6 +109,10 @@ pub fn run() {
             simulate_claude_memory_load_chain_cmd,
             get_memory_health_report_cmd,
             get_context_pressure_cmd,
+            get_review_queue_cmd,
+            sync_review_queue_cmd,
+            update_review_item_state_cmd,
+            get_review_queue_counts_cmd,
         ])
         .run(tauri::generate_context!())
         .expect("error while running tauri application");

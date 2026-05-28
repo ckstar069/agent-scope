@@ -52,3 +52,25 @@ export function getMemoryHealthReport<T = unknown>(projectPath?: string, force =
 export function getContextPressure<T = unknown>(projectPath?: string, force = false) {
   return tauriInvoke<T>("get_context_pressure", { projectPath, force });
 }
+
+// Review Queue API
+export function getReviewQueue<T = unknown>(projectPath?: string, filter?: string) {
+  return tauriInvoke<T>("get_review_queue", { projectPath, filter });
+}
+
+export function syncReviewQueue<T = unknown>(projectPath?: string, force = false) {
+  return tauriInvoke<T>("sync_review_queue", { projectPath, force });
+}
+
+export function updateReviewItemState<T = unknown>(
+  itemId: string,
+  newState: string,
+  snoozeDays?: number,
+  note?: string,
+) {
+  return tauriInvoke<T>("update_review_item_state", { itemId, newState, snoozeDays, note });
+}
+
+export function getReviewQueueCounts<T = unknown>(projectPath?: string) {
+  return tauriInvoke<T>("get_review_queue_counts", { projectPath });
+}

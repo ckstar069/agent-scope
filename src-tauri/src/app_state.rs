@@ -6,6 +6,7 @@ use std::sync::{Arc, Mutex};
 use tauri::Manager;
 
 use crate::collectors::agent::AgentCollector;
+use crate::collectors::claude_memory::review_queue::ReviewQueueStore;
 use crate::collectors::template::{load_template_path, TemplateFingerprint};
 use crate::registry::ProjectRegistry;
 
@@ -22,16 +23,22 @@ pub struct AppState {
     pub agent_collector: Mutex<AgentCollector>,
     pub template_path: Mutex<Option<PathBuf>>,
     pub template_fingerprint: Mutex<Option<TemplateFingerprintCache>>,
+    pub review_queue: Mutex<ReviewQueueStore>,
 }
 
 impl AppState {
-    pub fn new(registry: ProjectRegistry, agent_collector: AgentCollector) -> Self {
+    pub fn new(
+        registry: ProjectRegistry,
+        agent_collector: AgentCollector,
+        review_queue: ReviewQueueStore,
+    ) -> Self {
         Self {
             registry: Mutex::new(registry),
             watchers: Mutex::new(HashMap::new()),
             agent_collector: Mutex::new(agent_collector),
             template_path: Mutex::new(None),
             template_fingerprint: Mutex::new(None),
+            review_queue: Mutex::new(review_queue),
         }
     }
 }
@@ -40,8 +47,9 @@ pub fn init_app_state(
     app: &tauri::App,
     registry: ProjectRegistry,
     agent_collector: AgentCollector,
+    review_queue: ReviewQueueStore,
 ) {
-    let state = AppState::new(registry, agent_collector);
+    let state = AppState::new(registry, agent_collector, review_queue);
 
     let data_dir = ProjectRegistry::default_data_dir();
     if let Some(template_path) = load_template_path(&data_dir) {

@@ -199,3 +199,50 @@ export interface ContextPressure {
   heavy_assets: PressureHeavyAsset[];
   alerts: PressureAlert[];
 }
+
+// ─── Review Queue (Phase 3 Batch 2) ───
+
+export type ReviewState = "pending" | "reviewed" | "ignored" | "snoozed";
+
+export interface ReviewItem {
+  id: string;
+  source_key: string;
+  project_id: string;
+  issue_type: string;
+  severity: string;
+  message: string;
+  suggestion: string;
+  asset_ids: string[];
+  primary_asset_id: string;
+  group_id: string | null;
+  state: ReviewState;
+  created_at: number;
+  updated_at: number;
+  snooze_until: number | null;
+  review_note: string | null;
+}
+
+export interface ReviewQueue {
+  items: ReviewItem[];
+  pending_count: number;
+  reviewed_count: number;
+  ignored_count: number;
+  snoozed_count: number;
+  last_sync_at: number | null;
+}
+
+export interface ReviewQueueCounts {
+  pending: number;
+  reviewed: number;
+  ignored: number;
+  snoozed: number;
+  total: number;
+}
+
+export interface ReviewQueueSyncResult {
+  created: number;
+  updated: number;
+  unchanged: number;
+  expired_snoozes: number;
+  queue: ReviewQueue;
+}

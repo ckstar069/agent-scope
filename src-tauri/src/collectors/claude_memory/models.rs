@@ -1,4 +1,4 @@
-use serde::Serialize;
+use serde::{Deserialize, Serialize};
 use std::collections::HashMap;
 
 /// 单次扫描结果（v0.1 实时生成，无服务端缓存）
@@ -243,4 +243,69 @@ pub struct SerPressureAlert {
     pub threshold: f64,
     pub severity: String, // "info" | "warning" | "critical"
     pub message: String,
+}
+
+// ============================================================================
+// Review Queue 数据结构 (Phase 3 Batch 2)
+// ============================================================================
+
+/// 审阅状态枚举
+#[derive(Debug, Clone, Serialize, Deserialize, PartialEq)]
+#[serde(rename_all = "snake_case")]
+pub enum SerReviewState {
+    Pending,
+    Reviewed,
+    Ignored,
+    Snoozed,
+}
+
+/// 单个审阅项
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct SerReviewItem {
+    pub id: String,
+    pub source_key: String,
+    pub project_id: String,
+    pub issue_type: String,
+    pub severity: String,
+    pub message: String,
+    pub suggestion: String,
+    pub asset_ids: Vec<String>,
+    pub primary_asset_id: String,
+    pub group_id: Option<String>,
+    pub state: SerReviewState,
+    pub created_at: u64,
+    pub updated_at: u64,
+    pub snooze_until: Option<u64>,
+    pub review_note: Option<String>,
+}
+
+/// 审阅队列（返回给前端）
+#[derive(Debug, Clone, Serialize)]
+pub struct SerReviewQueue {
+    pub items: Vec<SerReviewItem>,
+    pub pending_count: usize,
+    pub reviewed_count: usize,
+    pub ignored_count: usize,
+    pub snoozed_count: usize,
+    pub last_sync_at: Option<u64>,
+}
+
+/// 审阅队列计数（轻量返回）
+#[derive(Debug, Clone, Serialize)]
+pub struct SerReviewQueueCounts {
+    pub pending: usize,
+    pub reviewed: usize,
+    pub ignored: usize,
+    pub snoozed: usize,
+    pub total: usize,
+}
+
+/// Sync 结果摘要
+#[derive(Debug, Clone, Serialize)]
+pub struct SerReviewQueueSyncResult {
+    pub created: usize,
+    pub updated: usize,
+    pub unchanged: usize,
+    pub expired_snoozes: usize,
+    pub queue: SerReviewQueue,
 }
