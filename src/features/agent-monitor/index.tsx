@@ -210,13 +210,13 @@ export function AgentMonitor() {
 
         <div className="flex flex-wrap items-center gap-3">
           <div className="flex items-center gap-1">
-            <span className="text-xs font-medium text-muted-foreground mr-1">速率视图</span>
-            <InfoHint content="选择速率的统计视图。窗口均速统一显示为 token/min；最近采样显示为 token/s。部分模型在回复结束或计数刷新后才更新 token 计数。" />
+            <span className="text-xs font-medium text-muted-foreground mr-1">速率统计</span>
+            <InfoHint content="5分钟/1分钟/监控期平均显示为 token/min；最近2秒显示为 token/s。部分模型只在回复结束后刷新 token 计数。" />
             {([
-              { key: "5min" as RateType, label: "5m均速", unit: "minute" as TokenRateUnit },
-              { key: "1min" as RateType, label: "1m均速", unit: "minute" as TokenRateUnit },
-              { key: "total" as RateType, label: "观察期", unit: "minute" as TokenRateUnit },
-              { key: "realtime" as RateType, label: "最近采样", unit: "second" as TokenRateUnit },
+              { key: "5min" as RateType, label: "5分钟平均", unit: "minute" as TokenRateUnit },
+              { key: "1min" as RateType, label: "1分钟平均", unit: "minute" as TokenRateUnit },
+              { key: "total" as RateType, label: "监控期平均", unit: "minute" as TokenRateUnit },
+              { key: "realtime" as RateType, label: "最近2秒", unit: "second" as TokenRateUnit },
             ]).map((item) => {
               const isActive = rateType === item.key;
               return (

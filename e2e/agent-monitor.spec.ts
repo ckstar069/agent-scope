@@ -31,23 +31,23 @@ test.describe("AgentMonitor", () => {
     await expect(page.getByText("刷新时间")).toBeVisible();
   });
 
-  test("显示速率视图切换按钮", async ({ page }) => {
+  test("显示速率统计切换按钮", async ({ page }) => {
     // 使用 exact 避免匹配 InfoHint 的 aria-label
-    await expect(page.getByRole("button", { name: "5m均速", exact: true })).toBeVisible();
-    await expect(page.getByRole("button", { name: "1m均速", exact: true })).toBeVisible();
-    await expect(page.getByRole("button", { name: "观察期", exact: true })).toBeVisible();
-    await expect(page.getByRole("button", { name: "最近采样", exact: true })).toBeVisible();
+    await expect(page.getByRole("button", { name: "5分钟平均", exact: true })).toBeVisible();
+    await expect(page.getByRole("button", { name: "1分钟平均", exact: true })).toBeVisible();
+    await expect(page.getByRole("button", { name: "监控期平均", exact: true })).toBeVisible();
+    await expect(page.getByRole("button", { name: "最近2秒", exact: true })).toBeVisible();
 
-    // 默认 5m均速 应该处于激活样式（bg-primary class）
-    const defaultActive = page.getByRole("button", { name: "5m均速", exact: true });
+    // 默认 5分钟平均 应该处于激活样式（bg-primary class）
+    const defaultActive = page.getByRole("button", { name: "5分钟平均", exact: true });
     await expect(defaultActive).toHaveClass(/bg-primary/);
 
-    // 点击 最近采样 切换
-    await page.getByRole("button", { name: "最近采样", exact: true }).click();
+    // 点击 最近2秒 切换
+    await page.getByRole("button", { name: "最近2秒", exact: true }).click();
 
-    // 点击后 最近采样 应该获得激活样式，5m均速 失去激活样式
+    // 点击后 最近2秒 应该获得激活样式，5分钟平均 失去激活样式
     await expect(defaultActive).not.toHaveClass(/bg-primary/);
-    await expect(page.getByRole("button", { name: "最近采样", exact: true })).toHaveClass(/bg-primary/);
+    await expect(page.getByRole("button", { name: "最近2秒", exact: true })).toHaveClass(/bg-primary/);
   });
 
   test("搜索输入框存在且可交互", async ({ page }) => {
@@ -97,11 +97,11 @@ test.describe("AgentMonitor", () => {
     // 搜索框可见
     await expect(page.getByRole("textbox", { name: "搜索 Agent 会话" })).toBeVisible();
 
-    // 速率视图按钮可见（exact 避免匹配 InfoHint aria-label）
-    await expect(page.getByRole("button", { name: "5m均速", exact: true })).toBeVisible();
-    await expect(page.getByRole("button", { name: "1m均速", exact: true })).toBeVisible();
-    await expect(page.getByRole("button", { name: "观察期", exact: true })).toBeVisible();
-    await expect(page.getByRole("button", { name: "最近采样", exact: true })).toBeVisible();
+    // 速率统计按钮可见（exact 避免匹配 InfoHint aria-label）
+    await expect(page.getByRole("button", { name: "5分钟平均", exact: true })).toBeVisible();
+    await expect(page.getByRole("button", { name: "1分钟平均", exact: true })).toBeVisible();
+    await expect(page.getByRole("button", { name: "监控期平均", exact: true })).toBeVisible();
+    await expect(page.getByRole("button", { name: "最近2秒", exact: true })).toBeVisible();
 
     // 汇总卡片可见
     await expect(page.getByText("会话总数")).toBeVisible();
