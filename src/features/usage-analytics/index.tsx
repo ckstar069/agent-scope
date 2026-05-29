@@ -11,12 +11,16 @@ import {
 import {
   AlertTriangle,
   BarChart3,
+  Bookmark,
+  Boxes,
+  FilePlus,
+  FolderKanban,
   Hash,
   Layers,
   Loader2,
-  Monitor,
   RefreshCw,
   Server,
+  Users,
   Zap,
 } from "lucide-react";
 
@@ -132,6 +136,7 @@ export function UsageAnalytics() {
   const handleTimeRangeChange = useCallback(
     async (range: TimeRange) => {
       setTimeRange(range);
+      setError(null);
       try {
         await loadAnalytics(range, groupBy);
       } catch (err) {
@@ -144,6 +149,7 @@ export function UsageAnalytics() {
   const handleGroupByChange = useCallback(
     async (grouping: GroupBy) => {
       setGroupBy(grouping);
+      setError(null);
       try {
         await loadAnalytics(timeRange, grouping);
       } catch (err) {
@@ -307,11 +313,39 @@ export function UsageAnalytics() {
             detail="输出 token"
           />
           <SummaryTile
-            icon={Monitor}
-            label="Cache"
-            value={formatNumber(aggregate.cache_read_tokens + aggregate.cache_create_tokens)}
-            fullValue={String(aggregate.cache_read_tokens + aggregate.cache_create_tokens)}
-            detail="缓存读写 token"
+            icon={Bookmark}
+            label="Cache Read"
+            value={formatNumber(aggregate.cache_read_tokens)}
+            fullValue={String(aggregate.cache_read_tokens)}
+            detail="缓存读取 token"
+          />
+          <SummaryTile
+            icon={FilePlus}
+            label="Cache Create"
+            value={formatNumber(aggregate.cache_create_tokens)}
+            fullValue={String(aggregate.cache_create_tokens)}
+            detail="缓存创建 token"
+          />
+          <SummaryTile
+            icon={Users}
+            label="Sessions"
+            value={formatNumber(aggregate.session_count)}
+            fullValue={String(aggregate.session_count)}
+            detail="会话数量"
+          />
+          <SummaryTile
+            icon={FolderKanban}
+            label="Projects"
+            value={formatNumber(aggregate.project_count)}
+            fullValue={String(aggregate.project_count)}
+            detail="项目数量"
+          />
+          <SummaryTile
+            icon={Boxes}
+            label="Models"
+            value={formatNumber(aggregate.model_count)}
+            fullValue={String(aggregate.model_count)}
+            detail="模型数量"
           />
         </div>
       )}
