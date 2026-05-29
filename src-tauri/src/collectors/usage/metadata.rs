@@ -6,6 +6,161 @@ use std::path::Path;
 use super::models::CandidateConfigDir;
 use crate::collectors::claude_history::path_codec::decode_project_dir;
 
+// ============================================================================
+// 标题质量分类系统
+// ============================================================================
+
+/// 会话标题质量等级（越高越优先作为会话名）
+#[derive(Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord, Default)]
+enum TitleQuality {
+    /// 空 / None
+    #[default]
+    Empty = 0,
+    /// 长首条用户消息（>40 字符），不作为标题
+    PromptLike = 5,
+    /// Placeholder（[Pasted text...]、[Image #...]）
+    Placeholder = 10,
+    /// 无意义命令（exit/model/resume 等）
+    Command = 20,
+    /// 短直接标题（≤40 字符）
+    DirectTitle = 70,
+    /// /rename 明确重命名
+    ExplicitRename = 100,
+}
+
+/// 标题候选
+#[derive(Debug, Clone)]
+struct TitleCandidate {
+    /// 原始 display
+    raw: Option<String>,
+    /// 清洗后的标题（用于最终展示）
+    cleaned: Option<String>,
+    /// 质量等级
+    quality: TitleQuality,
+}
+
+/// 对 history.jsonl display 字段进行候选分类
+///
+/// 规则：
+/// 1. None / 空 → Empty，cleaned = None
+/// 2. `[Pasted text...]` / `[Image #...]` → Placeholder，cleaned = None
+/// 3. slash command：
+///    - `/rename <arg>` → ExplicitRename，cleaned = arg
+///    - `/exit`、`/model`、`/resume` 等 → Command，cleaned = None
+///    - 其他 slash command → Command，cleaned = None
+/// 4. 无斜杠命令词（exit、model、resume 等）→ Command，cleaned = None
+/// 5. 普通文本：
+///    - ≤40 字符 → DirectTitle，cleaned = 原文
+///    - >40 字符 → PromptLike，cleaned = None
+fn classify_title_candidate(display: Option<&str>) -> TitleCandidate {
+    let Some(t) = display else {
+        return TitleCandidate {
+            raw: None,
+            cleaned: None,
+            quality: TitleQuality::Empty,
+        };
+    };
+
+    let trimmed = t.trim();
+    if trimmed.is_empty() {
+        return TitleCandidate {
+            raw: None,
+            cleaned: None,
+            quality: TitleQuality::Empty,
+        };
+    }
+
+    // Placeholder 检测
+    if trimmed.starts_with("[Pasted text")
+        || trimmed.starts_with("[Image #")
+        || trimmed.starts_with("[Image")
+    {
+        return TitleCandidate {
+            raw: Some(trimmed.to_string()),
+            cleaned: None,
+            quality: TitleQuality::Placeholder,
+        };
+    }
+
+    // slash command 处理
+    if let Some(stripped) = trimmed.strip_prefix('/') {
+        let stripped = stripped.trim_start_matches('/');
+        let mut parts = stripped.splitn(2, ' ');
+        let cmd = parts.next().unwrap_or("").trim();
+        let arg = parts.next().map(|s| s.trim()).filter(|s| !s.is_empty());
+
+        // 无意义 slash command（永远不能作为标题）
+        let no_meaning_commands = [
+            "exit", "quit", "q", "model", "resume", "advance-stage",
+            "clear", "compact", "help", "status", "cost", "doctor", "effort",
+            "new",
+        ];
+        if no_meaning_commands.contains(&cmd) {
+            return TitleCandidate {
+                raw: Some(trimmed.to_string()),
+                cleaned: None,
+                quality: TitleQuality::Command,
+            };
+        }
+
+        // /rename 命令：只保留参数
+        if cmd == "rename" {
+            if let Some(arg_str) = arg {
+                return TitleCandidate {
+                    raw: Some(trimmed.to_string()),
+                    cleaned: Some(arg_str.to_string()),
+                    quality: TitleQuality::ExplicitRename,
+                };
+            }
+            return TitleCandidate {
+                raw: Some(trimmed.to_string()),
+                cleaned: None,
+                quality: TitleQuality::Command,
+            };
+        }
+
+        // 其他 slash command（一律视为命令，不保留参数）
+        return TitleCandidate {
+            raw: Some(trimmed.to_string()),
+            cleaned: None,
+            quality: TitleQuality::Command,
+        };
+    }
+
+    // 无斜杠的命令词检测
+    let no_meaning_words = [
+        "exit", "quit", "q", "model", "resume", "advance-stage",
+        "clear", "compact", "help", "status", "cost", "doctor", "effort",
+    ];
+    if no_meaning_words.contains(&trimmed) {
+        return TitleCandidate {
+            raw: Some(trimmed.to_string()),
+            cleaned: None,
+            quality: TitleQuality::Command,
+        };
+    }
+
+    // 普通直接标题：按长度区分
+    let char_count = trimmed.chars().count();
+    if char_count <= 40 {
+        TitleCandidate {
+            raw: Some(trimmed.to_string()),
+            cleaned: Some(trimmed.to_string()),
+            quality: TitleQuality::DirectTitle,
+        }
+    } else {
+        TitleCandidate {
+            raw: Some(trimmed.to_string()),
+            cleaned: None,
+            quality: TitleQuality::PromptLike,
+        }
+    }
+}
+
+// ============================================================================
+// Usage 会话元数据
+// ============================================================================
+
 /// Usage 会话元数据
 ///
 /// 从 Claude Code history.jsonl 中读取，用于 enrichment usage record。
@@ -13,7 +168,7 @@ use crate::collectors::claude_history::path_codec::decode_project_dir;
 pub struct UsageSessionMetadata {
     /// 会话 ID
     pub session_id: String,
-    /// 会话显示标题（history.jsonl 中的 display 字段）
+    /// 会话显示标题（history.jsonl 中的 display 字段，经质量筛选后保留）
     pub display: Option<String>,
     /// 项目路径（history.jsonl 中的 project 字段）
     pub project_path: Option<String>,
@@ -23,7 +178,13 @@ pub struct UsageSessionMetadata {
     pub timestamp: Option<String>,
     /// 排序用时间戳（毫秒级，内部使用，不参与序列化）
     pub timestamp_sort_key: Option<i128>,
+    /// 当前 display 的质量等级（内部字段，用于同 session 比较）
+    title_quality: TitleQuality,
 }
+
+// ============================================================================
+// Timestamp 解析
+// ============================================================================
 
 /// 解析 history.jsonl 中的 timestamp
 ///
@@ -48,10 +209,17 @@ fn parse_history_timestamp(value: &serde_json::Value) -> Option<i128> {
     None
 }
 
+// ============================================================================
+// Metadata 加载
+// ============================================================================
+
 /// 从一组 config_dir 加载 session metadata
 ///
 /// 读取每个 config_dir 下的 history.jsonl，构建 session_id → metadata 映射。
-/// 同一 session_id 出现多次时，保留 timestamp 较新的记录（无法比较则后读覆盖）。
+/// 同一 session_id 出现多次时：
+/// - project_path / project_name 按最新 timestamp 更新
+/// - display 按标题质量优先选择（ExplicitRename > DirectTitle > 其他），
+///   质量相同时 timestamp 更新者胜出
 pub fn load_usage_session_metadata(
     config_dirs: &[CandidateConfigDir],
 ) -> HashMap<String, UsageSessionMetadata> {
@@ -123,6 +291,8 @@ pub fn load_usage_session_metadata(
                 None => (None, None),
             };
 
+            let new_candidate = classify_title_candidate(display.as_deref());
+
             let entry = map.entry(session_id.to_string()).or_insert_with(|| {
                 UsageSessionMetadata {
                     session_id: session_id.to_string(),
@@ -131,39 +301,22 @@ pub fn load_usage_session_metadata(
                     project_name: None,
                     timestamp: None,
                     timestamp_sort_key: None,
+                    title_quality: TitleQuality::Empty,
                 }
             });
 
-            // 按 timestamp_sort_key 判断新旧：
-            // 1. 新可解析，旧可解析：新 > 旧时更新
-            // 2. 新可解析，旧不可解析：更新
-            // 3. 新不可解析，旧可解析：保留旧
-            // 4. 都不可解析：后读覆盖前读
-            let should_update = match (timestamp_sort_key, entry.timestamp_sort_key) {
+            // 保存旧 timestamp 用于 title 比较（避免 project 更新后丢失旧值）
+            let old_timestamp_sort_key = entry.timestamp_sort_key;
+
+            // --- project 信息始终按最新 timestamp 更新 ---
+            let should_update_project = match (timestamp_sort_key, entry.timestamp_sort_key) {
                 (Some(new_ts), Some(old_ts)) => new_ts > old_ts,
                 (Some(_), None) => true,
                 (None, Some(_)) => false,
                 (None, None) => true,
             };
 
-            // 标题质量优先级：非 "(未命名)" 优于 "(未命名)"
-            // 当 timestamp 相同时，优先选择更有意义的标题
-            let new_is_better = match (&display, &entry.display) {
-                (Some(new_d), Some(old_d)) => {
-                    let new_cleaned = clean_session_title(Some(new_d));
-                    let old_cleaned = clean_session_title(Some(old_d));
-                    new_cleaned != "(未命名)" && old_cleaned == "(未命名)"
-                }
-                (Some(_), None) => true,
-                _ => false,
-            };
-
-            if should_update
-                || (timestamp_sort_key == entry.timestamp_sort_key && new_is_better)
-            {
-                if display.is_some() {
-                    entry.display = display;
-                }
+            if should_update_project {
                 if project_path.is_some() {
                     entry.project_path = project_path.clone();
                 }
@@ -175,11 +328,38 @@ pub fn load_usage_session_metadata(
                 }
                 entry.timestamp_sort_key = timestamp_sort_key;
             }
+
+            // --- display 按质量选择 ---
+            // 只有 cleaned 不为 None 的候选才可能成为标题
+            let should_update_title = if new_candidate.cleaned.is_none() {
+                false // 无有效标题，绝不覆盖
+            } else if entry.display.is_none() || new_candidate.quality > entry.title_quality {
+                true // 当前无标题，或新值质量更高
+            } else if new_candidate.quality == entry.title_quality {
+                // 质量相同：timestamp 更大者胜出（使用更新前的旧值）
+                match (timestamp_sort_key, old_timestamp_sort_key) {
+                    (Some(new_ts), Some(old_ts)) => new_ts > old_ts,
+                    (Some(_), None) => true,
+                    (None, Some(_)) => false,
+                    (None, None) => true, // 都不可解析时后读覆盖
+                }
+            } else {
+                false
+            };
+
+            if should_update_title {
+                entry.display = new_candidate.raw;
+                entry.title_quality = new_candidate.quality;
+            }
         }
     }
 
     map
 }
+
+// ============================================================================
+// 项目标签辅助
+// ============================================================================
 
 /// 从编码目录名提取可读的项目名
 ///
@@ -232,57 +412,21 @@ pub fn short_session_id(session_id: &str) -> String {
     session_id.chars().take(8).collect()
 }
 
+// ============================================================================
+// 会话标题清洗
+// ============================================================================
+
 /// 清洗会话标题
 ///
-/// 规则：
-/// 1. None / 空字符串 / trim 后为空 → "(未命名)"
-/// 2. `[Pasted text ...]` placeholder → "(未命名)"
-/// 3. `/` 开头的 slash command：
-///    - `/rename <arg>` → `<arg>`（去掉命令词）
-///    - `/model`, `/resume`, `/advance-stage` 等无意义命令 → "(未命名)"
-///    - 其他 slash command 有参数 → 参数
-///    - 其他 slash command 无参数 → "(未命名)"
-/// 4. 非 slash command → 保留原文本（trim 空白）
-/// 5. 不做后端截断
+/// 基于 classify_title_candidate，返回最终展示用字符串。
+/// - ExplicitRename → arg（如 "v0.3.7"）
+/// - DirectTitle → 原文
+/// - 其他（Command、Placeholder、PromptLike、Empty）→ "(未命名)"
 pub fn clean_session_title(title: Option<&str>) -> String {
-    let Some(t) = title else {
-        return "(未命名)".to_string();
-    };
-
-    let trimmed = t.trim();
-    if trimmed.is_empty() {
-        return "(未命名)".to_string();
-    }
-
-    // [Pasted text ...] placeholder
-    if trimmed.starts_with("[Pasted text") {
-        return "(未命名)".to_string();
-    }
-
-    // slash command 处理
-    if let Some(stripped) = trimmed.strip_prefix('/') {
-        let stripped = stripped.trim_start_matches('/'); // 去掉多余 /
-        let mut parts = stripped.splitn(2, ' ');
-        let cmd = parts.next().unwrap_or("").trim();
-        let arg = parts.next().map(|s| s.trim()).filter(|s| !s.is_empty());
-
-        // 已知无意义命令（不带参数的）
-        let no_arg_commands = ["model", "resume", "advance-stage"];
-        if no_arg_commands.contains(&cmd) {
-            return "(未命名)".to_string();
-        }
-
-        // rename 命令：只保留参数，不带 "rename" 前缀
-        if cmd == "rename" {
-            return arg.map(|a| a.to_string()).unwrap_or_else(|| "(未命名)".to_string());
-        }
-
-        // 其他 slash command：有参数保留参数，无参数 → (未命名)
-        return arg.map(|a| a.to_string()).unwrap_or_else(|| "(未命名)".to_string());
-    }
-
-    // 非 slash command：保留原文
-    trimmed.to_string()
+    let candidate = classify_title_candidate(title);
+    candidate
+        .cleaned
+        .unwrap_or_else(|| "(未命名)".to_string())
 }
 
 // ============================================================================
@@ -294,9 +438,191 @@ mod tests {
     use super::*;
     use std::io::Write;
 
+    // ------------------------------------------------------------------------
+    // classify_title_candidate 测试
+    // ------------------------------------------------------------------------
+
+    #[test]
+    fn test_classify_empty() {
+        let c = classify_title_candidate(None);
+        assert!(c.raw.is_none());
+        assert!(c.cleaned.is_none());
+        assert_eq!(c.quality, TitleQuality::Empty);
+    }
+
+    #[test]
+    fn test_classify_pasted_text() {
+        let c = classify_title_candidate(Some("[Pasted text #1 +47 lines]"));
+        assert_eq!(c.quality, TitleQuality::Placeholder);
+        assert!(c.cleaned.is_none());
+    }
+
+    #[test]
+    fn test_classify_image_placeholder() {
+        let c = classify_title_candidate(Some("[Image #1] 帮我检查..."));
+        assert_eq!(c.quality, TitleQuality::Placeholder);
+        assert!(c.cleaned.is_none());
+    }
+
+    #[test]
+    fn test_classify_slash_exit() {
+        let c = classify_title_candidate(Some("/exit"));
+        assert_eq!(c.quality, TitleQuality::Command);
+        assert!(c.cleaned.is_none());
+    }
+
+    #[test]
+    fn test_classify_slash_model() {
+        let c = classify_title_candidate(Some("/model"));
+        assert_eq!(c.quality, TitleQuality::Command);
+        assert!(c.cleaned.is_none());
+    }
+
+    #[test]
+    fn test_classify_plain_exit() {
+        let c = classify_title_candidate(Some("exit"));
+        assert_eq!(c.quality, TitleQuality::Command);
+        assert!(c.cleaned.is_none());
+    }
+
+    #[test]
+    fn test_classify_plain_model() {
+        let c = classify_title_candidate(Some("model"));
+        assert_eq!(c.quality, TitleQuality::Command);
+        assert!(c.cleaned.is_none());
+    }
+
+    #[test]
+    fn test_classify_rename_with_arg() {
+        let c = classify_title_candidate(Some("/rename v0.3.7"));
+        assert_eq!(c.quality, TitleQuality::ExplicitRename);
+        assert_eq!(c.cleaned, Some("v0.3.7".to_string()));
+    }
+
+    #[test]
+    fn test_classify_rename_without_arg() {
+        let c = classify_title_candidate(Some("/rename"));
+        assert_eq!(c.quality, TitleQuality::Command);
+        assert!(c.cleaned.is_none());
+    }
+
+    #[test]
+    fn test_classify_unknown_slash_command() {
+        let c = classify_title_candidate(Some("/some-cmd hello"));
+        assert_eq!(c.quality, TitleQuality::Command);
+        assert!(c.cleaned.is_none());
+    }
+
+    #[test]
+    fn test_classify_direct_short_title() {
+        let c = classify_title_candidate(Some("macos 健康状态检查"));
+        assert_eq!(c.quality, TitleQuality::DirectTitle);
+        assert_eq!(c.cleaned, Some("macos 健康状态检查".to_string()));
+    }
+
+    #[test]
+    fn test_classify_prompt_like_long() {
+        let c = classify_title_candidate(Some("帮我检查本机的健康状态。之前两天，连续出现两次关机时无响应、等半天、桌面dock/图标全部消失只有桌面的情况，等了很久没反应然后我强制关机了。"));
+        assert_eq!(c.quality, TitleQuality::PromptLike);
+        assert!(c.cleaned.is_none());
+    }
+
+    #[test]
+    fn test_classify_effort_command() {
+        let c = classify_title_candidate(Some("/effort"));
+        assert_eq!(c.quality, TitleQuality::Command);
+        assert!(c.cleaned.is_none());
+    }
+
+    // ------------------------------------------------------------------------
+    // clean_session_title 测试
+    // ------------------------------------------------------------------------
+
+    #[test]
+    fn test_clean_session_title_basic() {
+        assert_eq!(clean_session_title(Some("hello world")), "hello world");
+    }
+
+    #[test]
+    fn test_clean_session_title_trims_whitespace() {
+        assert_eq!(clean_session_title(Some("  hello  ")), "hello");
+    }
+
+    #[test]
+    fn test_clean_session_title_none_or_empty() {
+        assert_eq!(clean_session_title(None), "(未命名)");
+        assert_eq!(clean_session_title(Some("")), "(未命名)");
+        assert_eq!(clean_session_title(Some("   ")), "(未命名)");
+    }
+
+    #[test]
+    fn test_clean_session_title_keeps_chinese_short() {
+        let chinese = "macos 健康状态检查";
+        assert_eq!(clean_session_title(Some(chinese)), chinese);
+    }
+
+    #[test]
+    fn test_clean_session_title_long_prompt_becomes_unnamed() {
+        let long = "帮我检查本机的健康状态。之前两天，连续出现两次关机时无响应、等半天、桌面dock/图标全部消失只有桌面的情况，等了很久没反应然后我强制关机了。";
+        assert_eq!(clean_session_title(Some(long)), "(未命名)");
+    }
+
+    #[test]
+    fn test_clean_session_title_rename_with_arg() {
+        assert_eq!(clean_session_title(Some("/rename v0.3.7")), "v0.3.7");
+        assert_eq!(
+            clean_session_title(Some("/rename claude code 配置")),
+            "claude code 配置"
+        );
+    }
+
+    #[test]
+    fn test_clean_session_title_rename_without_arg() {
+        assert_eq!(clean_session_title(Some("/rename")), "(未命名)");
+    }
+
+    #[test]
+    fn test_clean_session_title_no_arg_commands() {
+        assert_eq!(clean_session_title(Some("/model")), "(未命名)");
+        assert_eq!(clean_session_title(Some("/resume")), "(未命名)");
+        assert_eq!(clean_session_title(Some("/advance-stage")), "(未命名)");
+    }
+
+    #[test]
+    fn test_clean_session_title_plain_commands() {
+        assert_eq!(clean_session_title(Some("exit")), "(未命名)");
+        assert_eq!(clean_session_title(Some("model")), "(未命名)");
+        assert_eq!(clean_session_title(Some("resume")), "(未命名)");
+    }
+
+    #[test]
+    fn test_clean_session_title_pasted_text() {
+        assert_eq!(
+            clean_session_title(Some("[Pasted text #1 +47 lines]")),
+            "(未命名)"
+        );
+    }
+
+    #[test]
+    fn test_clean_session_title_image_placeholder() {
+        assert_eq!(
+            clean_session_title(Some("[Image #1] 帮我检查...")),
+            "(未命名)"
+        );
+    }
+
+    #[test]
+    fn test_clean_session_title_unknown_slash_command() {
+        // 其他 slash command 不再保留参数
+        assert_eq!(clean_session_title(Some("/some-cmd hello")), "(未命名)");
+    }
+
+    // ------------------------------------------------------------------------
+    // compact_project_label 测试
+    // ------------------------------------------------------------------------
+
     #[test]
     fn test_compact_project_label_repo_prefix() {
-        // -Repo- 后的剩余部分就是项目名
         assert_eq!(
             compact_project_label("-Users-ckstar-Repo-agent-scope"),
             "agent-scope"
@@ -317,7 +643,6 @@ mod tests {
 
     #[test]
     fn test_compact_project_label_no_known_prefix() {
-        // 无已知前缀时 fallback 到 decode basename
         assert_eq!(
             compact_project_label("home-user-project"),
             "project"
@@ -326,24 +651,25 @@ mod tests {
 
     #[test]
     fn test_compact_project_label_long_no_dash() {
-        // 全是 'a' 没有 '-'，decode+basename 后 basename 就是完整的 50 个 a
-        // 超过 32 字符会被统一截断
         let long = "a".repeat(50);
         let result = compact_project_label(&long);
         assert!(result.starts_with('…'));
-        assert_eq!(result.chars().count(), 32); // 1 个 … + 31 个 a
+        assert_eq!(result.chars().count(), 32);
     }
 
     #[test]
     fn test_compact_project_label_last_segment_long() {
-        // 最后一个 '-' 后的段也很长（超过 32），会触发截断
         let prefix = "foo-bar-";
         let suffix = "z".repeat(50);
         let encoded = format!("{}{}", prefix, suffix);
         let result = compact_project_label(&encoded);
         assert!(result.starts_with('…'));
-        assert_eq!(result.chars().count(), 32); // 1 个 … + 31 个 z
+        assert_eq!(result.chars().count(), 32);
     }
+
+    // ------------------------------------------------------------------------
+    // short_session_id 测试
+    // ------------------------------------------------------------------------
 
     #[test]
     fn test_short_session_id() {
@@ -353,6 +679,41 @@ mod tests {
         );
     }
 
+    // ------------------------------------------------------------------------
+    // parse_history_timestamp 测试
+    // ------------------------------------------------------------------------
+
+    #[test]
+    fn test_parse_history_timestamp_number() {
+        let v = serde_json::json!(1780014184874u64);
+        assert_eq!(parse_history_timestamp(&v), Some(1780014184874i128));
+    }
+
+    #[test]
+    fn test_parse_history_timestamp_string_number() {
+        let v = serde_json::json!("1780014184874");
+        assert_eq!(parse_history_timestamp(&v), Some(1780014184874i128));
+    }
+
+    #[test]
+    fn test_parse_history_timestamp_rfc3339() {
+        let v = serde_json::json!("2026-05-29T08:58:25Z");
+        let result = parse_history_timestamp(&v);
+        assert!(result.is_some());
+        assert_eq!(result.unwrap(), 1_780_045_105_000i128);
+    }
+
+    #[test]
+    fn test_parse_history_timestamp_invalid() {
+        assert_eq!(parse_history_timestamp(&serde_json::json!(null)), None);
+        assert_eq!(parse_history_timestamp(&serde_json::json!("")), None);
+        assert_eq!(parse_history_timestamp(&serde_json::json!("not-a-date")), None);
+    }
+
+    // ------------------------------------------------------------------------
+    // load_usage_session_metadata 核心测试
+    // ------------------------------------------------------------------------
+
     #[test]
     fn test_load_usage_session_metadata_from_history() {
         let temp_dir = tempfile::tempdir().unwrap();
@@ -360,7 +721,6 @@ mod tests {
 
         let history_path = config_dir.join("history.jsonl");
         let mut file = std::fs::File::create(&history_path).unwrap();
-        // 使用 number timestamp（与真实 history.jsonl 一致）
         writeln!(
             file,
             r#"{{"type":"last-prompt","timestamp":1780000000000,"sessionId":"sess-001","display":"Phase2 阶段开发","project":"/Users/ckstar/Repo/agent-scope"}}"#
@@ -384,27 +744,23 @@ mod tests {
         assert_eq!(meta1.display, Some("Phase2 阶段开发".to_string()));
         assert_eq!(meta1.project_path, Some("/Users/ckstar/Repo/agent-scope".to_string()));
         assert_eq!(meta1.project_name, Some("agent-scope".to_string()));
-        assert_eq!(meta1.timestamp_sort_key, Some(1_780_000_000_000i128));
 
         let meta2 = metadata.get("sess-002").unwrap();
         assert_eq!(meta2.display, Some("文档整理".to_string()));
         assert_eq!(meta2.project_name, Some("notes".to_string()));
-        assert_eq!(meta2.timestamp_sort_key, Some(1_780_003_600_000i128));
     }
 
     #[test]
-    fn test_load_metadata_keeps_newer_timestamp() {
+    fn test_load_metadata_keeps_newer_timestamp_for_project() {
         let temp_dir = tempfile::tempdir().unwrap();
         let config_dir = temp_dir.path().to_path_buf();
 
         let history_path = config_dir.join("history.jsonl");
         let mut file = std::fs::File::create(&history_path).unwrap();
-        // 旧记录（number timestamp）
         writeln!(
             file,
             r#"{{"type":"last-prompt","timestamp":1780000000000,"sessionId":"sess-001","display":"旧标题","project":"/old/path"}}"#
         ).unwrap();
-        // 新记录（同 session，应覆盖）
         writeln!(
             file,
             r#"{{"type":"last-prompt","timestamp":1780010000000,"sessionId":"sess-001","display":"新标题","project":"/new/path"}}"#
@@ -439,34 +795,6 @@ mod tests {
     }
 
     #[test]
-    fn test_parse_history_timestamp_number() {
-        let v = serde_json::json!(1780014184874u64);
-        assert_eq!(parse_history_timestamp(&v), Some(1780014184874i128));
-    }
-
-    #[test]
-    fn test_parse_history_timestamp_string_number() {
-        let v = serde_json::json!("1780014184874");
-        assert_eq!(parse_history_timestamp(&v), Some(1780014184874i128));
-    }
-
-    #[test]
-    fn test_parse_history_timestamp_rfc3339() {
-        let v = serde_json::json!("2026-05-29T08:58:25Z");
-        let result = parse_history_timestamp(&v);
-        assert!(result.is_some());
-        // 2026-05-29T08:58:25Z 的毫秒时间戳
-        assert_eq!(result.unwrap(), 1_780_045_105_000i128);
-    }
-
-    #[test]
-    fn test_parse_history_timestamp_invalid() {
-        assert_eq!(parse_history_timestamp(&serde_json::json!(null)), None);
-        assert_eq!(parse_history_timestamp(&serde_json::json!("")), None);
-        assert_eq!(parse_history_timestamp(&serde_json::json!("not-a-date")), None);
-    }
-
-    #[test]
     fn test_load_metadata_renamed_title_overrides_long_message() {
         let temp_dir = tempfile::tempdir().unwrap();
         let config_dir = temp_dir.path().to_path_buf();
@@ -492,7 +820,7 @@ mod tests {
 
         let metadata = load_usage_session_metadata(&[candidate]);
         let meta = metadata.get("0230e7f8").unwrap();
-        // 应保留 /rename 解析后的标题
+        // /rename 质量(100) > 长消息质量(0)，应保留 rename
         assert_eq!(meta.display, Some("/rename macos 健康状态检查".to_string()));
     }
 
@@ -503,12 +831,10 @@ mod tests {
 
         let history_path = config_dir.join("history.jsonl");
         let mut file = std::fs::File::create(&history_path).unwrap();
-        // 无 timestamp 的旧记录
         writeln!(
             file,
             r#"{{"type":"last-prompt","sessionId":"sess-001","display":"旧标题"}}"#
         ).unwrap();
-        // 无 timestamp 的新记录（后读覆盖）
         writeln!(
             file,
             r#"{{"type":"last-prompt","sessionId":"sess-001","display":"新标题"}}"#
@@ -522,7 +848,6 @@ mod tests {
 
         let metadata = load_usage_session_metadata(&[candidate]);
         let meta = metadata.get("sess-001").unwrap();
-        // 无 timestamp 时后读覆盖前读
         assert_eq!(meta.display, Some("新标题".to_string()));
     }
 
@@ -538,7 +863,7 @@ mod tests {
             file,
             r#"{{"type":"last-prompt","timestamp":1780010000000,"sessionId":"sess-001","display":"/rename macos 健康状态检查","project":"/project/a"}}"#
         ).unwrap();
-        // 后写入长首条用户消息（较晚，但无意义）
+        // 后写入长首条用户消息（较晚，但质量更低）
         writeln!(
             file,
             r#"{{"type":"last-prompt","timestamp":1780011000000,"sessionId":"sess-001","display":"帮我检查本机的健康状态。之前两天，连续出现两次关机时无响应","project":"/project/a"}}"#
@@ -552,12 +877,194 @@ mod tests {
 
         let metadata = load_usage_session_metadata(&[candidate]);
         let meta = metadata.get("sess-001").unwrap();
-        // 较晚的长消息应覆盖较早的 rename，但 clean 后会显示 "macos 健康状态检查"
-        // 这里验证原始 display 保留最新记录
+        // 长消息质量(0) < rename 质量(100)，rename 应保留
         assert_eq!(
             meta.display,
-            Some("帮我检查本机的健康状态。之前两天，连续出现两次关机时无响应".to_string())
+            Some("/rename macos 健康状态检查".to_string())
         );
+    }
+
+    #[test]
+    fn test_load_metadata_exit_does_not_overwrite_rename() {
+        let temp_dir = tempfile::tempdir().unwrap();
+        let config_dir = temp_dir.path().to_path_buf();
+
+        let history_path = config_dir.join("history.jsonl");
+        let mut file = std::fs::File::create(&history_path).unwrap();
+        writeln!(
+            file,
+            r#"{{"type":"last-prompt","timestamp":1780010000000,"sessionId":"sess-001","display":"/rename v0.3.7","project":"/project/a"}}"#
+        ).unwrap();
+        writeln!(
+            file,
+            r#"{{"type":"last-prompt","timestamp":1780011000000,"sessionId":"sess-001","display":"exit","project":"/project/a"}}"#
+        ).unwrap();
+
+        let candidate = CandidateConfigDir {
+            raw_path: config_dir.clone(),
+            canonical_path: Some(config_dir.canonicalize().unwrap()),
+            source: super::super::models::ConfigDirSource::EnvClaudeConfigDir,
+        };
+
+        let metadata = load_usage_session_metadata(&[candidate]);
+        let meta = metadata.get("sess-001").unwrap();
+        assert_eq!(meta.display, Some("/rename v0.3.7".to_string()));
+    }
+
+    #[test]
+    fn test_load_metadata_slash_exit_does_not_overwrite_rename() {
+        let temp_dir = tempfile::tempdir().unwrap();
+        let config_dir = temp_dir.path().to_path_buf();
+
+        let history_path = config_dir.join("history.jsonl");
+        let mut file = std::fs::File::create(&history_path).unwrap();
+        writeln!(
+            file,
+            r#"{{"type":"last-prompt","timestamp":1780010000000,"sessionId":"sess-001","display":"/rename v0.3.7","project":"/project/a"}}"#
+        ).unwrap();
+        writeln!(
+            file,
+            r#"{{"type":"last-prompt","timestamp":1780011000000,"sessionId":"sess-001","display":"/exit","project":"/project/a"}}"#
+        ).unwrap();
+
+        let candidate = CandidateConfigDir {
+            raw_path: config_dir.clone(),
+            canonical_path: Some(config_dir.canonicalize().unwrap()),
+            source: super::super::models::ConfigDirSource::EnvClaudeConfigDir,
+        };
+
+        let metadata = load_usage_session_metadata(&[candidate]);
+        let meta = metadata.get("sess-001").unwrap();
+        assert_eq!(meta.display, Some("/rename v0.3.7".to_string()));
+    }
+
+    #[test]
+    fn test_load_metadata_model_does_not_overwrite_direct_title() {
+        let temp_dir = tempfile::tempdir().unwrap();
+        let config_dir = temp_dir.path().to_path_buf();
+
+        let history_path = config_dir.join("history.jsonl");
+        let mut file = std::fs::File::create(&history_path).unwrap();
+        writeln!(
+            file,
+            r#"{{"type":"last-prompt","timestamp":1780010000000,"sessionId":"sess-001","display":"macos 健康状态检查","project":"/project/a"}}"#
+        ).unwrap();
+        writeln!(
+            file,
+            r#"{{"type":"last-prompt","timestamp":1780011000000,"sessionId":"sess-001","display":"model","project":"/project/a"}}"#
+        ).unwrap();
+
+        let candidate = CandidateConfigDir {
+            raw_path: config_dir.clone(),
+            canonical_path: Some(config_dir.canonicalize().unwrap()),
+            source: super::super::models::ConfigDirSource::EnvClaudeConfigDir,
+        };
+
+        let metadata = load_usage_session_metadata(&[candidate]);
+        let meta = metadata.get("sess-001").unwrap();
+        assert_eq!(meta.display, Some("macos 健康状态检查".to_string()));
+    }
+
+    #[test]
+    fn test_load_metadata_only_exit_is_unnamed() {
+        let temp_dir = tempfile::tempdir().unwrap();
+        let config_dir = temp_dir.path().to_path_buf();
+
+        let history_path = config_dir.join("history.jsonl");
+        let mut file = std::fs::File::create(&history_path).unwrap();
+        writeln!(
+            file,
+            r#"{{"type":"last-prompt","timestamp":1780010000000,"sessionId":"sess-001","display":"exit","project":"/project/a"}}"#
+        ).unwrap();
+
+        let candidate = CandidateConfigDir {
+            raw_path: config_dir.clone(),
+            canonical_path: Some(config_dir.canonicalize().unwrap()),
+            source: super::super::models::ConfigDirSource::EnvClaudeConfigDir,
+        };
+
+        let metadata = load_usage_session_metadata(&[candidate]);
+        let meta = metadata.get("sess-001").unwrap();
+        // exit 是 Command，cleaned=None，不应写入 display
+        assert!(meta.display.is_none());
+    }
+
+    #[test]
+    fn test_load_metadata_only_long_prompt_is_unnamed() {
+        let temp_dir = tempfile::tempdir().unwrap();
+        let config_dir = temp_dir.path().to_path_buf();
+
+        let history_path = config_dir.join("history.jsonl");
+        let mut file = std::fs::File::create(&history_path).unwrap();
+        writeln!(
+            file,
+            r#"{{"type":"last-prompt","timestamp":1780010000000,"sessionId":"sess-001","display":"帮我检查本机的健康状态。之前两天，连续出现两次关机时无响应、等半天、桌面dock/图标全部消失只有桌面的情况，等了很久没反应然后我强制关机了。","project":"/project/a"}}"#
+        ).unwrap();
+
+        let candidate = CandidateConfigDir {
+            raw_path: config_dir.clone(),
+            canonical_path: Some(config_dir.canonicalize().unwrap()),
+            source: super::super::models::ConfigDirSource::EnvClaudeConfigDir,
+        };
+
+        let metadata = load_usage_session_metadata(&[candidate]);
+        let meta = metadata.get("sess-001").unwrap();
+        // 长消息是 PromptLike，cleaned=None，不应写入 display
+        assert!(meta.display.is_none());
+    }
+
+    #[test]
+    fn test_load_metadata_rename_after_long_prompt_wins() {
+        let temp_dir = tempfile::tempdir().unwrap();
+        let config_dir = temp_dir.path().to_path_buf();
+
+        let history_path = config_dir.join("history.jsonl");
+        let mut file = std::fs::File::create(&history_path).unwrap();
+        writeln!(
+            file,
+            r#"{{"type":"last-prompt","timestamp":1780010000000,"sessionId":"sess-001","display":"帮我检查本机的健康状态。之前两天，连续出现两次关机时无响应","project":"/project/a"}}"#
+        ).unwrap();
+        writeln!(
+            file,
+            r#"{{"type":"last-prompt","timestamp":1780011000000,"sessionId":"sess-001","display":"/rename macos 健康状态检查","project":"/project/a"}}"#
+        ).unwrap();
+
+        let candidate = CandidateConfigDir {
+            raw_path: config_dir.clone(),
+            canonical_path: Some(config_dir.canonicalize().unwrap()),
+            source: super::super::models::ConfigDirSource::EnvClaudeConfigDir,
+        };
+
+        let metadata = load_usage_session_metadata(&[candidate]);
+        let meta = metadata.get("sess-001").unwrap();
+        assert_eq!(meta.display, Some("/rename macos 健康状态检查".to_string()));
+    }
+
+    #[test]
+    fn test_load_metadata_direct_title_after_prompt_wins() {
+        let temp_dir = tempfile::tempdir().unwrap();
+        let config_dir = temp_dir.path().to_path_buf();
+
+        let history_path = config_dir.join("history.jsonl");
+        let mut file = std::fs::File::create(&history_path).unwrap();
+        writeln!(
+            file,
+            r#"{{"type":"last-prompt","timestamp":1780010000000,"sessionId":"sess-001","display":"帮我检查本机的健康状态。之前两天，连续出现两次关机时无响应","project":"/project/a"}}"#
+        ).unwrap();
+        writeln!(
+            file,
+            r#"{{"type":"last-prompt","timestamp":1780011000000,"sessionId":"sess-001","display":"macos 健康状态检查","project":"/project/a"}}"#
+        ).unwrap();
+
+        let candidate = CandidateConfigDir {
+            raw_path: config_dir.clone(),
+            canonical_path: Some(config_dir.canonicalize().unwrap()),
+            source: super::super::models::ConfigDirSource::EnvClaudeConfigDir,
+        };
+
+        let metadata = load_usage_session_metadata(&[candidate]);
+        let meta = metadata.get("sess-001").unwrap();
+        assert_eq!(meta.display, Some("macos 健康状态检查".to_string()));
     }
 
     #[test]
@@ -567,12 +1074,10 @@ mod tests {
 
         let history_path = config_dir.join("history.jsonl");
         let mut file = std::fs::File::create(&history_path).unwrap();
-        // 两条 timestamp 相同，先写 (未命名) 类标题
         writeln!(
             file,
             r#"{{"type":"last-prompt","timestamp":1780010000000,"sessionId":"sess-001","display":"/model","project":"/project/a"}}"#
         ).unwrap();
-        // 后写有意义标题（同 timestamp）
         writeln!(
             file,
             r#"{{"type":"last-prompt","timestamp":1780010000000,"sessionId":"sess-001","display":"macos 健康状态检查","project":"/project/a"}}"#
@@ -586,75 +1091,33 @@ mod tests {
 
         let metadata = load_usage_session_metadata(&[candidate]);
         let meta = metadata.get("sess-001").unwrap();
-        // 同 timestamp 时，有意义的标题应覆盖 (未命名) 类标题
+        // /model 是 Command（cleaned=None），不会写入 display
+        // macos 健康状态检查 是 DirectTitle，应写入
         assert_eq!(meta.display, Some("macos 健康状态检查".to_string()));
     }
 
     #[test]
-    fn test_clean_session_title_basic() {
-        assert_eq!(clean_session_title(Some("hello world")), "hello world");
-    }
+    fn test_load_metadata_unknown_slash_command_not_title() {
+        let temp_dir = tempfile::tempdir().unwrap();
+        let config_dir = temp_dir.path().to_path_buf();
 
-    #[test]
-    fn test_clean_session_title_trims_whitespace() {
-        assert_eq!(clean_session_title(Some("  hello  ")), "hello");
-    }
+        let history_path = config_dir.join("history.jsonl");
+        let mut file = std::fs::File::create(&history_path).unwrap();
+        writeln!(
+            file,
+            r#"{{"type":"last-prompt","timestamp":1780010000000,"sessionId":"sess-001","display":"/some-cmd hello","project":"/project/a"}}"#
+        ).unwrap();
 
-    #[test]
-    fn test_clean_session_title_none_or_empty() {
-        assert_eq!(clean_session_title(None), "(未命名)");
-        assert_eq!(clean_session_title(Some("")), "(未命名)");
-        assert_eq!(clean_session_title(Some("   ")), "(未命名)");
-    }
+        let candidate = CandidateConfigDir {
+            raw_path: config_dir.clone(),
+            canonical_path: Some(config_dir.canonicalize().unwrap()),
+            source: super::super::models::ConfigDirSource::EnvClaudeConfigDir,
+        };
 
-    #[test]
-    fn test_clean_session_title_keeps_chinese() {
-        let chinese = "帮我检查本机的健康状态。之前两天，连续出现两次关机时无响应";
-        assert_eq!(clean_session_title(Some(chinese)), chinese);
-    }
-
-    #[test]
-    fn test_clean_session_title_rename_with_arg() {
-        // /rename <arg> → <arg>，去掉命令词
-        assert_eq!(clean_session_title(Some("/rename v0.3.7")), "v0.3.7");
-        assert_eq!(clean_session_title(Some("/rename claude code 配置")), "claude code 配置");
-    }
-
-    #[test]
-    fn test_clean_session_title_rename_without_arg() {
-        assert_eq!(clean_session_title(Some("/rename")), "(未命名)");
-        assert_eq!(clean_session_title(Some("/rename  ")), "(未命名)");
-    }
-
-    #[test]
-    fn test_clean_session_title_no_arg_commands() {
-        assert_eq!(clean_session_title(Some("/model")), "(未命名)");
-        assert_eq!(clean_session_title(Some("/resume")), "(未命名)");
-        assert_eq!(clean_session_title(Some("/advance-stage")), "(未命名)");
-    }
-
-    #[test]
-    fn test_clean_session_title_pasted_text() {
-        assert_eq!(
-            clean_session_title(Some("[Pasted text #1 +47 lines]")),
-            "(未命名)"
-        );
-        assert_eq!(
-            clean_session_title(Some("[Pasted text with any content]")),
-            "(未命名)"
-        );
-    }
-
-    #[test]
-    fn test_clean_session_title_other_slash_with_arg() {
-        // 其他 slash command 有参数 → 保留参数
-        assert_eq!(clean_session_title(Some("/some-cmd hello")), "hello");
-    }
-
-    #[test]
-    fn test_clean_session_title_other_slash_without_arg() {
-        // 其他 slash command 无参数 → (未命名)
-        assert_eq!(clean_session_title(Some("/cmd")), "(未命名)");
+        let metadata = load_usage_session_metadata(&[candidate]);
+        let meta = metadata.get("sess-001").unwrap();
+        // 未知 slash command 不再保留参数作为标题
+        assert!(meta.display.is_none());
     }
 
     #[test]
