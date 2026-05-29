@@ -70,12 +70,14 @@ pub fn parse_usage_line(
         .map(|s| s.to_string());
 
     // 6. 提取时间戳
-    let timestamp = value
+    let timestamp_raw = value
         .get("timestamp")
         .and_then(|v| v.as_str())
-        .and_then(|s| DateTime::parse_from_rfc3339(s).ok())
-        .map(|dt| dt.with_timezone(&Utc))
-        .unwrap_or_else(Utc::now);
+        .ok_or_else(|| UsageParseError::MissingField("timestamp".to_string()))?;
+
+    let timestamp = DateTime::parse_from_rfc3339(timestamp_raw)
+        .map_err(|e| UsageParseError::InvalidFieldType(format!("timestamp: {}", e)))?
+        .with_timezone(&Utc);
 
     // 7. 提取 session_id
     let session_id = context
@@ -251,5 +253,25 @@ mod tests {
 
         let result = parse_usage_line(line, &test_context()).unwrap().unwrap();
         assert_eq!(result.model, Some("kimi-for-coding".to_string()));
+    }
+
+    #[test]
+    fn test_parse_missing_timestamp_returns_error() {
+        let line = r#"{"type":"assistant","sessionId":"550e8400","message":{"model":"claude","usage":{"input_tokens":100,"output_tokens":50}}}"#;
+
+        let result = parse_usage_line(line, &test_context());
+        assert!(result.is_err());
+        let err = result.unwrap_err().to_string();
+        assert!(err.contains("timestamp"), "错误应提及 timestamp: {}", err);
+    }
+
+    #[test]
+    fn test_parse_invalid_timestamp_returns_error() {
+        let line = r#"{"type":"assistant","timestamp":"not-a-valid-timestamp","sessionId":"550e8400","message":{"model":"claude","usage":{"input_tokens":100,"output_tokens":50}}}"#;
+
+        let result = parse_usage_line(line, &test_context());
+        assert!(result.is_err());
+        let err = result.unwrap_err().to_string();
+        assert!(err.contains("timestamp"), "错误应提及 timestamp: {}", err);
     }
 }

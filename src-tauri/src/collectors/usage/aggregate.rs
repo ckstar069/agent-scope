@@ -170,6 +170,10 @@ pub fn calculate_totals(records: &[UsageRecord]) -> UsageTotals {
         totals.cache_read_tokens += record.cache_read_tokens;
         totals.cache_create_tokens += record.cache_create_tokens;
     }
+    totals.total_tokens = totals.input_tokens
+        + totals.output_tokens
+        + totals.cache_read_tokens
+        + totals.cache_create_tokens;
     totals
 }
 
@@ -358,7 +362,7 @@ mod tests {
         assert_eq!(totals.output_tokens, 150);
         assert_eq!(totals.cache_read_tokens, 30);
         assert_eq!(totals.cache_create_tokens, 15);
-        assert_eq!(totals.total_tokens(), 495);
+        assert_eq!(totals.total_tokens, 495);
     }
 
     #[test]

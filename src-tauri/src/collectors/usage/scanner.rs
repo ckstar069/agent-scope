@@ -1,8 +1,10 @@
 use chrono::Utc;
+use std::collections::HashMap;
 use std::collections::HashSet;
 use std::fs;
 use std::io::{BufRead, BufReader};
 use std::path::{Path, PathBuf};
+use std::time::SystemTime;
 
 use super::models::{
     CandidateConfigDir, ConfigDirSource, ConfidenceLevel, DirErrorReason, RealtimeLevel,
@@ -86,24 +88,77 @@ pub fn discover_claude_config_dirs() -> Vec<CandidateConfigDir> {
 // File Scanning
 // ============================================================================
 
+/// 单个 JSONL 文件候选（用于跨目录去重）
+#[derive(Debug, Clone)]
+struct JsonlFileCandidate {
+    file_path: PathBuf,
+    config_dir: PathBuf,
+    source: UsageSource,
+    session_id: String,
+    mtime: SystemTime,
+}
+
+/// 目录扫描中间结果
+struct DirScanResult {
+    /// 发现的 session JSONL 文件路径
+    session_files: Vec<PathBuf>,
+    /// 是否存在 legacy usage.jsonl
+    has_legacy: bool,
+}
+
 /// 扫描 usage 数据
+///
+/// 扫描流程：
+/// 1. 遍历每个 config_dir，做目录诊断
+/// 2. 收集所有 session JSONL 文件候选（含 mtime）
+/// 3. 按 session_id 跨目录去重（保留 mtime 最新的文件）
+/// 4. 扫描去重后的 ClaudeJsonl 文件
+/// 5. 扫描 legacy usage.jsonl（不参与去重）
 pub fn scan_usage_data(config_dirs: &[CandidateConfigDir]) -> UsageScanResult {
     let scan_start = Utc::now();
-    let mut records = Vec::new();
+    let mut all_candidates: Vec<JsonlFileCandidate> = Vec::new();
+    let mut legacy_files: Vec<(PathBuf, PathBuf)> = Vec::new();
     let mut readable_dirs = Vec::new();
     let mut unreadable_dirs = Vec::new();
-    let mut scanned_files = 0usize;
-    let mut scanned_lines = 0usize;
     let mut errors = Vec::new();
 
     for candidate in config_dirs {
-        match scan_config_dir(candidate, &mut records, &mut errors) {
-            Ok((files, lines)) => {
+        match scan_config_dir(candidate) {
+            Ok(result) => {
                 readable_dirs.push(
                     candidate.canonical_path.clone().unwrap_or(candidate.raw_path.clone()),
                 );
-                scanned_files += files;
-                scanned_lines += lines;
+
+                // 收集 session JSONL 候选
+                for file_path in result.session_files {
+                    let session_id = file_path
+                        .file_stem()
+                        .and_then(|s| s.to_str())
+                        .map(|s| s.to_string())
+                        .unwrap_or_default();
+
+                    if session_id.is_empty() {
+                        continue;
+                    }
+
+                    let mtime = fs::metadata(&file_path)
+                        .and_then(|m| m.modified())
+                        .unwrap_or(SystemTime::UNIX_EPOCH);
+
+                    all_candidates.push(JsonlFileCandidate {
+                        file_path,
+                        config_dir: candidate.raw_path.clone(),
+                        source: UsageSource::ClaudeJsonl,
+                        session_id,
+                        mtime,
+                    });
+                }
+
+                // 收集 legacy 文件
+                if result.has_legacy {
+                    let legacy_path = candidate.raw_path.join("usage.jsonl");
+                    legacy_files.push((legacy_path, candidate.raw_path.clone()));
+                }
             }
             Err(reason) => {
                 unreadable_dirs.push(UnreadableDir {
@@ -112,6 +167,63 @@ pub fn scan_usage_data(config_dirs: &[CandidateConfigDir]) -> UsageScanResult {
                     reason,
                     detail: None,
                 });
+            }
+        }
+    }
+
+    // 按 session_id 去重：保留 mtime 最新的文件
+    let mut deduped: HashMap<String, JsonlFileCandidate> = HashMap::new();
+    for candidate in all_candidates {
+        let entry = deduped
+            .entry(candidate.session_id.clone())
+            .or_insert_with(|| candidate.clone());
+        if candidate.mtime > entry.mtime {
+            *entry = candidate;
+        }
+    }
+
+    // 扫描去重后的 ClaudeJsonl 文件
+    let mut records = Vec::new();
+    let mut scanned_files = 0usize;
+    let mut scanned_lines = 0usize;
+
+    for (_, candidate) in deduped {
+        match scan_jsonl_file(
+            &candidate.file_path,
+            &candidate.config_dir,
+            candidate.source,
+            &mut records,
+            &mut errors,
+        ) {
+            Ok((files, lines)) => {
+                scanned_files += files;
+                scanned_lines += lines;
+            }
+            Err(e) => {
+                errors.push(format!(
+                    "扫描文件 {} 失败: {}",
+                    candidate.file_path.display(),
+                    e
+                ));
+            }
+        }
+    }
+
+    // 扫描 legacy usage.jsonl（不参与去重）
+    for (file_path, config_dir) in legacy_files {
+        match scan_jsonl_file(
+            &file_path,
+            &config_dir,
+            UsageSource::LegacyOrGlobalUsage,
+            &mut records,
+            &mut errors,
+        ) {
+            Ok((files, lines)) => {
+                scanned_files += files;
+                scanned_lines += lines;
+            }
+            Err(e) => {
+                errors.push(format!("扫描 legacy usage.jsonl 失败: {}", e));
             }
         }
     }
@@ -158,12 +270,8 @@ pub fn scan_usage_data(config_dirs: &[CandidateConfigDir]) -> UsageScanResult {
 
 /// 扫描单个配置目录
 ///
-/// 返回 Ok((scanned_files, scanned_lines)) 或 Err(DirErrorReason)
-fn scan_config_dir(
-    candidate: &CandidateConfigDir,
-    records: &mut Vec<super::models::UsageRecord>,
-    errors: &mut Vec<String>,
-) -> Result<(usize, usize), DirErrorReason> {
+/// 返回目录诊断信息和发现的文件列表，不做实际解析。
+fn scan_config_dir(candidate: &CandidateConfigDir) -> Result<DirScanResult, DirErrorReason> {
     let dir = &candidate.raw_path;
 
     // 检查目录是否存在
@@ -177,8 +285,8 @@ fn scan_config_dir(
     }
 
     // 检查是否可读（尝试列出目录内容）
-    let entries = match fs::read_dir(dir) {
-        Ok(e) => e,
+    let entries: Vec<_> = match fs::read_dir(dir) {
+        Ok(e) => e.filter_map(|e| e.ok()).collect(),
         Err(e) => {
             if e.kind() == std::io::ErrorKind::PermissionDenied {
                 return Err(DirErrorReason::PermissionDenied);
@@ -187,102 +295,72 @@ fn scan_config_dir(
         }
     };
 
+    let is_empty = entries.is_empty();
+
     // 检查 projects 目录是否存在
     let projects_dir = dir.join("projects");
     let has_projects = projects_dir.exists() && projects_dir.is_dir();
 
-    let mut scanned_files = 0usize;
-    let mut scanned_lines = 0usize;
-
-    // 扫描 projects 目录下的所有 .jsonl 文件
-    if has_projects {
-        match scan_projects_dir(&projects_dir, dir, records, errors) {
-            Ok((files, lines)) => {
-                scanned_files += files;
-                scanned_lines += lines;
-            }
-            Err(e) => {
-                errors.push(format!("扫描 projects 目录失败: {}", e));
-            }
-        }
-    }
-
-    // 可选兼容：扫描 {config_dir}/usage.jsonl
+    // 检查 legacy usage.jsonl 是否存在
     let legacy_usage = dir.join("usage.jsonl");
-    if legacy_usage.exists() && legacy_usage.is_file() {
-        match scan_jsonl_file(&legacy_usage, dir, UsageSource::LegacyOrGlobalUsage, records, errors)
-        {
-            Ok((files, lines)) => {
-                scanned_files += files;
-                scanned_lines += lines;
-            }
-            Err(e) => {
-                errors.push(format!("扫描 legacy usage.jsonl 失败: {}", e));
-            }
-        }
-    }
+    let has_legacy = legacy_usage.exists() && legacy_usage.is_file();
 
-    // 如果 projects 目录不存在且没有 legacy usage，标记为 MissingStructure
-    if !has_projects && !legacy_usage.exists() {
-        // 但目录存在且有其他内容，不一定是错误
-        // 这里我们允许空扫描（可能用户还没有项目）
-        let has_any_content = entries.count() > 0;
-        if !has_any_content {
+    // 如果目录存在但既没有 projects 也没有 usage.jsonl
+    if !has_projects && !has_legacy {
+        if is_empty {
             return Err(DirErrorReason::Empty);
+        } else {
+            return Err(DirErrorReason::MissingStructure);
         }
     }
 
-    Ok((scanned_files, scanned_lines))
+    // 收集 projects 目录下的 session JSONL 文件（单层，不递归）
+    let mut session_files = Vec::new();
+    if has_projects {
+        match find_project_session_jsonl_files(&projects_dir) {
+            Ok(files) => session_files = files,
+            Err(_) => {
+                // 读取 projects 目录失败，但不中断整体流程
+                // 返回空列表，让调用方继续处理
+            }
+        }
+    }
+
+    Ok(DirScanResult {
+        session_files,
+        has_legacy,
+    })
 }
 
-/// 扫描 projects 目录下的所有 .jsonl 文件
-fn scan_projects_dir(
+/// 只扫描 projects 目录下一层项目目录中的 .jsonl 文件
+///
+/// 扫描范围: `{projects_dir}/{project-dir}/*.jsonl`
+/// 不递归进入子目录（避免附件/子目录中的无关文件）
+fn find_project_session_jsonl_files(
     projects_dir: &Path,
-    config_dir: &Path,
-    records: &mut Vec<super::models::UsageRecord>,
-    errors: &mut Vec<String>,
-) -> Result<(usize, usize), String> {
-    let mut scanned_files = 0usize;
-    let mut scanned_lines = 0usize;
-
-    // 递归查找所有 .jsonl 文件
-    let jsonl_files = match find_jsonl_files(projects_dir) {
-        Ok(files) => files,
-        Err(e) => return Err(format!("查找 JSONL 文件失败: {}", e)),
-    };
-
-    for file_path in jsonl_files {
-        match scan_jsonl_file(&file_path, config_dir, UsageSource::ClaudeJsonl, records, errors) {
-            Ok((files, lines)) => {
-                scanned_files += files;
-                scanned_lines += lines;
-            }
-            Err(e) => {
-                errors.push(format!("扫描文件 {} 失败: {}", file_path.display(), e));
-            }
-        }
-    }
-
-    Ok((scanned_files, scanned_lines))
-}
-
-/// 递归查找 .jsonl 文件
-fn find_jsonl_files(dir: &Path) -> Result<Vec<PathBuf>, std::io::Error> {
+) -> Result<Vec<PathBuf>, std::io::Error> {
     let mut files = Vec::new();
 
-    if !dir.exists() || !dir.is_dir() {
+    if !projects_dir.exists() || !projects_dir.is_dir() {
         return Ok(files);
     }
 
-    for entry in fs::read_dir(dir)? {
+    for entry in fs::read_dir(projects_dir)? {
         let entry = entry?;
-        let path = entry.path();
+        let project_dir = entry.path();
 
-        if path.is_dir() {
-            // 递归子目录
-            files.extend(find_jsonl_files(&path)?);
-        } else if path.extension().and_then(|e| e.to_str()) == Some("jsonl") {
-            files.push(path);
+        if !project_dir.is_dir() {
+            continue;
+        }
+
+        // 只扫描该 project 目录下的直接子文件中的 .jsonl
+        for file_entry in fs::read_dir(&project_dir)? {
+            let file_entry = file_entry?;
+            let path = file_entry.path();
+
+            if path.is_file() && path.extension().and_then(|e| e.to_str()) == Some("jsonl") {
+                files.push(path);
+            }
         }
     }
 
@@ -367,8 +445,8 @@ fn scan_jsonl_file(
 
 /// 从文件路径提取项目标识
 ///
-/// 文件路径格式: {config_dir}/projects/{encoded-project-dir}/{session_id}.jsonl
-/// 提取 {encoded-project-dir} 作为项目标识
+/// 文件路径格式: `{config_dir}/projects/{encoded-project-dir}/{session_id}.jsonl`
+/// 提取 `{encoded-project-dir}` 作为项目标识
 fn extract_project_from_path(file_path: &Path, config_dir: &Path) -> Option<String> {
     // 找到 projects 目录后的第一个子目录名
     let relative = file_path.strip_prefix(config_dir).ok()?;
@@ -398,6 +476,8 @@ mod tests {
     use super::*;
     use std::io::Write;
     use std::sync::Mutex;
+    use std::thread;
+    use std::time::Duration;
 
     // 环境变量测试需要串行执行，避免并行修改 CLAUDE_CONFIG_DIR 互相干扰
     static ENV_LOCK: Mutex<()> = Mutex::new(());
@@ -496,6 +576,7 @@ mod tests {
             PathBuf::from("/home/user/.claude/projects/my-org/my-project/550e8400.jsonl");
 
         let project = extract_project_from_path(&file, &config);
+        // 只提取 projects 后的第一个目录名
         assert_eq!(project, Some("my-org".to_string()));
     }
 
@@ -625,6 +706,35 @@ mod tests {
     }
 
     #[test]
+    fn test_scan_usage_data_missing_structure() {
+        let temp_dir = tempfile::tempdir().unwrap();
+
+        // 创建一个非空目录，但既没有 projects 也没有 usage.jsonl
+        let other_file = temp_dir.path().join("some-other-file.txt");
+        std::fs::File::create(&other_file).unwrap();
+        writeln!(std::fs::File::create(&other_file).unwrap(), "hello").unwrap();
+
+        let candidate = CandidateConfigDir {
+            raw_path: temp_dir.path().to_path_buf(),
+            canonical_path: Some(temp_dir.path().canonicalize().unwrap()),
+            source: ConfigDirSource::EnvClaudeConfigDir,
+        };
+
+        let result = scan_usage_data(&[candidate]);
+
+        assert_eq!(
+            result.source_status.unreadable_dirs.len(),
+            1,
+            "非空目录应被标记为 MissingStructure"
+        );
+        assert_eq!(
+            result.source_status.unreadable_dirs[0].reason,
+            DirErrorReason::MissingStructure,
+            "非空目录应返回 MissingStructure"
+        );
+    }
+
+    #[test]
     fn test_scan_usage_data_legacy_usage_jsonl() {
         let temp_dir = tempfile::tempdir().unwrap();
 
@@ -649,6 +759,100 @@ mod tests {
             result.records[0].source,
             UsageSource::LegacyOrGlobalUsage,
             "legacy 文件应标记为 LegacyOrGlobalUsage"
+        );
+    }
+
+    #[test]
+    fn test_scan_usage_data_does_not_recurse_into_subdirs() {
+        let temp_dir = tempfile::tempdir().unwrap();
+        let projects_dir = temp_dir.path().join("projects").join("test-project");
+        std::fs::create_dir_all(&projects_dir).unwrap();
+
+        // 在主目录下创建 JSONL
+        let main_jsonl = projects_dir.join("550e8400.jsonl");
+        let mut file = std::fs::File::create(&main_jsonl).unwrap();
+        writeln!(
+            file,
+            r#"{{"type":"assistant","timestamp":"2026-05-27T01:40:41.560Z","sessionId":"550e8400","message":{{"model":"claude","usage":{{"input_tokens":100,"output_tokens":50}}}}}}"#
+        ).unwrap();
+
+        // 在子目录下创建 JSONL（不应被扫描）
+        let sub_dir = projects_dir.join("sub-session");
+        std::fs::create_dir_all(&sub_dir).unwrap();
+        let sub_jsonl = sub_dir.join("660e8400.jsonl");
+        let mut file = std::fs::File::create(&sub_jsonl).unwrap();
+        writeln!(
+            file,
+            r#"{{"type":"assistant","timestamp":"2026-05-27T01:40:41.560Z","sessionId":"660e8400","message":{{"model":"claude","usage":{{"input_tokens":999,"output_tokens":999}}}}}}"#
+        ).unwrap();
+
+        let candidate = CandidateConfigDir {
+            raw_path: temp_dir.path().to_path_buf(),
+            canonical_path: Some(temp_dir.path().canonicalize().unwrap()),
+            source: ConfigDirSource::EnvClaudeConfigDir,
+        };
+
+        let result = scan_usage_data(&[candidate]);
+
+        assert_eq!(result.records.len(), 1, "不应递归扫描子目录");
+        assert_eq!(result.scanned_files, 1, "应只扫描 1 个文件");
+        assert_eq!(result.records[0].input_tokens, 100, "应是主目录下的文件");
+    }
+
+    #[test]
+    fn test_scan_usage_data_dedup_by_session_id_keeps_newest() {
+        let temp_dir = tempfile::tempdir().unwrap();
+
+        // 创建两个 config_dir 结构，模拟跨目录相同 session_id
+        let projects1 = temp_dir.path().join("dir1").join("projects").join("project-a");
+        let projects2 = temp_dir.path().join("dir2").join("projects").join("project-b");
+        std::fs::create_dir_all(&projects1).unwrap();
+        std::fs::create_dir_all(&projects2).unwrap();
+
+        // 两个文件同名（相同 session_id），但内容不同
+        let jsonl1 = projects1.join("same-session.jsonl");
+        let mut file = std::fs::File::create(&jsonl1).unwrap();
+        writeln!(
+            file,
+            r#"{{"type":"assistant","timestamp":"2026-05-27T01:40:41.560Z","sessionId":"same-session","message":{{"model":"claude","usage":{{"input_tokens":100,"output_tokens":50}}}}}}"#
+        ).unwrap();
+
+        // 等待一小段时间确保 mtime 不同
+        thread::sleep(Duration::from_millis(100));
+
+        let jsonl2 = projects2.join("same-session.jsonl");
+        let mut file = std::fs::File::create(&jsonl2).unwrap();
+        writeln!(
+            file,
+            r#"{{"type":"assistant","timestamp":"2026-05-27T01:40:41.560Z","sessionId":"same-session","message":{{"model":"claude","usage":{{"input_tokens":200,"output_tokens":100}}}}}}"#
+        ).unwrap();
+
+        let candidates = vec![
+            CandidateConfigDir {
+                raw_path: temp_dir.path().join("dir1"),
+                canonical_path: Some(temp_dir.path().join("dir1").canonicalize().unwrap()),
+                source: ConfigDirSource::EnvClaudeConfigDir,
+            },
+            CandidateConfigDir {
+                raw_path: temp_dir.path().join("dir2"),
+                canonical_path: Some(temp_dir.path().join("dir2").canonicalize().unwrap()),
+                source: ConfigDirSource::EnvClaudeConfigDir,
+            },
+        ];
+
+        let result = scan_usage_data(&candidates);
+
+        // 应只保留 mtime 最新的文件（jsonl2，200 input_tokens）
+        assert_eq!(result.records.len(), 1, "相同 session_id 应去重只保留一个");
+        assert_eq!(result.scanned_files, 1, "应只扫描 1 个文件");
+        assert_eq!(
+            result.records[0].input_tokens, 200,
+            "应保留 mtime 最新的文件"
+        );
+        assert_eq!(
+            result.records[0].project_path,
+            Some("project-b".to_string()),
+            "应保留 mtime 最新的文件的路径信息"
         );
     }
 }

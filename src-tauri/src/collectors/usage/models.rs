@@ -122,12 +122,7 @@ pub struct UsageTotals {
     pub output_tokens: u64,
     pub cache_read_tokens: u64,
     pub cache_create_tokens: u64,
-}
-
-impl UsageTotals {
-    pub fn total_tokens(&self) -> u64 {
-        self.input_tokens + self.output_tokens + self.cache_read_tokens + self.cache_create_tokens
-    }
+    pub total_tokens: u64,
 }
 
 // ============================================================================
