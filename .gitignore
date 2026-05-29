@@ -33,3 +33,6 @@ test-results/
 # Git worktrees
 .worktrees/
 .playwright-mcp/
+
+# Serena agent cache
+.serena/

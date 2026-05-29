@@ -7,11 +7,12 @@ import { ClaudeMemory } from "@/features/claude-memory";
 import { Dashboard } from "@/features/dashboard";
 import { ProjectDetail } from "@/features/project-detail";
 import { GeneralSettings, ProjectSettings } from "@/features/settings";
+import { UsageAnalytics } from "@/features/usage-analytics";
 
 export type AppDomain = "projects" | "monitoring" | "settings";
 
 export type ProjectPage = "overview" | "detail";
-export type MonitoringPage = "agents" | "claude-history" | "assets" | "load-chain";
+export type MonitoringPage = "agents" | "claude-history" | "assets" | "load-chain" | "usage";
 export type SettingsPage = "project" | "general";
 
 const STORAGE_KEY_DOMAIN = "agent-scope:domain";
@@ -104,6 +105,9 @@ function App() {
         }
         if (monitoringPage === "assets" || monitoringPage === "load-chain") {
           return <ClaudeMemory page={monitoringPage} />;
+        }
+        if (monitoringPage === "usage") {
+          return <UsageAnalytics />;
         }
         return <AgentMonitor />;
       }

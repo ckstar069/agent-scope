@@ -1,5 +1,6 @@
 import { useCallback, useEffect, useMemo, useState } from "react";
 import {
+  BarChart3,
   Bot,
   Brain,
   FolderKanban,
@@ -226,6 +227,13 @@ function MonitoringSidebarContent({
         isExpanded={isExpanded}
         isActive={activePage === "claude-history"}
         onClick={() => onPageChange("claude-history")}
+      />
+      <SidebarButton
+        icon={BarChart3}
+        label="Usage 分析"
+        isExpanded={isExpanded}
+        isActive={activePage === "usage"}
+        onClick={() => onPageChange("usage")}
       />
 
       {/* 分隔 */}
