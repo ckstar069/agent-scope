@@ -558,7 +558,7 @@ function AgentSessionRow({ agent, rateUnit, rateType, isExpanded, onToggle }: Om
 >
               <div className="flex items-center justify-between gap-1 text-[10px]"
 >
-                <span className="flex items-center gap-1 text-muted-foreground">上下文<InfoHint content="当前会话已使用的上下文比例，接近上限时可能触发压缩或影响后续对话质量。" /></span>
+                <span className="flex items-center gap-1 text-muted-foreground">上下文<InfoHint content="当前会话已使用的上下文比例，接近上限时可能触发压缩或影响后续对话质量。" interactive={false} /></span>
                 <span className={cn("font-mono font-semibold", ctxColor.text)}>
                   {formatRate(context.percent)}%
                 </span>

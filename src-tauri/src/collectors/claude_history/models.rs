@@ -48,6 +48,8 @@ pub struct SerPreviewMessage {
     pub role: String,
     pub content: String,
     pub timestamp: Option<u64>,
+    /// 消息来源类型：user / assistant / tool / last-prompt
+    pub source_type: String,
 }
 
 #[derive(Debug, Clone, Serialize)]
