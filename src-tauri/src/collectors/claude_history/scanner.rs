@@ -255,109 +255,8 @@ pub fn preview_claude_session(session_id: &str) -> Result<SerSessionPreview, Str
             Err(_) => continue,
         };
 
-        let msg_type = value.get("type").and_then(|v| v.as_str()).unwrap_or("");
-
-        match msg_type {
-            "user" => {
-                if let Some(message) = value.get("message") {
-                    let role = message
-                        .get("role")
-                        .and_then(|v| v.as_str())
-                        .unwrap_or("user");
-                    if let Some(content) = message.get("content") {
-                        // content 可能是字符串或数组
-                        if let Some(text) = content.as_str() {
-                            // 过滤系统标记（以 < 开头的伪消息）
-                            if !text.trim_start().starts_with('<') {
-                                messages.push(SerPreviewMessage {
-                                    role: role.to_string(),
-                                    content: text.to_string(),
-                                    timestamp: None,
-                                    source_type: "user".to_string(),
-                                });
-                            }
-                        } else if let Some(arr) = content.as_array() {
-                            for item in arr {
-                                // 只提取 text 类型的内容，跳过 tool_result 等
-                                if let Some(text) = item.get("text").and_then(|v| v.as_str()) {
-                                    messages.push(SerPreviewMessage {
-                                        role: role.to_string(),
-                                        content: text.to_string(),
-                                        timestamp: None,
-                                        source_type: "user".to_string(),
-                                    });
-                                }
-                            }
-                        }
-                    }
-                }
-            }
-            "assistant" => {
-                if let Some(message) = value.get("message") {
-                    let role = message
-                        .get("role")
-                        .and_then(|v| v.as_str())
-                        .unwrap_or("assistant");
-                    if let Some(content) = message.get("content").and_then(|c| c.as_array()) {
-                        let mut has_text = false;
-                        for item in content {
-                            let item_type = item.get("type").and_then(|v| v.as_str()).unwrap_or("");
-                            if item_type == "text" {
-                                if let Some(text) = item.get("text").and_then(|v| v.as_str()) {
-                                    has_text = true;
-                                    messages.push(SerPreviewMessage {
-                                        role: role.to_string(),
-                                        content: text.to_string(),
-                                        timestamp: None,
-                                        source_type: "assistant".to_string(),
-                                    });
-                                }
-                            }
-                        }
-                        // 如果没有 text 但有 tool_use，生成简化描述
-                        if !has_text {
-                            for item in content {
-                                let item_type =
-                                    item.get("type").and_then(|v| v.as_str()).unwrap_or("");
-                                if item_type == "tool_use" {
-                                    if let Some(name) = item.get("name").and_then(|v| v.as_str()) {
-                                        let detail = item
-                                            .get("input")
-                                            .and_then(|i| {
-                                                i.get("command").or_else(|| i.get("query"))
-                                            })
-                                            .and_then(|v| v.as_str())
-                                            .unwrap_or("");
-                                        let desc = if detail.is_empty() {
-                                            format!("调用工具: {}", name)
-                                        } else {
-                                            format!("调用工具: {} ({})", name, detail)
-                                        };
-                                        messages.push(SerPreviewMessage {
-                                            role: "tool".to_string(),
-                                            content: desc,
-                                            timestamp: None,
-                                            source_type: "tool".to_string(),
-                                        });
-                                    }
-                                }
-                            }
-                        }
-                    }
-                }
-            }
-            "last-prompt" => {
-                if let Some(prompt) = value.get("lastPrompt").and_then(|v| v.as_str()) {
-                    messages.push(SerPreviewMessage {
-                        role: "user".to_string(),
-                        content: prompt.to_string(),
-                        timestamp: None,
-                        source_type: "last-prompt".to_string(),
-                    });
-                }
-            }
-            _ => {}
-        }
+        let extracted = extract_preview_messages_from_value(&value);
+        messages.extend(extracted);
     }
 
     // Clean：相邻重复折叠 + last-prompt 与最近 user 去重
@@ -368,6 +267,112 @@ pub fn preview_claude_session(session_id: &str) -> Result<SerSessionPreview, Str
         messages,
         total_turns,
     })
+}
+
+/// 从单行 JSON value 中提取 preview messages（供 preview_claude_session 复用）
+fn extract_preview_messages_from_value(value: &Value) -> Vec<SerPreviewMessage> {
+    let mut messages: Vec<SerPreviewMessage> = Vec::new();
+    let msg_type = value.get("type").and_then(|v| v.as_str()).unwrap_or("");
+
+    match msg_type {
+        "user" => {
+            if let Some(message) = value.get("message") {
+                let role = message
+                    .get("role")
+                    .and_then(|v| v.as_str())
+                    .unwrap_or("user");
+                if let Some(content) = message.get("content") {
+                    if let Some(text) = content.as_str() {
+                        if !text.trim_start().starts_with('<') {
+                            messages.push(SerPreviewMessage {
+                                role: role.to_string(),
+                                content: text.to_string(),
+                                timestamp: None,
+                                source_type: "user".to_string(),
+                            });
+                        }
+                    } else if let Some(arr) = content.as_array() {
+                        for item in arr {
+                            if let Some(text) = item.get("text").and_then(|v| v.as_str()) {
+                                messages.push(SerPreviewMessage {
+                                    role: role.to_string(),
+                                    content: text.to_string(),
+                                    timestamp: None,
+                                    source_type: "user".to_string(),
+                                });
+                            }
+                        }
+                    }
+                }
+            }
+        }
+        "assistant" => {
+            if let Some(message) = value.get("message") {
+                let role = message
+                    .get("role")
+                    .and_then(|v| v.as_str())
+                    .unwrap_or("assistant");
+                if let Some(content) = message.get("content").and_then(|c| c.as_array()) {
+                    let mut has_text = false;
+                    for item in content {
+                        let item_type = item.get("type").and_then(|v| v.as_str()).unwrap_or("");
+                        if item_type == "text" {
+                            if let Some(text) = item.get("text").and_then(|v| v.as_str()) {
+                                has_text = true;
+                                messages.push(SerPreviewMessage {
+                                    role: role.to_string(),
+                                    content: text.to_string(),
+                                    timestamp: None,
+                                    source_type: "assistant".to_string(),
+                                });
+                            }
+                        }
+                    }
+                    if !has_text {
+                        for item in content {
+                            let item_type =
+                                item.get("type").and_then(|v| v.as_str()).unwrap_or("");
+                            if item_type == "tool_use" {
+                                if let Some(name) = item.get("name").and_then(|v| v.as_str()) {
+                                    let detail = item
+                                        .get("input")
+                                        .and_then(|i| {
+                                            i.get("command").or_else(|| i.get("query"))
+                                        })
+                                        .and_then(|v| v.as_str())
+                                        .unwrap_or("");
+                                    let desc = if detail.is_empty() {
+                                        format!("调用工具: {}", name)
+                                    } else {
+                                        format!("调用工具: {} ({})", name, detail)
+                                    };
+                                    messages.push(SerPreviewMessage {
+                                        role: "tool".to_string(),
+                                        content: desc,
+                                        timestamp: None,
+                                        source_type: "tool".to_string(),
+                                    });
+                                }
+                            }
+                        }
+                    }
+                }
+            }
+        }
+        "last-prompt" => {
+            if let Some(prompt) = value.get("lastPrompt").and_then(|v| v.as_str()) {
+                messages.push(SerPreviewMessage {
+                    role: "user".to_string(),
+                    content: prompt.to_string(),
+                    timestamp: None,
+                    source_type: "last-prompt".to_string(),
+                });
+            }
+        }
+        _ => {}
+    }
+
+    messages
 }
 
 /// 清理预览消息：
@@ -1118,23 +1123,65 @@ mod tests {
         assert_eq!(cleaned.len(), 2);
     }
 
+    // =========================================================================
+    // extract_preview_messages_from_value 单元测试
+    // =========================================================================
+
     #[test]
-    fn test_clean_preview_user_array_text_extraction() {
-        // user content 为数组且包含 text 类型时应提取
-        let jsonl_path = std::env::temp_dir().join("test-user-array.jsonl");
-        let line = r#"{"type":"user","message":{"role":"user","content":[{"type":"text","text":"这是数组格式的用户消息"}]}}"#;
-        std::fs::write(&jsonl_path, line).unwrap();
+    fn test_extract_user_content_string() {
+        let value: Value = serde_json::from_str(
+            r#"{"type":"user","message":{"role":"user","content":"Hello world"}}"#
+        ).unwrap();
+        let msgs = extract_preview_messages_from_value(&value);
+        assert_eq!(msgs.len(), 1);
+        assert_eq!(msgs[0].role, "user");
+        assert_eq!(msgs[0].content, "Hello world");
+        assert_eq!(msgs[0].source_type, "user");
+    }
 
-        let _preview = preview_claude_session("test-user-array").unwrap_or_else(|_| SerSessionPreview {
-            session_id: "test-user-array".to_string(),
-            messages: Vec::new(),
-            total_turns: 0,
-        });
+    #[test]
+    fn test_extract_user_content_array_text() {
+        let value: Value = serde_json::from_str(
+            r#"{"type":"user","message":{"role":"user","content":[{"type":"text","text":"这是数组格式的用户消息"}]}}"#
+        ).unwrap();
+        let msgs = extract_preview_messages_from_value(&value);
+        assert_eq!(msgs.len(), 1);
+        assert_eq!(msgs[0].role, "user");
+        assert_eq!(msgs[0].content, "这是数组格式的用户消息");
+        assert_eq!(msgs[0].source_type, "user");
+    }
 
-        // 注意：preview_claude_session 需要真实 session_id 和文件路径
-        // 这个测试主要验证 parser 逻辑，实际文件路径不匹配时会返回空
-        // 所以改为直接测试 extract 逻辑
+    #[test]
+    fn test_extract_assistant_content_text() {
+        let value: Value = serde_json::from_str(
+            r#"{"type":"assistant","message":{"role":"assistant","content":[{"type":"text","text":"好的，我来处理"}]}}"#
+        ).unwrap();
+        let msgs = extract_preview_messages_from_value(&value);
+        assert_eq!(msgs.len(), 1);
+        assert_eq!(msgs[0].role, "assistant");
+        assert_eq!(msgs[0].content, "好的，我来处理");
+        assert_eq!(msgs[0].source_type, "assistant");
+    }
 
-        let _ = std::fs::remove_file(&jsonl_path);
+    #[test]
+    fn test_extract_last_prompt_source_type() {
+        let value: Value = serde_json::from_str(
+            r#"{"type":"last-prompt","lastPrompt":"请分析这段代码"}"#
+        ).unwrap();
+        let msgs = extract_preview_messages_from_value(&value);
+        assert_eq!(msgs.len(), 1);
+        assert_eq!(msgs[0].role, "user");
+        assert_eq!(msgs[0].content, "请分析这段代码");
+        assert_eq!(msgs[0].source_type, "last-prompt");
+    }
+
+    #[test]
+    fn test_extract_user_system_message_filtered() {
+        // 以 < 开头的系统标记应被过滤
+        let value: Value = serde_json::from_str(
+            r#"{"type":"user","message":{"role":"user","content":"<system>prompt</system>"}}"#
+        ).unwrap();
+        let msgs = extract_preview_messages_from_value(&value);
+        assert_eq!(msgs.len(), 0);
     }
 }

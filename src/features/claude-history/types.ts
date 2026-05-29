@@ -2,6 +2,8 @@ export interface PreviewMessage {
   role: string;
   content: string;
   timestamp: number | null;
+  /** 消息来源类型：user / assistant / tool / last-prompt */
+  source_type?: string;
 }
 
 export interface SessionPreview {
