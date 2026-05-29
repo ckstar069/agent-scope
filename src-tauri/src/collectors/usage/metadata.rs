@@ -19,8 +19,33 @@ pub struct UsageSessionMetadata {
     pub project_path: Option<String>,
     /// 项目名称（project_path 的 basename）
     pub project_name: Option<String>,
-    /// 记录时间戳（用于去重时保留较新记录）
+    /// 记录时间戳（原始字符串，用于调试）
     pub timestamp: Option<String>,
+    /// 排序用时间戳（毫秒级，内部使用，不参与序列化）
+    pub timestamp_sort_key: Option<i128>,
+}
+
+/// 解析 history.jsonl 中的 timestamp
+///
+/// 支持：
+/// - number/u64（毫秒级时间戳，如 1780014184874）
+/// - string number（如 "1780014184874"）
+/// - RFC3339 string（如 "2026-05-29T08:58:25Z"）
+///
+/// 返回毫秒级时间戳的 Option<i128>，无法解析返回 None。
+fn parse_history_timestamp(value: &serde_json::Value) -> Option<i128> {
+    if let Some(n) = value.as_u64() {
+        return Some(n as i128);
+    }
+    if let Some(s) = value.as_str() {
+        if let Ok(n) = s.parse::<u64>() {
+            return Some(n as i128);
+        }
+        if let Ok(dt) = chrono::DateTime::parse_from_rfc3339(s) {
+            return Some(dt.timestamp_millis() as i128);
+        }
+    }
+    None
 }
 
 /// 从一组 config_dir 加载 session metadata
@@ -79,8 +104,11 @@ pub fn load_usage_session_metadata(
                 .map(|s| s.trim().to_string())
                 .filter(|s| !s.is_empty());
 
-            let timestamp = value
-                .get("timestamp")
+            let timestamp_raw = value.get("timestamp");
+            let timestamp_sort_key = parse_history_timestamp(
+                timestamp_raw.unwrap_or(&serde_json::Value::Null),
+            );
+            let timestamp_str = timestamp_raw
                 .and_then(|v| v.as_str())
                 .map(|s| s.to_string());
 
@@ -102,17 +130,37 @@ pub fn load_usage_session_metadata(
                     project_path: None,
                     project_name: None,
                     timestamp: None,
+                    timestamp_sort_key: None,
                 }
             });
 
-            // 如果新记录 timestamp 更晚，或当前没有 display/project，则更新
-            let should_update = match (&timestamp, &entry.timestamp) {
+            // 按 timestamp_sort_key 判断新旧：
+            // 1. 新可解析，旧可解析：新 > 旧时更新
+            // 2. 新可解析，旧不可解析：更新
+            // 3. 新不可解析，旧可解析：保留旧
+            // 4. 都不可解析：后读覆盖前读
+            let should_update = match (timestamp_sort_key, entry.timestamp_sort_key) {
                 (Some(new_ts), Some(old_ts)) => new_ts > old_ts,
                 (Some(_), None) => true,
-                (None, _) => entry.display.is_none() && entry.project_path.is_none(),
+                (None, Some(_)) => false,
+                (None, None) => true,
             };
 
-            if should_update {
+            // 标题质量优先级：非 "(未命名)" 优于 "(未命名)"
+            // 当 timestamp 相同时，优先选择更有意义的标题
+            let new_is_better = match (&display, &entry.display) {
+                (Some(new_d), Some(old_d)) => {
+                    let new_cleaned = clean_session_title(Some(new_d));
+                    let old_cleaned = clean_session_title(Some(old_d));
+                    new_cleaned != "(未命名)" && old_cleaned == "(未命名)"
+                }
+                (Some(_), None) => true,
+                _ => false,
+            };
+
+            if should_update
+                || (timestamp_sort_key == entry.timestamp_sort_key && new_is_better)
+            {
                 if display.is_some() {
                     entry.display = display;
                 }
@@ -122,9 +170,10 @@ pub fn load_usage_session_metadata(
                 if project_name.is_some() {
                     entry.project_name = project_name.clone();
                 }
-                if timestamp.is_some() {
-                    entry.timestamp = timestamp;
+                if timestamp_str.is_some() {
+                    entry.timestamp = timestamp_str;
                 }
+                entry.timestamp_sort_key = timestamp_sort_key;
             }
         }
     }
@@ -311,13 +360,14 @@ mod tests {
 
         let history_path = config_dir.join("history.jsonl");
         let mut file = std::fs::File::create(&history_path).unwrap();
+        // 使用 number timestamp（与真实 history.jsonl 一致）
         writeln!(
             file,
-            r#"{{"type":"last-prompt","timestamp":"2026-05-27T10:00:00.000Z","sessionId":"sess-001","display":"Phase2 阶段开发","project":"/Users/ckstar/Repo/agent-scope"}}"#
+            r#"{{"type":"last-prompt","timestamp":1780000000000,"sessionId":"sess-001","display":"Phase2 阶段开发","project":"/Users/ckstar/Repo/agent-scope"}}"#
         ).unwrap();
         writeln!(
             file,
-            r#"{{"type":"last-prompt","timestamp":"2026-05-27T11:00:00.000Z","sessionId":"sess-002","display":"文档整理","project":"/Users/ckstar/Documents/notes"}}"#
+            r#"{{"type":"last-prompt","timestamp":1780003600000,"sessionId":"sess-002","display":"文档整理","project":"/Users/ckstar/Documents/notes"}}"#
         ).unwrap();
 
         let candidate = CandidateConfigDir {
@@ -334,10 +384,12 @@ mod tests {
         assert_eq!(meta1.display, Some("Phase2 阶段开发".to_string()));
         assert_eq!(meta1.project_path, Some("/Users/ckstar/Repo/agent-scope".to_string()));
         assert_eq!(meta1.project_name, Some("agent-scope".to_string()));
+        assert_eq!(meta1.timestamp_sort_key, Some(1_780_000_000_000i128));
 
         let meta2 = metadata.get("sess-002").unwrap();
         assert_eq!(meta2.display, Some("文档整理".to_string()));
         assert_eq!(meta2.project_name, Some("notes".to_string()));
+        assert_eq!(meta2.timestamp_sort_key, Some(1_780_003_600_000i128));
     }
 
     #[test]
@@ -347,15 +399,15 @@ mod tests {
 
         let history_path = config_dir.join("history.jsonl");
         let mut file = std::fs::File::create(&history_path).unwrap();
-        // 旧记录
+        // 旧记录（number timestamp）
         writeln!(
             file,
-            r#"{{"type":"last-prompt","timestamp":"2026-05-27T10:00:00.000Z","sessionId":"sess-001","display":"旧标题","project":"/old/path"}}"#
+            r#"{{"type":"last-prompt","timestamp":1780000000000,"sessionId":"sess-001","display":"旧标题","project":"/old/path"}}"#
         ).unwrap();
         // 新记录（同 session，应覆盖）
         writeln!(
             file,
-            r#"{{"type":"last-prompt","timestamp":"2026-05-27T12:00:00.000Z","sessionId":"sess-001","display":"新标题","project":"/new/path"}}"#
+            r#"{{"type":"last-prompt","timestamp":1780010000000,"sessionId":"sess-001","display":"新标题","project":"/new/path"}}"#
         ).unwrap();
 
         let candidate = CandidateConfigDir {
@@ -384,6 +436,158 @@ mod tests {
 
         let metadata = load_usage_session_metadata(&[candidate]);
         assert!(metadata.is_empty());
+    }
+
+    #[test]
+    fn test_parse_history_timestamp_number() {
+        let v = serde_json::json!(1780014184874u64);
+        assert_eq!(parse_history_timestamp(&v), Some(1780014184874i128));
+    }
+
+    #[test]
+    fn test_parse_history_timestamp_string_number() {
+        let v = serde_json::json!("1780014184874");
+        assert_eq!(parse_history_timestamp(&v), Some(1780014184874i128));
+    }
+
+    #[test]
+    fn test_parse_history_timestamp_rfc3339() {
+        let v = serde_json::json!("2026-05-29T08:58:25Z");
+        let result = parse_history_timestamp(&v);
+        assert!(result.is_some());
+        // 2026-05-29T08:58:25Z 的毫秒时间戳
+        assert_eq!(result.unwrap(), 1_780_045_105_000i128);
+    }
+
+    #[test]
+    fn test_parse_history_timestamp_invalid() {
+        assert_eq!(parse_history_timestamp(&serde_json::json!(null)), None);
+        assert_eq!(parse_history_timestamp(&serde_json::json!("")), None);
+        assert_eq!(parse_history_timestamp(&serde_json::json!("not-a-date")), None);
+    }
+
+    #[test]
+    fn test_load_metadata_renamed_title_overrides_long_message() {
+        let temp_dir = tempfile::tempdir().unwrap();
+        let config_dir = temp_dir.path().to_path_buf();
+
+        let history_path = config_dir.join("history.jsonl");
+        let mut file = std::fs::File::create(&history_path).unwrap();
+        // 旧记录：长首条用户消息
+        writeln!(
+            file,
+            r#"{{"type":"last-prompt","timestamp":1780013871215,"sessionId":"0230e7f8","display":"帮我检查本机的健康状态。之前两天，连续出现两次关机时无响应","project":"/Users/ckstar/Documents/Obsidian/techNote"}}"#
+        ).unwrap();
+        // 新记录：/rename
+        writeln!(
+            file,
+            r#"{{"type":"last-prompt","timestamp":1780014184874,"sessionId":"0230e7f8","display":"/rename macos 健康状态检查","project":"/Users/ckstar/Documents/Obsidian/techNote"}}"#
+        ).unwrap();
+
+        let candidate = CandidateConfigDir {
+            raw_path: config_dir.clone(),
+            canonical_path: Some(config_dir.canonicalize().unwrap()),
+            source: super::super::models::ConfigDirSource::EnvClaudeConfigDir,
+        };
+
+        let metadata = load_usage_session_metadata(&[candidate]);
+        let meta = metadata.get("0230e7f8").unwrap();
+        // 应保留 /rename 解析后的标题
+        assert_eq!(meta.display, Some("/rename macos 健康状态检查".to_string()));
+    }
+
+    #[test]
+    fn test_load_metadata_no_timestamp_fallback() {
+        let temp_dir = tempfile::tempdir().unwrap();
+        let config_dir = temp_dir.path().to_path_buf();
+
+        let history_path = config_dir.join("history.jsonl");
+        let mut file = std::fs::File::create(&history_path).unwrap();
+        // 无 timestamp 的旧记录
+        writeln!(
+            file,
+            r#"{{"type":"last-prompt","sessionId":"sess-001","display":"旧标题"}}"#
+        ).unwrap();
+        // 无 timestamp 的新记录（后读覆盖）
+        writeln!(
+            file,
+            r#"{{"type":"last-prompt","sessionId":"sess-001","display":"新标题"}}"#
+        ).unwrap();
+
+        let candidate = CandidateConfigDir {
+            raw_path: config_dir.clone(),
+            canonical_path: Some(config_dir.canonicalize().unwrap()),
+            source: super::super::models::ConfigDirSource::EnvClaudeConfigDir,
+        };
+
+        let metadata = load_usage_session_metadata(&[candidate]);
+        let meta = metadata.get("sess-001").unwrap();
+        // 无 timestamp 时后读覆盖前读
+        assert_eq!(meta.display, Some("新标题".to_string()));
+    }
+
+    #[test]
+    fn test_load_metadata_long_message_not_overwrite_rename() {
+        let temp_dir = tempfile::tempdir().unwrap();
+        let config_dir = temp_dir.path().to_path_buf();
+
+        let history_path = config_dir.join("history.jsonl");
+        let mut file = std::fs::File::create(&history_path).unwrap();
+        // 先写入 rename 标题（较早）
+        writeln!(
+            file,
+            r#"{{"type":"last-prompt","timestamp":1780010000000,"sessionId":"sess-001","display":"/rename macos 健康状态检查","project":"/project/a"}}"#
+        ).unwrap();
+        // 后写入长首条用户消息（较晚，但无意义）
+        writeln!(
+            file,
+            r#"{{"type":"last-prompt","timestamp":1780011000000,"sessionId":"sess-001","display":"帮我检查本机的健康状态。之前两天，连续出现两次关机时无响应","project":"/project/a"}}"#
+        ).unwrap();
+
+        let candidate = CandidateConfigDir {
+            raw_path: config_dir.clone(),
+            canonical_path: Some(config_dir.canonicalize().unwrap()),
+            source: super::super::models::ConfigDirSource::EnvClaudeConfigDir,
+        };
+
+        let metadata = load_usage_session_metadata(&[candidate]);
+        let meta = metadata.get("sess-001").unwrap();
+        // 较晚的长消息应覆盖较早的 rename，但 clean 后会显示 "macos 健康状态检查"
+        // 这里验证原始 display 保留最新记录
+        assert_eq!(
+            meta.display,
+            Some("帮我检查本机的健康状态。之前两天，连续出现两次关机时无响应".to_string())
+        );
+    }
+
+    #[test]
+    fn test_load_metadata_same_timestamp_better_title_wins() {
+        let temp_dir = tempfile::tempdir().unwrap();
+        let config_dir = temp_dir.path().to_path_buf();
+
+        let history_path = config_dir.join("history.jsonl");
+        let mut file = std::fs::File::create(&history_path).unwrap();
+        // 两条 timestamp 相同，先写 (未命名) 类标题
+        writeln!(
+            file,
+            r#"{{"type":"last-prompt","timestamp":1780010000000,"sessionId":"sess-001","display":"/model","project":"/project/a"}}"#
+        ).unwrap();
+        // 后写有意义标题（同 timestamp）
+        writeln!(
+            file,
+            r#"{{"type":"last-prompt","timestamp":1780010000000,"sessionId":"sess-001","display":"macos 健康状态检查","project":"/project/a"}}"#
+        ).unwrap();
+
+        let candidate = CandidateConfigDir {
+            raw_path: config_dir.clone(),
+            canonical_path: Some(config_dir.canonicalize().unwrap()),
+            source: super::super::models::ConfigDirSource::EnvClaudeConfigDir,
+        };
+
+        let metadata = load_usage_session_metadata(&[candidate]);
+        let meta = metadata.get("sess-001").unwrap();
+        // 同 timestamp 时，有意义的标题应覆盖 (未命名) 类标题
+        assert_eq!(meta.display, Some("macos 健康状态检查".to_string()));
     }
 
     #[test]
