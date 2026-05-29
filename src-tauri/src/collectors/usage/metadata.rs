@@ -16,14 +16,12 @@ enum TitleQuality {
     /// 空 / None
     #[default]
     Empty = 0,
-    /// 长首条用户消息（>40 字符），不作为标题
+    /// 首条用户消息、长文本提问等，不作为标题
     PromptLike = 5,
     /// Placeholder（[Pasted text...]、[Image #...]）
     Placeholder = 10,
     /// 无意义命令（exit/model/resume 等）
     Command = 20,
-    /// 短直接标题（≤40 字符）
-    DirectTitle = 70,
     /// /rename 明确重命名
     ExplicitRename = 100,
 }
@@ -49,9 +47,8 @@ struct TitleCandidate {
 ///    - `/exit`、`/model`、`/resume` 等 → Command，cleaned = None
 ///    - 其他 slash command → Command，cleaned = None
 /// 4. 无斜杠命令词（exit、model、resume 等）→ Command，cleaned = None
-/// 5. 普通文本：
-///    - ≤40 字符 → DirectTitle，cleaned = 原文
-///    - >40 字符 → PromptLike，cleaned = None
+/// 5. 普通文本（自然语言）→ PromptLike，cleaned = None
+///    无论长短，一律视为首条用户消息，不作为会话标题
 fn classify_title_candidate(display: Option<&str>) -> TitleCandidate {
     let Some(t) = display else {
         return TitleCandidate {
@@ -140,20 +137,12 @@ fn classify_title_candidate(display: Option<&str>) -> TitleCandidate {
         };
     }
 
-    // 普通直接标题：按长度区分
-    let char_count = trimmed.chars().count();
-    if char_count <= 40 {
-        TitleCandidate {
-            raw: Some(trimmed.to_string()),
-            cleaned: Some(trimmed.to_string()),
-            quality: TitleQuality::DirectTitle,
-        }
-    } else {
-        TitleCandidate {
-            raw: Some(trimmed.to_string()),
-            cleaned: None,
-            quality: TitleQuality::PromptLike,
-        }
+    // 所有非 rename、非命令的自然语言文本都视为首条用户消息
+    // 不做长度区分，一律不作为会话标题
+    TitleCandidate {
+        raw: Some(trimmed.to_string()),
+        cleaned: None,
+        quality: TitleQuality::PromptLike,
     }
 }
 
@@ -218,7 +207,7 @@ fn parse_history_timestamp(value: &serde_json::Value) -> Option<i128> {
 /// 读取每个 config_dir 下的 history.jsonl，构建 session_id → metadata 映射。
 /// 同一 session_id 出现多次时：
 /// - project_path / project_name 按最新 timestamp 更新
-/// - display 按标题质量优先选择（ExplicitRename > DirectTitle > 其他），
+/// - display 按标题质量优先选择（ExplicitRename > 其他），
 ///   质量相同时 timestamp 更新者胜出
 pub fn load_usage_session_metadata(
     config_dirs: &[CandidateConfigDir],
@@ -420,7 +409,6 @@ pub fn short_session_id(session_id: &str) -> String {
 ///
 /// 基于 classify_title_candidate，返回最终展示用字符串。
 /// - ExplicitRename → arg（如 "v0.3.7"）
-/// - DirectTitle → 原文
 /// - 其他（Command、Placeholder、PromptLike、Empty）→ "(未命名)"
 pub fn clean_session_title(title: Option<&str>) -> String {
     let candidate = classify_title_candidate(title);
@@ -514,10 +502,11 @@ mod tests {
     }
 
     #[test]
-    fn test_classify_direct_short_title() {
+    fn test_classify_short_prompt_like() {
+        // 所有非 rename 自然语言文本都视为 PromptLike，无论长短
         let c = classify_title_candidate(Some("macos 健康状态检查"));
-        assert_eq!(c.quality, TitleQuality::DirectTitle);
-        assert_eq!(c.cleaned, Some("macos 健康状态检查".to_string()));
+        assert_eq!(c.quality, TitleQuality::PromptLike);
+        assert!(c.cleaned.is_none());
     }
 
     #[test]
@@ -539,13 +528,14 @@ mod tests {
     // ------------------------------------------------------------------------
 
     #[test]
-    fn test_clean_session_title_basic() {
-        assert_eq!(clean_session_title(Some("hello world")), "hello world");
+    fn test_clean_session_title_non_rename_is_unnamed() {
+        // 所有非 rename 自然语言文本都视为 PromptLike
+        assert_eq!(clean_session_title(Some("hello world")), "(未命名)");
     }
 
     #[test]
-    fn test_clean_session_title_trims_whitespace() {
-        assert_eq!(clean_session_title(Some("  hello  ")), "hello");
+    fn test_clean_session_title_trimmed_non_rename_is_unnamed() {
+        assert_eq!(clean_session_title(Some("  hello  ")), "(未命名)");
     }
 
     #[test]
@@ -556,9 +546,9 @@ mod tests {
     }
 
     #[test]
-    fn test_clean_session_title_keeps_chinese_short() {
-        let chinese = "macos 健康状态检查";
-        assert_eq!(clean_session_title(Some(chinese)), chinese);
+    fn test_clean_session_title_chinese_non_rename_is_unnamed() {
+        // 非 rename 中文短文本也不作为标题
+        assert_eq!(clean_session_title(Some("macos 健康状态检查")), "(未命名)");
     }
 
     #[test]
@@ -723,11 +713,11 @@ mod tests {
         let mut file = std::fs::File::create(&history_path).unwrap();
         writeln!(
             file,
-            r#"{{"type":"last-prompt","timestamp":1780000000000,"sessionId":"sess-001","display":"Phase2 阶段开发","project":"/Users/ckstar/Repo/agent-scope"}}"#
+            r#"{{"type":"last-prompt","timestamp":1780000000000,"sessionId":"sess-001","display":"/rename Phase2 阶段开发","project":"/Users/ckstar/Repo/agent-scope"}}"#
         ).unwrap();
         writeln!(
             file,
-            r#"{{"type":"last-prompt","timestamp":1780003600000,"sessionId":"sess-002","display":"文档整理","project":"/Users/ckstar/Documents/notes"}}"#
+            r#"{{"type":"last-prompt","timestamp":1780003600000,"sessionId":"sess-002","display":"/rename 文档整理","project":"/Users/ckstar/Documents/notes"}}"#
         ).unwrap();
 
         let candidate = CandidateConfigDir {
@@ -741,12 +731,12 @@ mod tests {
         assert_eq!(metadata.len(), 2);
 
         let meta1 = metadata.get("sess-001").unwrap();
-        assert_eq!(meta1.display, Some("Phase2 阶段开发".to_string()));
+        assert_eq!(meta1.display, Some("/rename Phase2 阶段开发".to_string()));
         assert_eq!(meta1.project_path, Some("/Users/ckstar/Repo/agent-scope".to_string()));
         assert_eq!(meta1.project_name, Some("agent-scope".to_string()));
 
         let meta2 = metadata.get("sess-002").unwrap();
-        assert_eq!(meta2.display, Some("文档整理".to_string()));
+        assert_eq!(meta2.display, Some("/rename 文档整理".to_string()));
         assert_eq!(meta2.project_name, Some("notes".to_string()));
     }
 
@@ -759,11 +749,11 @@ mod tests {
         let mut file = std::fs::File::create(&history_path).unwrap();
         writeln!(
             file,
-            r#"{{"type":"last-prompt","timestamp":1780000000000,"sessionId":"sess-001","display":"旧标题","project":"/old/path"}}"#
+            r#"{{"type":"last-prompt","timestamp":1780000000000,"sessionId":"sess-001","display":"/rename 旧标题","project":"/old/path"}}"#
         ).unwrap();
         writeln!(
             file,
-            r#"{{"type":"last-prompt","timestamp":1780010000000,"sessionId":"sess-001","display":"新标题","project":"/new/path"}}"#
+            r#"{{"type":"last-prompt","timestamp":1780010000000,"sessionId":"sess-001","display":"/rename 新标题","project":"/new/path"}}"#
         ).unwrap();
 
         let candidate = CandidateConfigDir {
@@ -775,7 +765,7 @@ mod tests {
         let metadata = load_usage_session_metadata(&[candidate]);
 
         let meta = metadata.get("sess-001").unwrap();
-        assert_eq!(meta.display, Some("新标题".to_string()));
+        assert_eq!(meta.display, Some("/rename 新标题".to_string()));
         assert_eq!(meta.project_path, Some("/new/path".to_string()));
     }
 
@@ -833,11 +823,11 @@ mod tests {
         let mut file = std::fs::File::create(&history_path).unwrap();
         writeln!(
             file,
-            r#"{{"type":"last-prompt","sessionId":"sess-001","display":"旧标题"}}"#
+            r#"{{"type":"last-prompt","sessionId":"sess-001","display":"/rename 旧标题"}}"#
         ).unwrap();
         writeln!(
             file,
-            r#"{{"type":"last-prompt","sessionId":"sess-001","display":"新标题"}}"#
+            r#"{{"type":"last-prompt","sessionId":"sess-001","display":"/rename 新标题"}}"#
         ).unwrap();
 
         let candidate = CandidateConfigDir {
@@ -848,7 +838,7 @@ mod tests {
 
         let metadata = load_usage_session_metadata(&[candidate]);
         let meta = metadata.get("sess-001").unwrap();
-        assert_eq!(meta.display, Some("新标题".to_string()));
+        assert_eq!(meta.display, Some("/rename 新标题".to_string()));
     }
 
     #[test]
@@ -939,7 +929,7 @@ mod tests {
     }
 
     #[test]
-    fn test_load_metadata_model_does_not_overwrite_direct_title() {
+    fn test_load_metadata_model_does_not_overwrite_rename() {
         let temp_dir = tempfile::tempdir().unwrap();
         let config_dir = temp_dir.path().to_path_buf();
 
@@ -947,7 +937,7 @@ mod tests {
         let mut file = std::fs::File::create(&history_path).unwrap();
         writeln!(
             file,
-            r#"{{"type":"last-prompt","timestamp":1780010000000,"sessionId":"sess-001","display":"macos 健康状态检查","project":"/project/a"}}"#
+            r#"{{"type":"last-prompt","timestamp":1780010000000,"sessionId":"sess-001","display":"/rename macos 健康状态检查","project":"/project/a"}}"#
         ).unwrap();
         writeln!(
             file,
@@ -962,7 +952,8 @@ mod tests {
 
         let metadata = load_usage_session_metadata(&[candidate]);
         let meta = metadata.get("sess-001").unwrap();
-        assert_eq!(meta.display, Some("macos 健康状态检查".to_string()));
+        // /rename 质量(100) > model 命令质量(20)，应保留 rename
+        assert_eq!(meta.display, Some("/rename macos 健康状态检查".to_string()));
     }
 
     #[test]
@@ -1041,7 +1032,7 @@ mod tests {
     }
 
     #[test]
-    fn test_load_metadata_direct_title_after_prompt_wins() {
+    fn test_load_metadata_rename_after_prompt_wins() {
         let temp_dir = tempfile::tempdir().unwrap();
         let config_dir = temp_dir.path().to_path_buf();
 
@@ -1053,7 +1044,7 @@ mod tests {
         ).unwrap();
         writeln!(
             file,
-            r#"{{"type":"last-prompt","timestamp":1780011000000,"sessionId":"sess-001","display":"macos 健康状态检查","project":"/project/a"}}"#
+            r#"{{"type":"last-prompt","timestamp":1780011000000,"sessionId":"sess-001","display":"/rename macos 健康状态检查","project":"/project/a"}}"#
         ).unwrap();
 
         let candidate = CandidateConfigDir {
@@ -1064,7 +1055,8 @@ mod tests {
 
         let metadata = load_usage_session_metadata(&[candidate]);
         let meta = metadata.get("sess-001").unwrap();
-        assert_eq!(meta.display, Some("macos 健康状态检查".to_string()));
+        // /rename 质量(100) > 长消息质量(5)，应保留 rename
+        assert_eq!(meta.display, Some("/rename macos 健康状态检查".to_string()));
     }
 
     #[test]
@@ -1080,7 +1072,7 @@ mod tests {
         ).unwrap();
         writeln!(
             file,
-            r#"{{"type":"last-prompt","timestamp":1780010000000,"sessionId":"sess-001","display":"macos 健康状态检查","project":"/project/a"}}"#
+            r#"{{"type":"last-prompt","timestamp":1780010000000,"sessionId":"sess-001","display":"/rename macos 健康状态检查","project":"/project/a"}}"#
         ).unwrap();
 
         let candidate = CandidateConfigDir {
@@ -1092,8 +1084,8 @@ mod tests {
         let metadata = load_usage_session_metadata(&[candidate]);
         let meta = metadata.get("sess-001").unwrap();
         // /model 是 Command（cleaned=None），不会写入 display
-        // macos 健康状态检查 是 DirectTitle，应写入
-        assert_eq!(meta.display, Some("macos 健康状态检查".to_string()));
+        // /rename 是 ExplicitRename，应写入
+        assert_eq!(meta.display, Some("/rename macos 健康状态检查".to_string()));
     }
 
     #[test]
