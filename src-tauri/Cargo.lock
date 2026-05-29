@@ -27,6 +27,7 @@ name = "agent-scope"
 version = "0.3.6"
 dependencies = [
  "abtop-collector",
+ "chrono",
  "dirs 5.0.1",
  "regex",
  "serde",
