@@ -4,7 +4,7 @@ use crate::collectors::usage::{
     aggregate_usage, discover_claude_config_dirs, scan_usage_data,
 };
 use crate::collectors::usage::models::{
-    GroupBy, TimeRange, UsageAggregate, UsageScanResult, UsageSourceStatus,
+    CandidateConfigDir, GroupBy, TimeRange, UsageAggregate, UsageScanResult, UsageSourceStatus,
 };
 
 /// Usage 扫描摘要（轻量 DTO，避免返回大量原始 records）
@@ -40,6 +40,11 @@ impl From<&UsageScanResult> for UsageScanSummary {
 pub struct UsageService {
     last_result: Option<UsageScanResult>,
     last_scan_at: Option<DateTime<Utc>>,
+    /// 测试专用：覆盖 discover_claude_config_dirs() 的返回值，
+    /// 避免测试扫描真实 ~/.claude 目录。
+    /// 仅在 #[cfg(test)] 下通过 with_config_dirs_for_test 注入。
+    #[cfg(test)]
+    config_dirs_override: Option<Vec<CandidateConfigDir>>,
 }
 
 impl UsageService {
@@ -47,16 +52,27 @@ impl UsageService {
         Self {
             last_result: None,
             last_scan_at: None,
+            #[cfg(test)]
+            config_dirs_override: None,
         }
     }
 
     /// 执行完整扫描，更新缓存并返回结果
     pub fn scan(&mut self) -> &UsageScanResult {
-        let dirs = discover_claude_config_dirs();
+        let dirs = self.resolve_config_dirs();
         let result = scan_usage_data(&dirs);
         self.last_scan_at = Some(Utc::now());
         self.last_result = Some(result);
         self.last_result.as_ref().unwrap()
+    }
+
+    /// 确定要扫描的配置目录列表
+    fn resolve_config_dirs(&self) -> Vec<CandidateConfigDir> {
+        #[cfg(test)]
+        if let Some(ref dirs) = self.config_dirs_override {
+            return dirs.clone();
+        }
+        discover_claude_config_dirs()
     }
 
     /// 确保已有缓存；如果没有则触发扫描
@@ -69,7 +85,10 @@ impl UsageService {
 
     /// 返回数据源状态
     ///
-    /// 如果没有缓存，会触发一次扫描以确保状态可用。
+    /// P0 行为：如果缓存为空，会触发一次完整扫描。
+    /// 这保证了前端首次打开页面时状态总是可用，
+    /// 但可能因扫描大量 JSONL 而有延迟。
+    /// Phase 4 如页面首屏过慢，可拆出轻量 discover-only status command。
     pub fn source_status(&mut self) -> UsageSourceStatus {
         self.ensure_scanned().source_status.clone()
     }
@@ -92,6 +111,16 @@ impl UsageService {
     /// 最后一次扫描时间
     pub fn last_scan_at(&self) -> Option<DateTime<Utc>> {
         self.last_scan_at
+    }
+
+    /// 测试专用：注入固定配置目录，隔离真实 ~/.claude
+    #[cfg(test)]
+    pub fn with_config_dirs_for_test(config_dirs: Vec<CandidateConfigDir>) -> Self {
+        Self {
+            last_result: None,
+            last_scan_at: None,
+            config_dirs_override: Some(config_dirs),
+        }
     }
 }
 
@@ -135,6 +164,8 @@ mod tests {
     use super::*;
     use std::io::Write;
 
+    use crate::collectors::usage::models::ConfigDirSource;
+
     fn create_test_config_dir() -> (tempfile::TempDir, std::path::PathBuf) {
         let temp_dir = tempfile::tempdir().unwrap();
         let path = temp_dir.path().to_path_buf();
@@ -151,6 +182,14 @@ mod tests {
         (temp_dir, path)
     }
 
+    fn make_test_candidate(path: std::path::PathBuf) -> CandidateConfigDir {
+        CandidateConfigDir {
+            raw_path: path.clone(),
+            canonical_path: Some(path.canonicalize().unwrap()),
+            source: ConfigDirSource::EnvClaudeConfigDir,
+        }
+    }
+
     #[test]
     fn test_usage_service_initial_state() {
         let service = UsageService::new();
@@ -160,36 +199,49 @@ mod tests {
 
     #[test]
     fn test_usage_service_scan_creates_cache() {
-        let _guard = crate::collectors::usage::scanner::ENV_LOCK.lock().unwrap();
         let (_temp_dir, config_path) = create_test_config_dir();
+        let candidate = make_test_candidate(config_path);
 
-        std::env::set_var("CLAUDE_CONFIG_DIR", config_path.to_string_lossy().to_string());
-
-        let mut service = UsageService::new();
+        let mut service = UsageService::with_config_dirs_for_test(vec![candidate]);
         let result = service.scan();
 
-        assert!(!result.records.is_empty());
+        // 只扫描测试目录中的 1 条 JSONL，1 行 assistant usage
+        assert_eq!(result.records.len(), 1);
+        assert_eq!(result.scanned_files, 1);
+        assert_eq!(result.scanned_lines, 1);
+        assert_eq!(result.records[0].input_tokens, 100);
         assert!(service.last_scan_at().is_some());
-
-        std::env::remove_var("CLAUDE_CONFIG_DIR");
     }
 
     #[test]
     fn test_usage_service_analytics_triggers_scan_when_empty() {
-        let _guard = crate::collectors::usage::scanner::ENV_LOCK.lock().unwrap();
         let (_temp_dir, config_path) = create_test_config_dir();
+        let candidate = make_test_candidate(config_path);
 
-        std::env::set_var("CLAUDE_CONFIG_DIR", config_path.to_string_lossy().to_string());
-
-        let mut service = UsageService::new();
+        let mut service = UsageService::with_config_dirs_for_test(vec![candidate]);
         // 不手动 scan，直接调用 analytics
-        let agg = service.analytics(TimeRange::Today, GroupBy::Project);
+        // 使用 Last7Days 确保测试数据（2026-05-27）在范围内
+        let agg = service.analytics(TimeRange::Last7Days, GroupBy::Project);
 
         assert!(service.last_scan_at().is_some());
-        // 测试目录数据应被扫描到；真实 ~/.claude 数据也可能被包含
-        assert!(!agg.groups.is_empty(), "应至少有一个聚合组");
+        // 只来自测试数据，有且仅有 1 个 project 组
+        assert_eq!(agg.groups.len(), 1);
+        assert_eq!(agg.groups[0].group_key, "test-project");
+        assert_eq!(agg.groups[0].input_tokens, 100);
+        assert_eq!(agg.groups[0].total_tokens, 180);
+    }
 
-        std::env::remove_var("CLAUDE_CONFIG_DIR");
+    #[test]
+    fn test_usage_service_scan_summary() {
+        let (_temp_dir, config_path) = create_test_config_dir();
+        let candidate = make_test_candidate(config_path);
+
+        let mut service = UsageService::with_config_dirs_for_test(vec![candidate]);
+        let summary = service.scan_summary();
+
+        assert_eq!(summary.record_count, 1);
+        assert_eq!(summary.scanned_files, 1);
+        assert_eq!(summary.scanned_lines, 1);
     }
 
     #[test]

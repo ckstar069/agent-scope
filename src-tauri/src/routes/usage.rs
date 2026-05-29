@@ -3,6 +3,10 @@ use tauri::State;
 use crate::app_state::AppState;
 use crate::services::usage_service::{parse_group_by, parse_time_range, UsageScanSummary};
 
+// 所有 usage command 均在 spawn_blocking 中执行 IO 操作，
+// 避免阻塞 Tauri 主线程。
+// UsageService 内部使用 Mutex 串行化扫描，避免并发扫描同一批 JSONL。
+
 #[tauri::command(rename = "get_usage_source_status")]
 pub async fn get_usage_source_status_cmd(
     state: State<'_, AppState>,
