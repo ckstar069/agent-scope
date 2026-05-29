@@ -210,42 +210,36 @@ export function AgentMonitor() {
 
         <div className="flex flex-wrap items-center gap-3">
           <div className="flex items-center gap-1">
-            <span className="text-xs font-medium text-muted-foreground mr-1">速率类型</span>
-            <InfoHint content="选择 Token 消耗速率的统计窗口。瞬时基于最近 2 秒采样；部分模型在回复结束或计数刷新后才更新 token 计数，因此流式输出中可能短暂显示「等待计数更新」。" />
-            {(["5min", "1min", "total", "realtime"] as RateType[]).map((type) => (
-              <Button
-                key={type}
-                type="button"
-                variant={rateType === type ? "secondary" : "outline"}
-                size="sm"
-                className="h-8 px-2.5 text-xs"
-                onClick={() => setRateType(type)}
-              >
-                {type === "5min" ? "5分钟" : type === "1min" ? "1分钟" : type === "total" ? "全程" : "瞬时"}
-              </Button>
-            ))}
-          </div>
-          <div className="h-6 w-px bg-border" />
-          <div className="flex items-center gap-1">
-            <span className="text-xs font-medium text-muted-foreground mr-1">单位</span>
-            <Button
-              type="button"
-              variant={rateUnit === "second" ? "secondary" : "outline"}
-              size="sm"
-              className="h-8 px-2.5 text-xs"
-              onClick={() => setRateUnit("second")}
-            >
-              token/s
-            </Button>
-            <Button
-              type="button"
-              variant={rateUnit === "minute" ? "secondary" : "outline"}
-              size="sm"
-              className="h-8 px-2.5 text-xs"
-              onClick={() => setRateUnit("minute")}
-            >
-              token/min
-            </Button>
+            <span className="text-xs font-medium text-muted-foreground mr-1">速率视图</span>
+            <InfoHint content="选择速率的统计视图。窗口均速统一显示为 token/min；最近采样显示为 token/s。部分模型在回复结束或计数刷新后才更新 token 计数。" />
+            {([
+              { key: "5min" as RateType, label: "5m均速", unit: "minute" as TokenRateUnit },
+              { key: "1min" as RateType, label: "1m均速", unit: "minute" as TokenRateUnit },
+              { key: "total" as RateType, label: "观察期", unit: "minute" as TokenRateUnit },
+              { key: "realtime" as RateType, label: "最近采样", unit: "second" as TokenRateUnit },
+            ]).map((item) => {
+              const isActive = rateType === item.key;
+              return (
+                <Button
+                  key={item.key}
+                  type="button"
+                  variant="outline"
+                  size="sm"
+                  className={cn(
+                    "h-8 px-2.5 text-xs transition-colors",
+                    isActive
+                      ? "border-primary bg-primary text-primary-foreground shadow-sm hover:bg-primary/90 hover:text-primary-foreground"
+                      : "border-border bg-background text-muted-foreground hover:bg-muted hover:text-foreground"
+                  )}
+                  onClick={() => {
+                    setRateType(item.key);
+                    setRateUnit(item.unit);
+                  }}
+                >
+                  {item.label}
+                </Button>
+              );
+            })}
           </div>
         </div>
       </div>

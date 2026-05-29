@@ -1,5 +1,5 @@
 import { useEffect, useRef, useState } from "react";
-import { Circle, Download, Trash2, ChevronDown, ChevronUp, Wrench, FileCode, ArrowUpDown } from "lucide-react";
+import { Circle, Download, Trash2, ChevronDown, ChevronUp, Wrench, FileCode, ArrowUpDown, Eye, EyeOff } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { cn } from "@/lib/utils";
 
@@ -8,6 +8,7 @@ import type { SessionTimelineProps, SessionPreview, ToolCallStat, FileReference 
 type PreviewOrder = "newest-first" | "oldest-first";
 
 const ORDER_STORAGE_KEY = "claude-history-preview-order";
+const SHOW_TOOLS_STORAGE_KEY = "agent-scope.session-preview.show-tools";
 
 function formatDate(timestamp: number | null): string {
   if (!timestamp) return "未知时间";
@@ -77,6 +78,9 @@ function PreviewPanel({ preview }: { preview: SessionPreview }) {
     const saved = localStorage.getItem(ORDER_STORAGE_KEY);
     return (saved as PreviewOrder) || "newest-first";
   });
+  const [showTools, setShowTools] = useState(() => {
+    return localStorage.getItem(SHOW_TOOLS_STORAGE_KEY) === "true";
+  });
 
   const roleLabel: Record<string, string> = {
     user: "用户",
@@ -96,8 +100,18 @@ function PreviewPanel({ preview }: { preview: SessionPreview }) {
     localStorage.setItem(ORDER_STORAGE_KEY, next);
   };
 
+  const toggleShowTools = () => {
+    const next = !showTools;
+    setShowTools(next);
+    localStorage.setItem(SHOW_TOOLS_STORAGE_KEY, String(next));
+  };
+
+  const hasToolMessages = preview.messages.some((msg) => msg.role === "tool");
+  const visibleMessages = showTools
+    ? preview.messages
+    : preview.messages.filter((msg) => msg.role !== "tool");
   const displayMessages =
-    order === "newest-first" ? [...preview.messages].reverse() : preview.messages;
+    order === "newest-first" ? [...visibleMessages].reverse() : visibleMessages;
 
   return (
     <div className="mt-3 rounded-xl border border-border bg-tile p-3">
@@ -105,17 +119,32 @@ function PreviewPanel({ preview }: { preview: SessionPreview }) {
         <p className="text-xs text-muted-foreground">
           预览（共 {preview.total_turns} 轮对话）
         </p>
-        <Button
-          type="button"
-          variant="ghost"
-          size="sm"
-          className="h-6 gap-1 px-2 text-xs text-muted-foreground hover:text-foreground"
-          onClick={toggleOrder}
-          title={order === "newest-first" ? "当前：最新在上" : "当前：最早在上"}
-        >
-          <ArrowUpDown className="size-3" />
-          {order === "newest-first" ? "最新在上" : "最早在上"}
-        </Button>
+        <div className="flex items-center gap-1">
+          {hasToolMessages && (
+            <Button
+              type="button"
+              variant="ghost"
+              size="sm"
+              className="h-6 gap-1 px-2 text-xs text-muted-foreground hover:text-foreground"
+              onClick={toggleShowTools}
+              title={showTools ? "隐藏工具调用" : "显示工具调用"}
+            >
+              {showTools ? <EyeOff className="size-3" /> : <Eye className="size-3" />}
+              {showTools ? "隐藏工具调用" : "显示工具调用"}
+            </Button>
+          )}
+          <Button
+            type="button"
+            variant="ghost"
+            size="sm"
+            className="h-6 gap-1 px-2 text-xs text-muted-foreground hover:text-foreground"
+            onClick={toggleOrder}
+            title={order === "newest-first" ? "当前：最新在上" : "当前：最早在上"}
+          >
+            <ArrowUpDown className="size-3" />
+            {order === "newest-first" ? "最新在上" : "最早在上"}
+          </Button>
+        </div>
       </div>
       <div className="flex max-h-[600px] flex-col gap-4 overflow-y-auto pr-1">
         {displayMessages.map((msg, idx) => (
