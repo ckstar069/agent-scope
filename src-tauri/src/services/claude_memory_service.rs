@@ -332,6 +332,9 @@ mod tests {
             template_path: std::sync::Mutex::new(None),
             template_fingerprint: std::sync::Mutex::new(None),
             review_queue: std::sync::Mutex::new(rq_store),
+            usage_service: std::sync::Arc::new(std::sync::Mutex::new(
+                crate::services::usage_service::UsageService::new(),
+            )),
         }
     }
 

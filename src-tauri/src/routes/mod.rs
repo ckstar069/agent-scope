@@ -4,6 +4,7 @@ pub mod history;
 pub mod memory;
 pub mod project;
 pub mod settings;
+pub mod usage;
 
 pub use agent::{
     get_agent_snapshot_cmd, get_latest_session_cmd, get_session_transcript_cmd,
@@ -25,3 +26,6 @@ pub use project::{
     list_projects_cmd, remove_project_cmd,
 };
 pub use settings::{get_template_path_cmd, set_template_path_cmd};
+pub use usage::{
+    get_usage_analytics_cmd, get_usage_source_status_cmd, scan_usage_data_cmd,
+};

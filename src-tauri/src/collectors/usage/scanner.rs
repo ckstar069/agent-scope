@@ -467,6 +467,10 @@ fn extract_project_from_path(file_path: &Path, config_dir: &Path) -> Option<Stri
     Some(project_name.to_string())
 }
 
+// 环境变量测试需要串行执行，避免并行修改 CLAUDE_CONFIG_DIR 互相干扰
+#[cfg(test)]
+pub(crate) static ENV_LOCK: std::sync::Mutex<()> = std::sync::Mutex::new(());
+
 // ============================================================================
 // Tests
 // ============================================================================
@@ -475,12 +479,8 @@ fn extract_project_from_path(file_path: &Path, config_dir: &Path) -> Option<Stri
 mod tests {
     use super::*;
     use std::io::Write;
-    use std::sync::Mutex;
     use std::thread;
     use std::time::Duration;
-
-    // 环境变量测试需要串行执行，避免并行修改 CLAUDE_CONFIG_DIR 互相干扰
-    static ENV_LOCK: Mutex<()> = Mutex::new(());
 
     #[test]
     fn test_discover_includes_default_dirs() {

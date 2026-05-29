@@ -9,6 +9,7 @@ use crate::collectors::agent::AgentCollector;
 use crate::collectors::claude_memory::review_queue::ReviewQueueStore;
 use crate::collectors::template::{load_template_path, TemplateFingerprint};
 use crate::registry::ProjectRegistry;
+use crate::services::usage_service::UsageService;
 
 /// 模板指纹缓存 — 记录模板目录中所有文件路径的快照
 #[derive(Debug, Clone)]
@@ -24,6 +25,7 @@ pub struct AppState {
     pub template_path: Mutex<Option<PathBuf>>,
     pub template_fingerprint: Mutex<Option<TemplateFingerprintCache>>,
     pub review_queue: Mutex<ReviewQueueStore>,
+    pub usage_service: Arc<Mutex<UsageService>>,
 }
 
 impl AppState {
@@ -39,6 +41,7 @@ impl AppState {
             template_path: Mutex::new(None),
             template_fingerprint: Mutex::new(None),
             review_queue: Mutex::new(review_queue),
+            usage_service: Arc::new(Mutex::new(UsageService::new())),
         }
     }
 }
