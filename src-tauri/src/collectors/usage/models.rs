@@ -89,9 +89,12 @@ pub struct UsageRecord {
     /// 项目路径（从 JSONL 路径推断）
     #[serde(skip_serializing_if = "Option::is_none")]
     pub project_path: Option<String>,
-    /// 项目名称（与 ProjectRegistry 匹配后填充）
+    /// 项目名称（与 ProjectRegistry 匹配后填充，或通过 history.jsonl enrichment）
     #[serde(skip_serializing_if = "Option::is_none")]
     pub project_name: Option<String>,
+    /// 会话标题（从 history.jsonl display 字段 enrichment）
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub session_title: Option<String>,
     /// 会话 ID
     pub session_id: String,
     /// 模型名称
@@ -207,10 +210,13 @@ pub enum GroupBy {
 /// 分组明细
 #[derive(Debug, Clone, Serialize)]
 pub struct UsageGroup {
-    /// 分组键
+    /// 分组键（稳定唯一标识，用于内部聚合和排序）
     pub group_key: String,
-    /// 展示标签
+    /// 展示标签（面向用户的可读名称）
     pub group_label: String,
+    /// 分组详情（如项目路径、会话 UUID 等次级信息）
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub group_detail: Option<String>,
     pub input_tokens: u64,
     pub output_tokens: u64,
     pub cache_read_tokens: u64,

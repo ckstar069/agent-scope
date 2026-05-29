@@ -106,6 +106,7 @@ pub fn parse_usage_line(
         config_dir: context.config_dir.clone(),
         project_path: context.project_from_path.clone(),
         project_name: None, // Phase 3/4 再做 ProjectRegistry 映射
+        session_title: None, // 由 scanner enrichment 填充
         session_id,
         model,
         timestamp,

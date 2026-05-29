@@ -1,6 +1,7 @@
 use chrono::{DateTime, Datelike, Local, TimeZone, Utc};
 use std::collections::HashMap;
 
+use super::metadata::short_session_id;
 use super::models::{
     GroupBy, TimeRange, UsageAggregate, UsageGroup, UsageRecord, UsageTotals,
 };
@@ -27,22 +28,52 @@ pub fn aggregate_usage(
     let mut model_keys = HashMap::new();
 
     for record in &filtered {
-        let group_key = match group_by {
-            GroupBy::Project => record
-                .project_name
-                .clone()
-                .or(record.project_path.clone())
-                .unwrap_or_else(|| "未关联项目".to_string()),
-            GroupBy::Model => record.model.clone().unwrap_or_else(|| "unknown".to_string()),
-            GroupBy::Session => record.session_id.clone(),
+        let (group_key, group_label, group_detail) = match group_by {
+            GroupBy::Project => {
+                let key = record
+                    .project_path
+                    .clone()
+                    .or(record.project_name.clone())
+                    .unwrap_or_else(|| "未关联项目".to_string());
+                let label = record
+                    .project_name
+                    .clone()
+                    .unwrap_or_else(|| key.clone());
+                let detail = record.project_path.clone();
+                (key, label, detail)
+            }
+            GroupBy::Model => {
+                let key = record.model.clone().unwrap_or_else(|| "unknown".to_string());
+                (key.clone(), key, None)
+            }
+            GroupBy::Session => {
+                let key = record.session_id.clone();
+                let label = record
+                    .session_title
+                    .clone()
+                    .unwrap_or_else(|| {
+                        let short = short_session_id(&record.session_id);
+                        if let Some(ref name) = record.project_name {
+                            format!("{} · {}", name, short)
+                        } else {
+                            short
+                        }
+                    });
+                let detail = Some(
+                    record
+                        .project_name
+                        .clone()
+                        .unwrap_or_else(|| record.session_id.clone()),
+                );
+                (key, label, detail)
+            }
         };
-
-        let group_label = group_key.clone();
 
         let acc = groups_map.entry(group_key.clone()).or_insert_with(|| {
             UsageGroupAccumulator {
                 group_key: group_key.clone(),
                 group_label,
+                group_detail,
                 input_tokens: 0,
                 output_tokens: 0,
                 cache_read_tokens: 0,
@@ -83,6 +114,7 @@ pub fn aggregate_usage(
         .map(|acc| UsageGroup {
             group_key: acc.group_key,
             group_label: acc.group_label,
+            group_detail: acc.group_detail,
             input_tokens: acc.input_tokens,
             output_tokens: acc.output_tokens,
             cache_read_tokens: acc.cache_read_tokens,
@@ -151,6 +183,7 @@ fn is_in_time_range(
 struct UsageGroupAccumulator {
     group_key: String,
     group_label: String,
+    group_detail: Option<String>,
     input_tokens: u64,
     output_tokens: u64,
     cache_read_tokens: u64,
@@ -200,6 +233,7 @@ mod tests {
             config_dir: std::path::PathBuf::from("/home/user/.claude"),
             project_path: project.map(|s| s.to_string()),
             project_name: None,
+            session_title: None,
             session_id: session_id.to_string(),
             model: model.map(|s| s.to_string()),
             timestamp,

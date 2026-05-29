@@ -35,7 +35,8 @@ const MOCK_AGGREGATE = {
   groups: [
     {
       group_key: "project-alpha",
-      group_label: "project-alpha",
+      group_label: "agent-scope",
+      group_detail: "/Users/ckstar/Repo/agent-scope",
       input_tokens: 800,
       output_tokens: 400,
       cache_read_tokens: 200,
@@ -47,7 +48,8 @@ const MOCK_AGGREGATE = {
     },
     {
       group_key: "project-beta",
-      group_label: "project-beta",
+      group_label: "notes",
+      group_detail: "/Users/ckstar/Documents/notes",
       input_tokens: 400,
       output_tokens: 200,
       cache_read_tokens: 100,
@@ -274,8 +276,11 @@ test.describe("Usage Analytics", () => {
     // mock 数值 1.8K 应在页面上
     await expect(page.getByText("1.8K").first()).toBeVisible();
 
-    // 分组明细表格出现 project-alpha（用 getByTitle 定位表格行）
-    await expect(page.getByTitle("project-alpha")).toBeVisible();
+    // 分组明细表格出现可读项目名及其详情
+    const labelCell = page.locator('td [data-testid="group-label"]').filter({ hasText: "agent-scope" });
+    await expect(labelCell).toBeVisible();
+    const detailCell = page.locator('td [data-testid="group-detail"]').filter({ hasText: "/Users/ckstar/Repo/agent-scope" });
+    await expect(detailCell).toBeVisible();
   });
 
   test("切换时间范围为近 7 天", async ({ page }) => {
@@ -285,13 +290,13 @@ test.describe("Usage Analytics", () => {
     await page.getByRole("button", { name: "Usage 分析" }).click();
 
     // 等待初始加载完成
-    await expect(page.getByTitle("project-alpha")).toBeVisible();
+    await expect(page.locator('td [data-testid="group-label"]').filter({ hasText: "agent-scope" })).toBeVisible();
 
     // 点击近 7 天
     await page.getByRole("button", { name: "近 7 天" }).click();
 
     // 等待刷新后的结果
-    await expect(page.getByTitle("project-alpha")).toBeVisible();
+    await expect(page.locator('td [data-testid="group-label"]').filter({ hasText: "agent-scope" })).toBeVisible();
 
     // 验证调用参数
     const invokeCalls = await page.evaluate(() =>
@@ -310,12 +315,12 @@ test.describe("Usage Analytics", () => {
     await page.locator('nav[aria-label="大域导航"]').getByRole("button", { name: "Claude Code" }).click();
     await page.getByRole("button", { name: "Usage 分析" }).click();
 
-    await expect(page.getByTitle("project-alpha")).toBeVisible();
+    await expect(page.locator('td [data-testid="group-label"]').filter({ hasText: "agent-scope" })).toBeVisible();
 
     // 点击按模型
     await page.getByRole("button", { name: "按模型" }).click();
 
-    await expect(page.getByTitle("project-alpha")).toBeVisible();
+    await expect(page.locator('td [data-testid="group-label"]').filter({ hasText: "agent-scope" })).toBeVisible();
 
     const invokeCalls = await page.evaluate(() =>
       ((window as unknown as Record<string, unknown>).usageCalls as { command: string; args: Record<string, unknown> }[]),
@@ -332,12 +337,12 @@ test.describe("Usage Analytics", () => {
     await page.locator('nav[aria-label="大域导航"]').getByRole("button", { name: "Claude Code" }).click();
     await page.getByRole("button", { name: "Usage 分析" }).click();
 
-    await expect(page.getByTitle("project-alpha")).toBeVisible();
+    await expect(page.locator('td [data-testid="group-label"]').filter({ hasText: "agent-scope" })).toBeVisible();
 
     // 点击刷新
     await page.getByRole("button", { name: "刷新" }).click();
 
-    await expect(page.getByTitle("project-alpha")).toBeVisible();
+    await expect(page.locator('td [data-testid="group-label"]').filter({ hasText: "agent-scope" })).toBeVisible();
 
     const cmds = await page.evaluate(() =>
       ((window as unknown as Record<string, unknown>).usageCommands as string[]),

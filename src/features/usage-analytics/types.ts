@@ -42,6 +42,7 @@ export interface UsageScanSummary {
 export interface UsageGroup {
   group_key: string;
   group_label: string;
+  group_detail?: string;
   input_tokens: number;
   output_tokens: number;
   cache_read_tokens: number;

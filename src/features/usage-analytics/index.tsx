@@ -198,7 +198,9 @@ export function UsageAnalytics() {
   const chartData = useMemo(() => {
     if (!aggregate) return [];
     return aggregate.groups.slice(0, 10).map((g) => ({
-      label: g.group_label.slice(0, 20),
+      label: g.group_label.slice(0, 16),
+      fullLabel: g.group_label,
+      detail: g.group_detail,
       total: g.total_tokens,
       input: g.input_tokens,
       output: g.output_tokens,
@@ -355,7 +357,7 @@ export function UsageAnalytics() {
         <Card className="flex min-h-72 items-center justify-center border-dashed">
           <div className="flex items-center gap-3 text-sm text-muted-foreground">
             <Loader2 className="size-4 animate-spin" aria-hidden="true" />
-            正在加载 usage 数据…
+            正在扫描本地 Claude Code usage 数据…
           </div>
         </Card>
       )}
@@ -404,14 +406,25 @@ export function UsageAnalytics() {
                       borderRadius: "8px",
                       fontSize: "12px",
                     }}
-                    formatter={(value, name) => {
+                    formatter={(value, name, props) => {
                       const labelMap: Record<string, string> = {
                         total: "Total",
                         input: "Input",
                         output: "Output",
                       };
                       const nameStr = String(name ?? "");
-                      return [formatNumber(Number(value)), labelMap[nameStr] ?? nameStr];
+                      // 如果有 detail，在 tooltip 中展示
+                      const payload = (props?.payload ?? {}) as Record<string, unknown>;
+                      const detail = payload.detail as string | undefined;
+                      const displayName = detail
+                        ? `${labelMap[nameStr] ?? nameStr} (${detail})`
+                        : (labelMap[nameStr] ?? nameStr);
+                      return [formatNumber(Number(value)), displayName];
+                    }}
+                    labelFormatter={(label, payload) => {
+                      const p = payload?.[0]?.payload as Record<string, unknown> | undefined;
+                      const fullLabel = p?.fullLabel as string | undefined;
+                      return fullLabel ?? String(label);
                     }}
                   />
                   <Bar dataKey="total" fill="hsl(var(--chart-1))" radius={[4, 4, 0, 0]} />
@@ -458,11 +471,23 @@ export function UsageAnalytics() {
                       className="border-b transition-colors hover:bg-muted/30"
                     >
                       <td className="px-4 py-2.5">
-                        <div
-                          className="max-w-[200px] truncate font-medium"
-                          title={group.group_label}
-                        >
-                          {group.group_label}
+                        <div className="max-w-[240px]">
+                          <div
+                            className="truncate font-medium"
+                            title={group.group_label}
+                            data-testid="group-label"
+                          >
+                            {group.group_label}
+                          </div>
+                          {group.group_detail && (
+                            <div
+                              className="truncate text-xs text-muted-foreground"
+                              title={group.group_detail}
+                              data-testid="group-detail"
+                            >
+                              {group.group_detail}
+                            </div>
+                          )}
                         </div>
                       </td>
                       <td className="px-4 py-2.5 text-right font-semibold">

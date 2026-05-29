@@ -6,6 +6,7 @@ use std::io::{BufRead, BufReader};
 use std::path::{Path, PathBuf};
 use std::time::SystemTime;
 
+use super::metadata::{compact_project_label, load_usage_session_metadata};
 use super::models::{
     CandidateConfigDir, ConfigDirSource, ConfidenceLevel, DirErrorReason, RealtimeLevel,
     UnreadableDir, UsageParseContext, UsageScanResult, UsageSource, UsageSourceStatus,
@@ -116,6 +117,10 @@ struct DirScanResult {
 /// 5. 扫描 legacy usage.jsonl（不参与去重）
 pub fn scan_usage_data(config_dirs: &[CandidateConfigDir]) -> UsageScanResult {
     let scan_start = Utc::now();
+
+    // 1. 预加载 session metadata（从 history.jsonl）
+    let metadata_map = load_usage_session_metadata(config_dirs);
+
     let mut all_candidates: Vec<JsonlFileCandidate> = Vec::new();
     let mut legacy_files: Vec<(PathBuf, PathBuf)> = Vec::new();
     let mut readable_dirs = Vec::new();
@@ -224,6 +229,29 @@ pub fn scan_usage_data(config_dirs: &[CandidateConfigDir]) -> UsageScanResult {
             }
             Err(e) => {
                 errors.push(format!("扫描 legacy usage.jsonl 失败: {}", e));
+            }
+        }
+    }
+
+    // 6. enrichment：用 metadata 和 compact fallback 填充 project_name / session_title
+    for record in &mut records {
+        if let Some(meta) = metadata_map.get(&record.session_id) {
+            // metadata 中的 project 信息优先级最高
+            if let Some(ref path) = meta.project_path {
+                record.project_path = Some(path.clone());
+            }
+            if let Some(ref name) = meta.project_name {
+                record.project_name = Some(name.clone());
+            }
+            if let Some(ref title) = meta.display {
+                record.session_title = Some(title.clone());
+            }
+        }
+
+        // 如果没有 project_name，尝试从 project_path 的 encoded dir 生成可读名
+        if record.project_name.is_none() {
+            if let Some(ref path) = record.project_path {
+                record.project_name = Some(compact_project_label(path));
             }
         }
     }

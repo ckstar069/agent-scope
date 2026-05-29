@@ -10,6 +10,7 @@
 //! - 可选兼容: `{config_dir}/usage.jsonl` (legacy)
 
 pub mod aggregate;
+pub mod metadata;
 pub mod models;
 pub mod parser;
 pub mod scanner;
