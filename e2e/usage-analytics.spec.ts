@@ -76,7 +76,7 @@ const MOCK_AGGREGATE_SESSION = {
   groups: [
     {
       group_key: "sess-001",
-      group_label: "rename v0.3.7",
+      group_label: "v0.3.7",
       group_detail: "agent-scope · 1f093b08",
       input_tokens: 800,
       output_tokens: 400,
@@ -427,7 +427,7 @@ test.describe("Usage Analytics", () => {
     await expect(page.getByRole("button", { name: "重试" })).toBeVisible();
   });
 
-  test("按会话分组时清洗 slash command", async ({ page }) => {
+  test("按会话分组时 /rename 只显示参数", async ({ page }) => {
     await setupMockTauri(page, { sourceStatus: MOCK_SOURCE_STATUS, aggregate: MOCK_AGGREGATE_SESSION });
     await page.goto("/");
     await page.locator('nav[aria-label="大域导航"]').getByRole("button", { name: "Claude Code" }).click();
@@ -436,11 +436,14 @@ test.describe("Usage Analytics", () => {
     // 切换到按会话
     await page.getByRole("button", { name: "按会话" }).click();
 
-    // 验证不显示 "/rename"
+    // 验证不显示原始 "/rename v0.3.7"
     await expect(page.getByText("/rename v0.3.7")).not.toBeVisible();
 
-    // 验证显示清洗后的 "rename v0.3.7"
-    await expect(page.locator('td [data-testid="group-label"]').filter({ hasText: "rename v0.3.7" })).toBeVisible();
+    // 验证不显示 "rename" 命令词
+    await expect(page.locator('td [data-testid="group-label"]').filter({ hasText: "rename v0.3.7" })).not.toBeVisible();
+
+    // 验证只显示参数 "v0.3.7"
+    await expect(page.locator('td [data-testid="group-label"]').filter({ hasText: "v0.3.7" })).toBeVisible();
 
     // 验证 detail 包含 project_name 和 short_session_id
     await expect(page.locator('td [data-testid="group-detail"]').filter({ hasText: "agent-scope · 1f093b08" })).toBeVisible();

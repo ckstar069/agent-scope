@@ -186,24 +186,54 @@ pub fn short_session_id(session_id: &str) -> String {
 /// 清洗会话标题
 ///
 /// 规则：
-/// 1. trim 首尾空白
-/// 2. 如果以 "/" 开头，去掉开头所有 "/"
-/// 3. 清洗后为空，返回 "(未命名)"
-/// 4. 原始值为 None 或空，返回 "(未命名)"
-/// 5. 不做截断（前端负责）
-/// 6. 保留 "[Pasted text ...]" 等特殊格式
+/// 1. None / 空字符串 / trim 后为空 → "(未命名)"
+/// 2. `[Pasted text ...]` placeholder → "(未命名)"
+/// 3. `/` 开头的 slash command：
+///    - `/rename <arg>` → `<arg>`（去掉命令词）
+///    - `/model`, `/resume`, `/advance-stage` 等无意义命令 → "(未命名)"
+///    - 其他 slash command 有参数 → 参数
+///    - 其他 slash command 无参数 → "(未命名)"
+/// 4. 非 slash command → 保留原文本（trim 空白）
+/// 5. 不做后端截断
 pub fn clean_session_title(title: Option<&str>) -> String {
     let Some(t) = title else {
         return "(未命名)".to_string();
     };
 
-    let cleaned = t.trim().trim_start_matches('/');
-
-    if cleaned.is_empty() {
-        "(未命名)".to_string()
-    } else {
-        cleaned.to_string()
+    let trimmed = t.trim();
+    if trimmed.is_empty() {
+        return "(未命名)".to_string();
     }
+
+    // [Pasted text ...] placeholder
+    if trimmed.starts_with("[Pasted text") {
+        return "(未命名)".to_string();
+    }
+
+    // slash command 处理
+    if let Some(stripped) = trimmed.strip_prefix('/') {
+        let stripped = stripped.trim_start_matches('/'); // 去掉多余 /
+        let mut parts = stripped.splitn(2, ' ');
+        let cmd = parts.next().unwrap_or("").trim();
+        let arg = parts.next().map(|s| s.trim()).filter(|s| !s.is_empty());
+
+        // 已知无意义命令（不带参数的）
+        let no_arg_commands = ["model", "resume", "advance-stage"];
+        if no_arg_commands.contains(&cmd) {
+            return "(未命名)".to_string();
+        }
+
+        // rename 命令：只保留参数，不带 "rename" 前缀
+        if cmd == "rename" {
+            return arg.map(|a| a.to_string()).unwrap_or_else(|| "(未命名)".to_string());
+        }
+
+        // 其他 slash command：有参数保留参数，无参数 → (未命名)
+        return arg.map(|a| a.to_string()).unwrap_or_else(|| "(未命名)".to_string());
+    }
+
+    // 非 slash command：保留原文
+    trimmed.to_string()
 }
 
 // ============================================================================
@@ -362,13 +392,6 @@ mod tests {
     }
 
     #[test]
-    fn test_clean_session_title_trims_leading_slash() {
-        assert_eq!(clean_session_title(Some("/rename v0.3.7")), "rename v0.3.7");
-        assert_eq!(clean_session_title(Some("//model")), "model");
-        assert_eq!(clean_session_title(Some("///")).as_str(), "(未命名)");
-    }
-
-    #[test]
     fn test_clean_session_title_trims_whitespace() {
         assert_eq!(clean_session_title(Some("  hello  ")), "hello");
     }
@@ -387,11 +410,47 @@ mod tests {
     }
 
     #[test]
-    fn test_clean_session_title_keeps_pasted_text() {
+    fn test_clean_session_title_rename_with_arg() {
+        // /rename <arg> → <arg>，去掉命令词
+        assert_eq!(clean_session_title(Some("/rename v0.3.7")), "v0.3.7");
+        assert_eq!(clean_session_title(Some("/rename claude code 配置")), "claude code 配置");
+    }
+
+    #[test]
+    fn test_clean_session_title_rename_without_arg() {
+        assert_eq!(clean_session_title(Some("/rename")), "(未命名)");
+        assert_eq!(clean_session_title(Some("/rename  ")), "(未命名)");
+    }
+
+    #[test]
+    fn test_clean_session_title_no_arg_commands() {
+        assert_eq!(clean_session_title(Some("/model")), "(未命名)");
+        assert_eq!(clean_session_title(Some("/resume")), "(未命名)");
+        assert_eq!(clean_session_title(Some("/advance-stage")), "(未命名)");
+    }
+
+    #[test]
+    fn test_clean_session_title_pasted_text() {
         assert_eq!(
             clean_session_title(Some("[Pasted text #1 +47 lines]")),
-            "[Pasted text #1 +47 lines]"
+            "(未命名)"
         );
+        assert_eq!(
+            clean_session_title(Some("[Pasted text with any content]")),
+            "(未命名)"
+        );
+    }
+
+    #[test]
+    fn test_clean_session_title_other_slash_with_arg() {
+        // 其他 slash command 有参数 → 保留参数
+        assert_eq!(clean_session_title(Some("/some-cmd hello")), "hello");
+    }
+
+    #[test]
+    fn test_clean_session_title_other_slash_without_arg() {
+        // 其他 slash command 无参数 → (未命名)
+        assert_eq!(clean_session_title(Some("/cmd")), "(未命名)");
     }
 
     #[test]

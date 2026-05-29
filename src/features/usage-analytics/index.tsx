@@ -73,6 +73,44 @@ function formatDate(iso?: string): string {
   }
 }
 
+/** 按 groupBy 生成去重后的显示行（用于 tooltip / title） */
+function buildDisplayParts(
+  groupBy: GroupBy,
+  label: string,
+  detail: string | undefined,
+  key: string,
+): string[] {
+  const lines: string[] = [];
+  const seen = new Set<string>();
+
+  const add = (s: string) => {
+    const trimmed = s.trim();
+    if (trimmed && !seen.has(trimmed)) {
+      seen.add(trimmed);
+      lines.push(trimmed);
+    }
+  };
+
+  add(label);
+
+  if (groupBy === "project") {
+    // detail 是路径，优先展示；key 与 detail 相同则不重复
+    if (detail) add(detail);
+    // key 只在 detail 为空且 key 与 label 不同时展示
+    else if (key !== label) add(key);
+  } else if (groupBy === "session") {
+    // detail 是 project_name · short_id
+    if (detail) add(detail);
+    // key 是完整 session_id，只要 key 未包含在 detail 中就展示
+    if (!detail || !detail.includes(key.slice(0, 8))) {
+      if (key !== label && !lines.includes(key)) add(key);
+    }
+  }
+  // groupBy === "model": 不展示 detail 和 key
+
+  return lines;
+}
+
 export function UsageAnalytics() {
   const { invoke } = useTauri();
 
@@ -197,6 +235,7 @@ export function UsageAnalytics() {
 
   const chartData = useMemo(() => {
     if (!aggregate) return [];
+    const gb = aggregate.group_by;
     return aggregate.groups.slice(0, 10).map((g) => {
       // 轴标签截断：去掉开头 "/"，中文/长文本最多 16 字符
       let label = g.group_label.trim().replace(/^\/+/, "");
@@ -205,9 +244,7 @@ export function UsageAnalytics() {
       }
       return {
         label,
-        fullLabel: g.group_label,
-        detail: g.group_detail,
-        key: g.group_key,
+        displayParts: buildDisplayParts(gb, g.group_label, g.group_detail, g.group_key),
         total: g.total_tokens,
         input: g.input_tokens,
         output: g.output_tokens,
@@ -456,13 +493,12 @@ export function UsageAnalytics() {
                       <td className="px-4 py-2.5">
                         <div
                           className="max-w-[300px]"
-                          title={[
+                          title={buildDisplayParts(
+                            aggregate!.group_by,
                             group.group_label,
                             group.group_detail,
-                            group.group_key !== group.group_label ? group.group_key : undefined,
-                          ]
-                            .filter(Boolean)
-                            .join("\n")}
+                            group.group_key,
+                          ).join("\n")}
                         >
                           <div
                             className="break-words font-semibold leading-snug"
@@ -628,9 +664,7 @@ function ChartTooltipContent({ active, payload }: ChartTooltipProps) {
   if (!active || !payload || payload.length === 0) return null;
 
   const p = payload[0].payload ?? {};
-  const fullLabel = String(p.fullLabel ?? "");
-  const detail = p.detail as string | undefined;
-  const key = p.key as string | undefined;
+  const displayParts = (p.displayParts as string[] | undefined) ?? [];
 
   const items: { label: string; value: number }[] = [
     { label: "Total", value: Number(p.total ?? 0) },
@@ -645,15 +679,20 @@ function ChartTooltipContent({ active, payload }: ChartTooltipProps) {
       className="rounded-lg border bg-card p-3 text-xs shadow-sm"
       style={{ borderColor: "var(--border)" }}
     >
-      <div className="mb-1.5 font-semibold">{fullLabel}</div>
-      {detail && (
-        <div className="mb-1.5 text-muted-foreground">{detail}</div>
-      )}
-      {key && key !== fullLabel && (
-        <div className="mb-1.5 font-mono text-[10px] text-muted-foreground">
-          {key}
+      {displayParts.map((line, i) => (
+        <div
+          key={i}
+          className={
+            i === 0
+              ? "mb-1.5 font-semibold"
+              : i === displayParts.length - 1 && line.length > 20
+                ? "mb-1.5 font-mono text-[10px] text-muted-foreground"
+                : "mb-1.5 text-muted-foreground"
+          }
+        >
+          {line}
         </div>
-      )}
+      ))}
       <div className="space-y-0.5">
         {items.map((item) => (
           <div key={item.label} className="flex items-center justify-between gap-4">
