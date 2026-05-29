@@ -169,6 +169,7 @@ fn is_in_time_range(
             let seven_days_ago = now - chrono::Duration::days(7);
             timestamp >= seven_days_ago && timestamp <= now
         }
+        TimeRange::All => true,
     }
 }
 
@@ -337,6 +338,27 @@ mod tests {
 
         assert_eq!(agg.groups.len(), 1);
         assert_eq!(agg.groups[0].group_key, "project-a");
+    }
+
+    #[test]
+    fn test_all_range_no_filter() {
+        let now = Utc::now();
+        let today = now;
+        let yesterday = now - chrono::Duration::days(1);
+        let ten_days_ago = now - chrono::Duration::days(10);
+
+        let records = vec![
+            make_record(today, "s1", Some("model-a"), Some("project-a"), 100, 50, 10, 5),
+            make_record(yesterday, "s2", Some("model-b"), Some("project-b"), 200, 100, 20, 10),
+            make_record(ten_days_ago, "s3", Some("model-c"), Some("project-c"), 50, 25, 5, 2),
+        ];
+
+        let agg = aggregate_usage(&records, TimeRange::All, GroupBy::Project, now);
+
+        // All 不过滤时间范围，应包含所有 3 条记录
+        assert_eq!(agg.groups.len(), 3);
+        assert_eq!(agg.input_tokens, 350);
+        assert_eq!(agg.session_count, 3);
     }
 
     #[test]

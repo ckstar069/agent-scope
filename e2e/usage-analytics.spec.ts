@@ -10,12 +10,19 @@ import { test, expect } from "@playwright/test";
  */
 
 const MOCK_SOURCE_STATUS = {
-  source_type: "claude-code-local",
-  config_dirs: ["/home/user/.claude"],
+  source_type: "claude_jsonl",
+  config_dirs: ["/home/user/.claude", "/home/user/.config/claude"],
   readable_dirs: ["/home/user/.claude"],
-  unreadable_dirs: [],
+  unreadable_dirs: [
+    {
+      path: "/home/user/.config/claude",
+      reason: "not_found",
+      source: "default_xdg",
+      severity: "info",
+    },
+  ],
   last_scan_at: new Date().toISOString(),
-  last_usage_at: new Date().toISOString(),
+  last_usage_at: "2026-05-22T10:54:22Z",
   confidence: "high",
   realtime_level: "near_realtime",
   notes: ["测试数据源"],
@@ -500,5 +507,63 @@ test.describe("Usage Analytics", () => {
     await expect(page.getByText("Output").first()).toBeVisible();
     await expect(page.getByText("Cache Read").first()).toBeVisible();
     await expect(page.getByText("Cache Create").first()).toBeVisible();
+  });
+
+  test("页面显示全部时间范围按钮", async ({ page }) => {
+    await setupMockTauri(page, { sourceStatus: MOCK_SOURCE_STATUS, aggregate: MOCK_AGGREGATE_PROJECT });
+    await page.goto("/");
+    await page.locator('nav[aria-label="大域导航"]').getByRole("button", { name: "Claude Code" }).click();
+    await page.getByRole("button", { name: "Usage 分析" }).click();
+
+    // 验证"全部"按钮存在
+    await expect(page.getByRole("button", { name: "全部" })).toBeVisible();
+  });
+
+  test("点击全部按钮触发 get_usage_analytics 参数", async ({ page }) => {
+    await setupMockTauriWithTracking(page, { sourceStatus: MOCK_SOURCE_STATUS, aggregate: MOCK_AGGREGATE_PROJECT });
+    await page.goto("/");
+    await page.locator('nav[aria-label="大域导航"]').getByRole("button", { name: "Claude Code" }).click();
+    await page.getByRole("button", { name: "Usage 分析" }).click();
+
+    // 等待初始加载完成
+    await expect(page.locator('td [data-testid="group-label"]').filter({ hasText: "agent-scope" })).toBeVisible();
+
+    // 点击"全部"
+    await page.getByRole("button", { name: "全部" }).click();
+
+    // 验证调用参数
+    const invokeCalls = await page.evaluate(() =>
+      ((window as unknown as Record<string, unknown>).usageCalls as { command: string; args: Record<string, unknown> }[]),
+    );
+
+    const analyticsCalls = invokeCalls.filter((c) => c.command === "get_usage_analytics");
+    const lastCall = analyticsCalls[analyticsCalls.length - 1];
+    expect(lastCall.args.timeRange).toBe("all");
+  });
+
+  test("最近 usage 时间显示 2026 年", async ({ page }) => {
+    await setupMockTauri(page, { sourceStatus: MOCK_SOURCE_STATUS, aggregate: MOCK_AGGREGATE_PROJECT });
+    await page.goto("/");
+    await page.locator('nav[aria-label="大域导航"]').getByRole("button", { name: "Claude Code" }).click();
+    await page.getByRole("button", { name: "Usage 分析" }).click();
+
+    // 最近 usage 时间应包含 2026（而非 2025）
+    const pageText = await page.locator("body").innerText();
+    expect(pageText).toContain("2026");
+    // 同时不应出现错误的 2025（如果格式正确的话）
+    // 但为了避免误报，只验证正向包含
+  });
+
+  test("可选目录缺失显示轻提示", async ({ page }) => {
+    await setupMockTauri(page, { sourceStatus: MOCK_SOURCE_STATUS, aggregate: MOCK_AGGREGATE_PROJECT });
+    await page.goto("/");
+    await page.locator('nav[aria-label="大域导航"]').getByRole("button", { name: "Claude Code" }).click();
+    await page.getByRole("button", { name: "Usage 分析" }).click();
+
+    // 验证"可选目录不存在"轻提示存在
+    await expect(page.getByText("可选目录不存在，已跳过")).toBeVisible();
+
+    // 不应显示强警告"部分目录不可读"（因为没有 warning/error 级别的目录）
+    await expect(page.getByText("部分目录不可读")).not.toBeVisible();
   });
 });

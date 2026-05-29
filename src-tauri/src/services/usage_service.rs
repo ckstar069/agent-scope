@@ -135,8 +135,9 @@ pub fn parse_time_range(s: &str) -> Result<TimeRange, String> {
     match s {
         "today" => Ok(TimeRange::Today),
         "last7days" => Ok(TimeRange::Last7Days),
+        "all" => Ok(TimeRange::All),
         _ => Err(format!(
-            "无效 time_range: '{}', 允许值: 'today', 'last7days'",
+            "无效 time_range: '{}', 允许值: 'today', 'last7days', 'all'",
             s
         )),
     }
@@ -248,11 +249,15 @@ mod tests {
     fn test_parse_time_range_valid() {
         assert_eq!(parse_time_range("today").unwrap(), TimeRange::Today);
         assert_eq!(parse_time_range("last7days").unwrap(), TimeRange::Last7Days);
+        assert_eq!(parse_time_range("all").unwrap(), TimeRange::All);
     }
 
     #[test]
     fn test_parse_time_range_invalid() {
-        assert!(parse_time_range("invalid").is_err());
+        let err = parse_time_range("invalid").unwrap_err();
+        assert!(err.contains("today"));
+        assert!(err.contains("last7days"));
+        assert!(err.contains("all"));
         assert!(parse_time_range("").is_err());
     }
 

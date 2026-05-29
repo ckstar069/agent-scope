@@ -85,6 +85,31 @@ pub fn discover_claude_config_dirs() -> Vec<CandidateConfigDir> {
         .collect()
 }
 
+/// 计算目录问题的严重程度
+///
+/// 规则：
+/// - 默认候选路径（DefaultXdg / DefaultClaude / DefaultWindows）不存在 → Info
+///   这类缺失属于正常情况（如 Linux 下 ~/.config/claude 未使用）
+/// - 用户显式配置的路径（EnvClaudeConfigDir）不存在 → Warning
+/// - PermissionDenied → Error
+/// - MissingStructure / Empty → Warning（目录存在但不是 Claude Code 数据目录）
+/// - NotADirectory / InvalidPath → Warning
+fn compute_dir_severity(
+    reason: &super::models::DirErrorReason,
+    source: &super::models::ConfigDirSource,
+) -> super::models::DirIssueSeverity {
+    use super::models::{ConfigDirSource, DirErrorReason, DirIssueSeverity};
+
+    match reason {
+        DirErrorReason::NotFound => match source {
+            ConfigDirSource::EnvClaudeConfigDir => DirIssueSeverity::Warning,
+            _ => DirIssueSeverity::Info,
+        },
+        DirErrorReason::PermissionDenied => DirIssueSeverity::Error,
+        _ => DirIssueSeverity::Warning,
+    }
+}
+
 // ============================================================================
 // File Scanning
 // ============================================================================
@@ -166,11 +191,14 @@ pub fn scan_usage_data(config_dirs: &[CandidateConfigDir]) -> UsageScanResult {
                 }
             }
             Err(reason) => {
+                let severity = compute_dir_severity(&reason, &candidate.source);
                 unreadable_dirs.push(UnreadableDir {
                     path: candidate.raw_path.clone(),
                     canonical_path: candidate.canonical_path.clone(),
                     reason,
                     detail: None,
+                    source: candidate.source.clone(),
+                    severity,
                 });
             }
         }

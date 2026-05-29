@@ -1,4 +1,4 @@
-export type TimeRange = "today" | "last7days";
+export type TimeRange = "today" | "last7days" | "all";
 export type GroupBy = "project" | "model" | "session";
 
 export type ConfidenceLevel = "high" | "medium" | "low";
@@ -11,11 +11,15 @@ export type DirErrorReason =
   | "missing_structure"
   | "empty";
 
+export type DirIssueSeverity = "info" | "warning" | "error";
+
 export interface UnreadableDir {
   path: string;
   canonical_path?: string;
   reason: DirErrorReason;
   detail?: string;
+  source: string;
+  severity: DirIssueSeverity;
 }
 
 export interface UsageSourceStatus {

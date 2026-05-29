@@ -58,6 +58,7 @@ const REASON_LABELS: Record<string, string> = {
   empty: "目录为空",
 };
 
+
 function formatNumber(n: number): string {
   if (n < 1000) return String(n);
   if (n < 1_000_000) return `${(n / 1000).toFixed(1)}K`;
@@ -313,6 +314,12 @@ export function UsageAnalytics() {
           >
             近 7 天
           </FilterButton>
+          <FilterButton
+            active={timeRange === "all"}
+            onClick={() => handleTimeRangeChange("all")}
+          >
+            全部
+          </FilterButton>
         </div>
 
         <div className="flex items-center gap-1 rounded-md border bg-muted p-1">
@@ -411,13 +418,11 @@ export function UsageAnalytics() {
 
       {/* 空状态 */}
       {!isLoading && !error && !hasData && (
-        <Card className="flex min-h-72 items-center justify-center border-dashed">
-          <div className="text-center text-sm text-muted-foreground">
-            <BarChart3 className="mx-auto mb-3 size-8 opacity-40" aria-hidden="true" />
-            <p>暂无 usage 数据</p>
-            <p className="mt-1 text-xs">未在配置目录中发现有效的 session JSONL 文件</p>
-          </div>
-        </Card>
+        <EmptyStateCard
+          summary={summary}
+          timeRange={timeRange}
+          onViewAll={() => handleTimeRangeChange("all")}
+        />
       )}
 
       {/* 图表 */}
@@ -549,6 +554,12 @@ export function UsageAnalytics() {
 
 /* ─── 数据源状态卡片 ─── */
 function SourceStatusCard({ status }: { status: UsageSourceStatus }) {
+  const infoDirs = status.unreadable_dirs.filter((d) => d.severity === "info");
+  const warningDirs = status.unreadable_dirs.filter((d) => d.severity === "warning");
+  const errorDirs = status.unreadable_dirs.filter((d) => d.severity === "error");
+
+  const hasRealIssue = warningDirs.length > 0 || errorDirs.length > 0;
+
   return (
     <Card>
       <CardHeader className="pb-2">
@@ -568,29 +579,50 @@ function SourceStatusCard({ status }: { status: UsageSourceStatus }) {
             label="实时性"
             value={REALTIME_LABELS[status.realtime_level] ?? status.realtime_level}
           />
-          <StatusItem label="已识别目录" value={`${status.config_dirs.length}`} />
-          <StatusItem label="可读目录" value={`${status.readable_dirs.length}`} />
-          <StatusItem label="不可读目录" value={`${status.unreadable_dirs.length}`} />
+          <StatusItem label="已检查目录" value={`${status.config_dirs.length}`} />
+          <StatusItem label="有效目录" value={`${status.readable_dirs.length}`} />
+          <StatusItem label="可选缺失" value={`${infoDirs.length}`} />
+          <StatusItem label="异常目录" value={`${warningDirs.length + errorDirs.length}`} />
           <StatusItem label="最近扫描" value={formatDate(status.last_scan_at)} />
           <StatusItem label="最近 usage" value={formatDate(status.last_usage_at)} />
         </div>
 
-        {status.unreadable_dirs.length > 0 && (
+        {/* 真正需要关注的问题（warning / error） */}
+        {hasRealIssue && (
           <div className="mt-3 rounded-md border border-amber-200 bg-amber-50 p-3 text-xs text-amber-800 dark:border-amber-900 dark:bg-amber-950/30 dark:text-amber-200">
             <div className="mb-1.5 flex items-center gap-1.5 font-medium">
               <AlertTriangle className="size-3.5" aria-hidden="true" />
-              部分目录不可读
+              {errorDirs.length > 0
+                ? `发现 ${errorDirs.length} 个错误、${warningDirs.length} 个警告`
+                : `发现 ${warningDirs.length} 个警告`}
             </div>
             <ul className="space-y-1">
-              {status.unreadable_dirs.slice(0, 3).map((dir, i) => (
+              {[...errorDirs, ...warningDirs].slice(0, 3).map((dir, i) => (
                 <li key={i} className="truncate" title={dir.path}>
                   {dir.path} — {REASON_LABELS[dir.reason] ?? dir.reason}
                 </li>
               ))}
-              {status.unreadable_dirs.length > 3 && (
+              {warningDirs.length + errorDirs.length > 3 && (
                 <li className="text-muted-foreground">
-                  还有 {status.unreadable_dirs.length - 3} 个…
+                  还有 {warningDirs.length + errorDirs.length - 3} 个…
                 </li>
+              )}
+            </ul>
+          </div>
+        )}
+
+        {/* 可选缺失（info 级别，轻提示） */}
+        {infoDirs.length > 0 && !hasRealIssue && (
+          <div className="mt-3 rounded-md border border-muted bg-muted/30 p-3 text-xs text-muted-foreground">
+            <div className="mb-1.5 font-medium">可选目录不存在，已跳过</div>
+            <ul className="space-y-1">
+              {infoDirs.slice(0, 3).map((dir, i) => (
+                <li key={i} className="truncate" title={dir.path}>
+                  {dir.path} — {REASON_LABELS[dir.reason] ?? dir.reason}
+                </li>
+              ))}
+              {infoDirs.length > 3 && (
+                <li>还有 {infoDirs.length - 3} 个…</li>
               )}
             </ul>
           </div>
@@ -704,6 +736,50 @@ function ChartTooltipContent({ active, payload }: ChartTooltipProps) {
         ))}
       </div>
     </div>
+  );
+}
+
+/* ─── 空状态卡片 ─── */
+function EmptyStateCard({
+  summary,
+  timeRange,
+  onViewAll,
+}: {
+  summary: UsageScanSummary | null;
+  timeRange: TimeRange;
+  onViewAll: () => void;
+}) {
+  const hasRecords = summary && summary.record_count > 0;
+
+  if (hasRecords && timeRange !== "all") {
+    return (
+      <Card className="flex min-h-72 items-center justify-center border-dashed">
+        <div className="text-center text-sm text-muted-foreground">
+          <BarChart3 className="mx-auto mb-3 size-8 opacity-40" aria-hidden="true" />
+          <p>当前时间范围内没有 usage 数据</p>
+          {summary?.source_status.last_usage_at && (
+            <p className="mt-1 text-xs">
+              最近 usage 时间：{formatDate(summary.source_status.last_usage_at)}
+            </p>
+          )}
+          <div className="mt-3">
+            <Button type="button" variant="outline" size="sm" onClick={onViewAll}>
+              查看全部
+            </Button>
+          </div>
+        </div>
+      </Card>
+    );
+  }
+
+  return (
+    <Card className="flex min-h-72 items-center justify-center border-dashed">
+      <div className="text-center text-sm text-muted-foreground">
+        <BarChart3 className="mx-auto mb-3 size-8 opacity-40" aria-hidden="true" />
+        <p>暂无 usage 数据</p>
+        <p className="mt-1 text-xs">未在配置目录中发现有效的 session JSONL 文件</p>
+      </div>
+    </Card>
   );
 }
 

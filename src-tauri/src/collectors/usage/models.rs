@@ -18,7 +18,8 @@ pub struct CandidateConfigDir {
 }
 
 /// 配置目录来源
-#[derive(Debug, Clone, PartialEq, Eq)]
+#[derive(Debug, Clone, PartialEq, Eq, Serialize)]
+#[serde(rename_all = "snake_case")]
 pub enum ConfigDirSource {
     /// ~/.claude
     DefaultClaude,
@@ -50,6 +51,18 @@ pub enum DirErrorReason {
     Empty,
 }
 
+/// 目录问题严重程度
+#[derive(Debug, Clone, PartialEq, Eq, Serialize)]
+#[serde(rename_all = "snake_case")]
+pub enum DirIssueSeverity {
+    /// 默认候选路径不存在，属于正常情况（如 Linux 下 ~/.config/claude 未使用）
+    Info,
+    /// 用户显式配置的路径不存在或结构异常，需要关注
+    Warning,
+    /// 权限错误等严重问题
+    Error,
+}
+
 /// 不可读/无效的配置目录
 #[derive(Debug, Clone, Serialize)]
 pub struct UnreadableDir {
@@ -63,6 +76,10 @@ pub struct UnreadableDir {
     /// 额外说明
     #[serde(skip_serializing_if = "Option::is_none")]
     pub detail: Option<String>,
+    /// 目录来源（用于前端区分默认候选 vs 用户配置）
+    pub source: ConfigDirSource,
+    /// 问题严重程度
+    pub severity: DirIssueSeverity,
 }
 
 // ============================================================================
@@ -193,6 +210,8 @@ pub enum TimeRange {
     Today,
     /// 最近 7 天
     Last7Days,
+    /// 全部历史（不过滤时间范围）
+    All,
 }
 
 /// 分组维度
