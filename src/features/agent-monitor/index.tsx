@@ -211,7 +211,7 @@ export function AgentMonitor() {
         <div className="flex flex-wrap items-center gap-3">
           <div className="flex items-center gap-1">
             <span className="text-xs font-medium text-muted-foreground mr-1">速率类型</span>
-            <InfoHint content="选择 Token 消耗速率的统计窗口。采样不足时会显示「采样中」。" />
+            <InfoHint content="选择 Token 消耗速率的统计窗口。瞬时基于最近 2 秒采样；部分模型在回复结束或计数刷新后才更新 token 计数，因此流式输出中可能短暂显示「等待计数更新」。" />
             {(["5min", "1min", "total", "realtime"] as RateType[]).map((type) => (
               <Button
                 key={type}
@@ -771,24 +771,26 @@ function getDisplayRate(agent: AgentInfo, rateType: RateType, unit: TokenRateUni
 function formatActiveRate(agent: AgentInfo, rateType: RateType, unit: TokenRateUnit): string {
   const rate = getDisplayRate(agent, rateType, unit);
   const suffix = unit === "second" ? "token/s" : "token/min";
+  // Active 状态：模型正在生成或执行工具时速率可能为 0（token 计数尚未刷新）
+  const isActive = agent.status === "Thinking" || agent.status === "Executing" || agent.status === "RateLimited";
 
   switch (rateType) {
     case "1min":
       if (agent.token_rate_1m_reason === "insufficient_samples") return "采样中";
       if (agent.token_rate_1m_reason === "short_span") return "采样中";
-      if (agent.token_rate_1m_reason === "no_activity") return `0 ${suffix}`;
+      if (agent.token_rate_1m_reason === "no_activity") return isActive ? "等待计数更新" : `0 ${suffix}`;
       break;
     case "5min":
       if (agent.token_rate_5m_reason === "insufficient_samples") return "采样中";
       if (agent.token_rate_5m_reason === "short_span") return "采样中";
-      if (agent.token_rate_5m_reason === "no_activity") return `0 ${suffix}`;
+      if (agent.token_rate_5m_reason === "no_activity") return isActive ? "等待计数更新" : `0 ${suffix}`;
       break;
     case "total":
       if (agent.token_rate_total_reason === "warming_up") return "采样中";
-      if (agent.token_rate_total_reason === "no_activity") return `0 ${suffix}`;
+      if (agent.token_rate_total_reason === "no_activity") return isActive ? "等待计数更新" : `0 ${suffix}`;
       break;
     case "realtime":
-      if (rate <= 0) return `0 ${suffix}`;
+      if (rate <= 0) return isActive ? "等待计数更新" : `0 ${suffix}`;
       break;
   }
 
@@ -871,7 +873,9 @@ function getRateColor(ratePerMin: number): { bar: string; text: string; level: s
   if (ratePerMin >= 80_000) return { bar: "bg-red-500", text: "text-red-600", level: "极高" };
   if (ratePerMin >= 20_000) return { bar: "bg-orange-500", text: "text-orange-600", level: "高" };
   if (ratePerMin >= 1_000) return { bar: "bg-amber-500", text: "text-amber-600", level: "中" };
-  return { bar: "bg-green-500", text: "text-green-600", level: "低" };
+  if (ratePerMin > 0) return { bar: "bg-green-500", text: "text-green-600", level: "低" };
+  // rate == 0 时返回中性色，避免绿色误导用户以为完全没有消耗
+  return { bar: "bg-muted-foreground/30", text: "text-muted-foreground", level: "无" };
 }
 
 // 上下文窗口分级

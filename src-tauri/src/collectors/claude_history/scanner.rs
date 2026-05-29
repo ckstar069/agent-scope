@@ -376,24 +376,29 @@ fn extract_preview_messages_from_value(value: &Value) -> Vec<SerPreviewMessage> 
 }
 
 /// 清理预览消息：
-/// 1. 相邻完全相同的 role + content 做折叠（保留第一条）
-/// 2. last-prompt 与最近一条原始 user 内容语义相同时跳过（避免伪重复）
-/// 3. 绝不删除两条相邻的真实 user 消息，即使内容相同
+/// 1. last-prompt 与任意已出现的原始 user 内容语义相同则跳过（避免伪重复）
+/// 2. 相邻完全相同的 role + content 折叠，但绝不折叠两条原始 user 消息
+/// 3. 绝不删除真实 user 消息
 fn clean_preview_messages(messages: Vec<SerPreviewMessage>) -> Vec<SerPreviewMessage> {
     let mut cleaned: Vec<SerPreviewMessage> = Vec::new();
+    // 记录所有出现过的原始 user 消息的归一化内容，用于跨位置 last-prompt 去重
+    let mut original_user_norms: std::collections::HashSet<String> = std::collections::HashSet::new();
 
     for msg in messages {
-        // 规则 2：last-prompt 与最近一条原始 user 语义相同则跳过
-        // 使用 normalize_text 做宽松比较（忽略空白差异）
+        // 规则 1：last-prompt 与任意已出现的原始 user 语义相同则跳过
         if msg.source_type == "last-prompt" {
-            if let Some(last) = cleaned.last() {
-                if last.source_type == "user" && normalize_text(&last.content) == normalize_text(&msg.content) {
-                    continue;
-                }
+            let norm = normalize_text(&msg.content);
+            if original_user_norms.contains(&norm) {
+                continue;
             }
         }
 
-        // 规则 1：相邻完全相同的 role + content 折叠
+        // 记录原始 user 消息（用于后续 last-prompt 去重）
+        if msg.source_type == "user" {
+            original_user_norms.insert(normalize_text(&msg.content));
+        }
+
+        // 规则 2：相邻完全相同的 role + content 折叠
         // 但绝不折叠两条原始 user 消息（避免误删真实重复输入）
         if let Some(last) = cleaned.last() {
             if last.role == msg.role && last.content == msg.content {
@@ -1183,5 +1188,115 @@ mod tests {
         ).unwrap();
         let msgs = extract_preview_messages_from_value(&value);
         assert_eq!(msgs.len(), 0);
+    }
+
+    #[test]
+    fn test_clean_preview_last_prompt_non_adjacent_duplicate_should_be_skipped() {
+        // last-prompt 与前面非相邻的原始 user 语义重复时应跳过
+        let messages = vec![
+            SerPreviewMessage {
+                role: "user".to_string(),
+                content: "帮我检查本机的健康状态".to_string(),
+                timestamp: None,
+                source_type: "user".to_string(),
+            },
+            SerPreviewMessage {
+                role: "assistant".to_string(),
+                content: "error".to_string(),
+                timestamp: None,
+                source_type: "assistant".to_string(),
+            },
+            SerPreviewMessage {
+                role: "user".to_string(),
+                content: "帮我检查本机的健康状态".to_string(),
+                timestamp: None,
+                source_type: "last-prompt".to_string(),
+            },
+        ];
+        let cleaned = clean_preview_messages(messages);
+        assert_eq!(cleaned.len(), 2);
+        assert_eq!(cleaned[0].source_type, "user");
+        assert_eq!(cleaned[1].source_type, "assistant");
+    }
+
+    #[test]
+    fn test_clean_preview_last_prompt_duplicate_after_tool_should_be_skipped() {
+        // last-prompt 前面有 tool summary 时仍应去重
+        let messages = vec![
+            SerPreviewMessage {
+                role: "user".to_string(),
+                content: "本机有ipv6，家里设备也有ipv6".to_string(),
+                timestamp: None,
+                source_type: "user".to_string(),
+            },
+            SerPreviewMessage {
+                role: "tool".to_string(),
+                content: "调用工具: Bash (ping6)".to_string(),
+                timestamp: None,
+                source_type: "tool".to_string(),
+            },
+            SerPreviewMessage {
+                role: "user".to_string(),
+                content: "本机有ipv6，家里设备也有ipv6".to_string(),
+                timestamp: None,
+                source_type: "last-prompt".to_string(),
+            },
+        ];
+        let cleaned = clean_preview_messages(messages);
+        assert_eq!(cleaned.len(), 2);
+        assert_eq!(cleaned[0].source_type, "user");
+        assert_eq!(cleaned[1].source_type, "tool");
+    }
+
+    #[test]
+    fn test_clean_preview_real_duplicate_users_should_be_kept() {
+        // 两条真实 user 消息中间隔了 assistant，不应误删
+        let messages = vec![
+            SerPreviewMessage {
+                role: "user".to_string(),
+                content: "请继续".to_string(),
+                timestamp: None,
+                source_type: "user".to_string(),
+            },
+            SerPreviewMessage {
+                role: "assistant".to_string(),
+                content: "error".to_string(),
+                timestamp: None,
+                source_type: "assistant".to_string(),
+            },
+            SerPreviewMessage {
+                role: "user".to_string(),
+                content: "请继续".to_string(),
+                timestamp: None,
+                source_type: "user".to_string(),
+            },
+        ];
+        let cleaned = clean_preview_messages(messages);
+        assert_eq!(cleaned.len(), 3);
+        assert_eq!(cleaned[0].source_type, "user");
+        assert_eq!(cleaned[1].source_type, "assistant");
+        assert_eq!(cleaned[2].source_type, "user");
+    }
+
+    #[test]
+    fn test_clean_preview_last_prompt_without_matching_user_can_be_kept() {
+        // 没有对应原始 user 的 last-prompt 应保留作为 fallback
+        let messages = vec![
+            SerPreviewMessage {
+                role: "assistant".to_string(),
+                content: "error".to_string(),
+                timestamp: None,
+                source_type: "assistant".to_string(),
+            },
+            SerPreviewMessage {
+                role: "user".to_string(),
+                content: "请分析这段代码".to_string(),
+                timestamp: None,
+                source_type: "last-prompt".to_string(),
+            },
+        ];
+        let cleaned = clean_preview_messages(messages);
+        assert_eq!(cleaned.len(), 2);
+        assert_eq!(cleaned[1].source_type, "last-prompt");
     }
 }
