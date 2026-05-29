@@ -6,7 +6,7 @@ use std::io::{BufRead, BufReader};
 use std::path::{Path, PathBuf};
 use std::time::SystemTime;
 
-use super::metadata::{compact_project_label, load_usage_session_metadata};
+use super::metadata::{clean_session_title, compact_project_label, load_usage_session_metadata};
 use super::models::{
     CandidateConfigDir, ConfigDirSource, ConfidenceLevel, DirErrorReason, RealtimeLevel,
     UnreadableDir, UsageParseContext, UsageScanResult, UsageSource, UsageSourceStatus,
@@ -244,7 +244,7 @@ pub fn scan_usage_data(config_dirs: &[CandidateConfigDir]) -> UsageScanResult {
                 record.project_name = Some(name.clone());
             }
             if let Some(ref title) = meta.display {
-                record.session_title = Some(title.clone());
+                record.session_title = Some(clean_session_title(Some(title)));
             }
         }
 

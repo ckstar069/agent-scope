@@ -51,21 +51,14 @@ pub fn aggregate_usage(
                 let label = record
                     .session_title
                     .clone()
-                    .unwrap_or_else(|| {
-                        let short = short_session_id(&record.session_id);
-                        if let Some(ref name) = record.project_name {
-                            format!("{} · {}", name, short)
-                        } else {
-                            short
-                        }
-                    });
-                let detail = Some(
-                    record
-                        .project_name
-                        .clone()
-                        .unwrap_or_else(|| record.session_id.clone()),
-                );
-                (key, label, detail)
+                    .unwrap_or_else(|| "(未命名)".to_string());
+                let short = short_session_id(&record.session_id);
+                let detail = if let Some(ref name) = record.project_name {
+                    format!("{} · {}", name, short)
+                } else {
+                    short
+                };
+                (key, label, Some(detail))
             }
         };
 

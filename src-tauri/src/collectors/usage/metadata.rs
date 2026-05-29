@@ -183,6 +183,29 @@ pub fn short_session_id(session_id: &str) -> String {
     session_id.chars().take(8).collect()
 }
 
+/// 清洗会话标题
+///
+/// 规则：
+/// 1. trim 首尾空白
+/// 2. 如果以 "/" 开头，去掉开头所有 "/"
+/// 3. 清洗后为空，返回 "(未命名)"
+/// 4. 原始值为 None 或空，返回 "(未命名)"
+/// 5. 不做截断（前端负责）
+/// 6. 保留 "[Pasted text ...]" 等特殊格式
+pub fn clean_session_title(title: Option<&str>) -> String {
+    let Some(t) = title else {
+        return "(未命名)".to_string();
+    };
+
+    let cleaned = t.trim().trim_start_matches('/');
+
+    if cleaned.is_empty() {
+        "(未命名)".to_string()
+    } else {
+        cleaned.to_string()
+    }
+}
+
 // ============================================================================
 // Tests
 // ============================================================================
@@ -331,6 +354,44 @@ mod tests {
 
         let metadata = load_usage_session_metadata(&[candidate]);
         assert!(metadata.is_empty());
+    }
+
+    #[test]
+    fn test_clean_session_title_basic() {
+        assert_eq!(clean_session_title(Some("hello world")), "hello world");
+    }
+
+    #[test]
+    fn test_clean_session_title_trims_leading_slash() {
+        assert_eq!(clean_session_title(Some("/rename v0.3.7")), "rename v0.3.7");
+        assert_eq!(clean_session_title(Some("//model")), "model");
+        assert_eq!(clean_session_title(Some("///")).as_str(), "(未命名)");
+    }
+
+    #[test]
+    fn test_clean_session_title_trims_whitespace() {
+        assert_eq!(clean_session_title(Some("  hello  ")), "hello");
+    }
+
+    #[test]
+    fn test_clean_session_title_none_or_empty() {
+        assert_eq!(clean_session_title(None), "(未命名)");
+        assert_eq!(clean_session_title(Some("")), "(未命名)");
+        assert_eq!(clean_session_title(Some("   ")), "(未命名)");
+    }
+
+    #[test]
+    fn test_clean_session_title_keeps_chinese() {
+        let chinese = "帮我检查本机的健康状态。之前两天，连续出现两次关机时无响应";
+        assert_eq!(clean_session_title(Some(chinese)), chinese);
+    }
+
+    #[test]
+    fn test_clean_session_title_keeps_pasted_text() {
+        assert_eq!(
+            clean_session_title(Some("[Pasted text #1 +47 lines]")),
+            "[Pasted text #1 +47 lines]"
+        );
     }
 
     #[test]

@@ -21,7 +21,7 @@ const MOCK_SOURCE_STATUS = {
   notes: ["测试数据源"],
 };
 
-const MOCK_AGGREGATE = {
+const MOCK_AGGREGATE_PROJECT = {
   time_range: "today",
   group_by: "project",
   input_tokens: 1200,
@@ -34,7 +34,7 @@ const MOCK_AGGREGATE = {
   model_count: 1,
   groups: [
     {
-      group_key: "project-alpha",
+      group_key: "/Users/ckstar/Repo/agent-scope",
       group_label: "agent-scope",
       group_detail: "/Users/ckstar/Repo/agent-scope",
       input_tokens: 800,
@@ -47,7 +47,7 @@ const MOCK_AGGREGATE = {
       last_seen: new Date().toISOString(),
     },
     {
-      group_key: "project-beta",
+      group_key: "/Users/ckstar/Documents/notes",
       group_label: "notes",
       group_detail: "/Users/ckstar/Documents/notes",
       input_tokens: 400,
@@ -62,9 +62,63 @@ const MOCK_AGGREGATE = {
   ],
 };
 
+const MOCK_AGGREGATE_SESSION = {
+  time_range: "today",
+  group_by: "session",
+  input_tokens: 1200,
+  output_tokens: 600,
+  cache_read_tokens: 300,
+  cache_create_tokens: 150,
+  total_tokens: 1800,
+  session_count: 3,
+  project_count: 2,
+  model_count: 1,
+  groups: [
+    {
+      group_key: "sess-001",
+      group_label: "rename v0.3.7",
+      group_detail: "agent-scope · 1f093b08",
+      input_tokens: 800,
+      output_tokens: 400,
+      cache_read_tokens: 200,
+      cache_create_tokens: 100,
+      total_tokens: 1200,
+      session_count: 1,
+      first_seen: new Date().toISOString(),
+      last_seen: new Date().toISOString(),
+    },
+    {
+      group_key: "sess-002",
+      group_label: "(未命名)",
+      group_detail: "agent-scope · 1f093b09",
+      input_tokens: 300,
+      output_tokens: 150,
+      cache_read_tokens: 80,
+      cache_create_tokens: 40,
+      total_tokens: 570,
+      session_count: 1,
+      first_seen: new Date().toISOString(),
+      last_seen: new Date().toISOString(),
+    },
+    {
+      group_key: "sess-003",
+      group_label: "帮我检查本机的健康状态。之前两天，连续出现两次关机时无响应",
+      group_detail: "notes · abcdef12",
+      input_tokens: 100,
+      output_tokens: 50,
+      cache_read_tokens: 20,
+      cache_create_tokens: 10,
+      total_tokens: 180,
+      session_count: 1,
+      first_seen: new Date().toISOString(),
+      last_seen: new Date().toISOString(),
+    },
+  ],
+};
+
 type MockTauriArgs = {
   sourceStatus: typeof MOCK_SOURCE_STATUS;
-  aggregate: typeof MOCK_AGGREGATE;
+  aggregate: typeof MOCK_AGGREGATE_PROJECT;
   empty?: boolean;
   error?: boolean;
 };
@@ -238,7 +292,7 @@ async function setupMockTauriWithCommandTracking(
 
 test.describe("Usage Analytics", () => {
   test("侧边栏出现 Usage 分析入口", async ({ page }) => {
-    await setupMockTauri(page, { sourceStatus: MOCK_SOURCE_STATUS, aggregate: MOCK_AGGREGATE });
+    await setupMockTauri(page, { sourceStatus: MOCK_SOURCE_STATUS, aggregate: MOCK_AGGREGATE_PROJECT });
     await page.goto("/");
 
     // 切换到监控域——TopNav 按钮文本是 "Claude Code"
@@ -249,7 +303,7 @@ test.describe("Usage Analytics", () => {
   });
 
   test("点击 Usage 分析进入页面并展示标题与数据", async ({ page }) => {
-    await setupMockTauri(page, { sourceStatus: MOCK_SOURCE_STATUS, aggregate: MOCK_AGGREGATE });
+    await setupMockTauri(page, { sourceStatus: MOCK_SOURCE_STATUS, aggregate: MOCK_AGGREGATE_PROJECT });
     await page.goto("/");
 
     // 切换到监控域
@@ -284,7 +338,7 @@ test.describe("Usage Analytics", () => {
   });
 
   test("切换时间范围为近 7 天", async ({ page }) => {
-    await setupMockTauriWithTracking(page, { sourceStatus: MOCK_SOURCE_STATUS, aggregate: MOCK_AGGREGATE });
+    await setupMockTauriWithTracking(page, { sourceStatus: MOCK_SOURCE_STATUS, aggregate: MOCK_AGGREGATE_PROJECT });
     await page.goto("/");
     await page.locator('nav[aria-label="大域导航"]').getByRole("button", { name: "Claude Code" }).click();
     await page.getByRole("button", { name: "Usage 分析" }).click();
@@ -310,7 +364,7 @@ test.describe("Usage Analytics", () => {
   });
 
   test("切换分组维度为按模型", async ({ page }) => {
-    await setupMockTauriWithTracking(page, { sourceStatus: MOCK_SOURCE_STATUS, aggregate: MOCK_AGGREGATE });
+    await setupMockTauriWithTracking(page, { sourceStatus: MOCK_SOURCE_STATUS, aggregate: MOCK_AGGREGATE_PROJECT });
     await page.goto("/");
     await page.locator('nav[aria-label="大域导航"]').getByRole("button", { name: "Claude Code" }).click();
     await page.getByRole("button", { name: "Usage 分析" }).click();
@@ -332,7 +386,7 @@ test.describe("Usage Analytics", () => {
   });
 
   test("刷新按钮触发重新扫描", async ({ page }) => {
-    await setupMockTauriWithCommandTracking(page, { sourceStatus: MOCK_SOURCE_STATUS, aggregate: MOCK_AGGREGATE });
+    await setupMockTauriWithCommandTracking(page, { sourceStatus: MOCK_SOURCE_STATUS, aggregate: MOCK_AGGREGATE_PROJECT });
     await page.goto("/");
     await page.locator('nav[aria-label="大域导航"]').getByRole("button", { name: "Claude Code" }).click();
     await page.getByRole("button", { name: "Usage 分析" }).click();
@@ -354,7 +408,7 @@ test.describe("Usage Analytics", () => {
   });
 
   test("空数据状态显示提示", async ({ page }) => {
-    await setupMockTauri(page, { sourceStatus: MOCK_SOURCE_STATUS, aggregate: MOCK_AGGREGATE, empty: true });
+    await setupMockTauri(page, { sourceStatus: MOCK_SOURCE_STATUS, aggregate: MOCK_AGGREGATE_PROJECT, empty: true });
     await page.goto("/");
     await page.locator('nav[aria-label="大域导航"]').getByRole("button", { name: "Claude Code" }).click();
     await page.getByRole("button", { name: "Usage 分析" }).click();
@@ -364,12 +418,84 @@ test.describe("Usage Analytics", () => {
   });
 
   test("错误状态显示提示和重试按钮", async ({ page }) => {
-    await setupMockTauri(page, { sourceStatus: MOCK_SOURCE_STATUS, aggregate: MOCK_AGGREGATE, error: true });
+    await setupMockTauri(page, { sourceStatus: MOCK_SOURCE_STATUS, aggregate: MOCK_AGGREGATE_PROJECT, error: true });
     await page.goto("/");
     await page.locator('nav[aria-label="大域导航"]').getByRole("button", { name: "Claude Code" }).click();
     await page.getByRole("button", { name: "Usage 分析" }).click();
 
     await expect(page.getByText("模拟扫描失败")).toBeVisible();
     await expect(page.getByRole("button", { name: "重试" })).toBeVisible();
+  });
+
+  test("按会话分组时清洗 slash command", async ({ page }) => {
+    await setupMockTauri(page, { sourceStatus: MOCK_SOURCE_STATUS, aggregate: MOCK_AGGREGATE_SESSION });
+    await page.goto("/");
+    await page.locator('nav[aria-label="大域导航"]').getByRole("button", { name: "Claude Code" }).click();
+    await page.getByRole("button", { name: "Usage 分析" }).click();
+
+    // 切换到按会话
+    await page.getByRole("button", { name: "按会话" }).click();
+
+    // 验证不显示 "/rename"
+    await expect(page.getByText("/rename v0.3.7")).not.toBeVisible();
+
+    // 验证显示清洗后的 "rename v0.3.7"
+    await expect(page.locator('td [data-testid="group-label"]').filter({ hasText: "rename v0.3.7" })).toBeVisible();
+
+    // 验证 detail 包含 project_name 和 short_session_id
+    await expect(page.locator('td [data-testid="group-detail"]').filter({ hasText: "agent-scope · 1f093b08" })).toBeVisible();
+  });
+
+  test("按会话分组时未命名会话显示 (未命名)", async ({ page }) => {
+    await setupMockTauri(page, { sourceStatus: MOCK_SOURCE_STATUS, aggregate: MOCK_AGGREGATE_SESSION });
+    await page.goto("/");
+    await page.locator('nav[aria-label="大域导航"]').getByRole("button", { name: "Claude Code" }).click();
+    await page.getByRole("button", { name: "Usage 分析" }).click();
+
+    await page.getByRole("button", { name: "按会话" }).click();
+
+    // 验证 (未命名) 显示
+    await expect(page.locator('td [data-testid="group-label"]').filter({ hasText: "(未命名)" })).toBeVisible();
+    await expect(page.locator('td [data-testid="group-detail"]').filter({ hasText: "agent-scope · 1f093b09" })).toBeVisible();
+  });
+
+  test("按会话分组时中文长会话名可显示", async ({ page }) => {
+    await setupMockTauri(page, { sourceStatus: MOCK_SOURCE_STATUS, aggregate: MOCK_AGGREGATE_SESSION });
+    await page.goto("/");
+    await page.locator('nav[aria-label="大域导航"]').getByRole("button", { name: "Claude Code" }).click();
+    await page.getByRole("button", { name: "Usage 分析" }).click();
+
+    await page.getByRole("button", { name: "按会话" }).click();
+
+    const longLabel = "帮我检查本机的健康状态。之前两天，连续出现两次关机时无响应";
+    const labelCell = page.locator('td [data-testid="group-label"]').filter({ hasText: longLabel });
+    await expect(labelCell).toBeVisible();
+
+    // 验证 title 属性包含完整中文（title 在父级 div 上）
+    const title = await labelCell.locator("..").getAttribute("title");
+    expect(title).toContain(longLabel);
+  });
+
+  test("图表 tooltip 包含 token 分项", async ({ page }) => {
+    await setupMockTauri(page, { sourceStatus: MOCK_SOURCE_STATUS, aggregate: MOCK_AGGREGATE_PROJECT });
+    await page.goto("/");
+    await page.locator('nav[aria-label="大域导航"]').getByRole("button", { name: "Claude Code" }).click();
+    await page.getByRole("button", { name: "Usage 分析" }).click();
+
+    // 等待图表渲染
+    await expect(page.locator('td [data-testid="group-label"]').filter({ hasText: "agent-scope" })).toBeVisible();
+
+    // 悬停到第一个柱子上触发 tooltip
+    const bar = page.locator(".recharts-bar-rectangle").first();
+    await bar.hover();
+
+    // 验证 tooltip 中出现分项文案
+    const tooltip = page.locator(".recharts-tooltip-wrapper");
+    await expect(tooltip).toBeVisible();
+    await expect(page.getByText("Total").first()).toBeVisible();
+    await expect(page.getByText("Input").first()).toBeVisible();
+    await expect(page.getByText("Output").first()).toBeVisible();
+    await expect(page.getByText("Cache Read").first()).toBeVisible();
+    await expect(page.getByText("Cache Create").first()).toBeVisible();
   });
 });

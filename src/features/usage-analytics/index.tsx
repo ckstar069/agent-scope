@@ -197,14 +197,24 @@ export function UsageAnalytics() {
 
   const chartData = useMemo(() => {
     if (!aggregate) return [];
-    return aggregate.groups.slice(0, 10).map((g) => ({
-      label: g.group_label.slice(0, 16),
-      fullLabel: g.group_label,
-      detail: g.group_detail,
-      total: g.total_tokens,
-      input: g.input_tokens,
-      output: g.output_tokens,
-    }));
+    return aggregate.groups.slice(0, 10).map((g) => {
+      // 轴标签截断：去掉开头 "/"，中文/长文本最多 16 字符
+      let label = g.group_label.trim().replace(/^\/+/, "");
+      if (label.length > 16) {
+        label = label.slice(0, 15) + "…";
+      }
+      return {
+        label,
+        fullLabel: g.group_label,
+        detail: g.group_detail,
+        key: g.group_key,
+        total: g.total_tokens,
+        input: g.input_tokens,
+        output: g.output_tokens,
+        cacheRead: g.cache_read_tokens,
+        cacheCreate: g.cache_create_tokens,
+      };
+    });
   }, [aggregate]);
 
   const hasData = aggregate && aggregate.groups.length > 0;
@@ -399,34 +409,7 @@ export function UsageAnalytics() {
                     tickLine={false}
                     tickFormatter={(v: number) => formatNumber(v)}
                   />
-                  <Tooltip
-                    contentStyle={{
-                      backgroundColor: "var(--card)",
-                      border: "1px solid var(--border)",
-                      borderRadius: "8px",
-                      fontSize: "12px",
-                    }}
-                    formatter={(value, name, props) => {
-                      const labelMap: Record<string, string> = {
-                        total: "Total",
-                        input: "Input",
-                        output: "Output",
-                      };
-                      const nameStr = String(name ?? "");
-                      // 如果有 detail，在 tooltip 中展示
-                      const payload = (props?.payload ?? {}) as Record<string, unknown>;
-                      const detail = payload.detail as string | undefined;
-                      const displayName = detail
-                        ? `${labelMap[nameStr] ?? nameStr} (${detail})`
-                        : (labelMap[nameStr] ?? nameStr);
-                      return [formatNumber(Number(value)), displayName];
-                    }}
-                    labelFormatter={(label, payload) => {
-                      const p = payload?.[0]?.payload as Record<string, unknown> | undefined;
-                      const fullLabel = p?.fullLabel as string | undefined;
-                      return fullLabel ?? String(label);
-                    }}
-                  />
+                  <Tooltip content={<ChartTooltipContent />} />
                   <Bar dataKey="total" fill="hsl(var(--chart-1))" radius={[4, 4, 0, 0]} />
                 </BarChart>
               </ResponsiveContainer>
@@ -471,18 +454,25 @@ export function UsageAnalytics() {
                       className="border-b transition-colors hover:bg-muted/30"
                     >
                       <td className="px-4 py-2.5">
-                        <div className="max-w-[240px]">
+                        <div
+                          className="max-w-[300px]"
+                          title={[
+                            group.group_label,
+                            group.group_detail,
+                            group.group_key !== group.group_label ? group.group_key : undefined,
+                          ]
+                            .filter(Boolean)
+                            .join("\n")}
+                        >
                           <div
-                            className="truncate font-medium"
-                            title={group.group_label}
+                            className="break-words font-semibold leading-snug"
                             data-testid="group-label"
                           >
                             {group.group_label}
                           </div>
                           {group.group_detail && (
                             <div
-                              className="truncate text-xs text-muted-foreground"
-                              title={group.group_detail}
+                              className="mt-0.5 truncate text-xs text-muted-foreground"
                               data-testid="group-detail"
                             >
                               {group.group_detail}
@@ -620,6 +610,61 @@ function SummaryTile({
         </div>
       </CardContent>
     </Card>
+  );
+}
+
+/* ─── 自定义图表 Tooltip ─── */
+interface ChartTooltipPayloadItem {
+  payload?: Record<string, unknown>;
+}
+
+interface ChartTooltipProps {
+  active?: boolean;
+  payload?: ChartTooltipPayloadItem[];
+  label?: string;
+}
+
+function ChartTooltipContent({ active, payload }: ChartTooltipProps) {
+  if (!active || !payload || payload.length === 0) return null;
+
+  const p = payload[0].payload ?? {};
+  const fullLabel = String(p.fullLabel ?? "");
+  const detail = p.detail as string | undefined;
+  const key = p.key as string | undefined;
+
+  const items: { label: string; value: number }[] = [
+    { label: "Total", value: Number(p.total ?? 0) },
+    { label: "Input", value: Number(p.input ?? 0) },
+    { label: "Output", value: Number(p.output ?? 0) },
+    { label: "Cache Read", value: Number(p.cacheRead ?? 0) },
+    { label: "Cache Create", value: Number(p.cacheCreate ?? 0) },
+  ];
+
+  return (
+    <div
+      className="rounded-lg border bg-card p-3 text-xs shadow-sm"
+      style={{ borderColor: "var(--border)" }}
+    >
+      <div className="mb-1.5 font-semibold">{fullLabel}</div>
+      {detail && (
+        <div className="mb-1.5 text-muted-foreground">{detail}</div>
+      )}
+      {key && key !== fullLabel && (
+        <div className="mb-1.5 font-mono text-[10px] text-muted-foreground">
+          {key}
+        </div>
+      )}
+      <div className="space-y-0.5">
+        {items.map((item) => (
+          <div key={item.label} className="flex items-center justify-between gap-4">
+            <span className="text-muted-foreground">{item.label}</span>
+            <span className="font-medium tabular-nums">
+              {formatNumber(item.value)} ({item.value.toLocaleString("zh-CN")})
+            </span>
+          </div>
+        ))}
+      </div>
+    </div>
   );
 }
 
